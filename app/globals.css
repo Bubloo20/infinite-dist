@@ -2,11 +2,6 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --bg: #ffffff;
-  --bg-soft: #f6f8fc;
-}
-
 * {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -14,11 +9,11 @@
 
 html {
   scroll-behavior: smooth;
-  scroll-padding-top: 96px;
+  scroll-padding-top: 110px;
 }
 
 body {
-  background: var(--bg);
+  background: #ffffff;
   color: theme("colors.ink");
   overflow-x: hidden;
 }
@@ -34,68 +29,68 @@ body {
   }
 }
 
-/* Selection */
 ::selection {
-  background: theme("colors.brand.600");
+  background: theme("colors.orchid");
   color: #fff;
 }
 
-/* Custom scrollbar */
 ::-webkit-scrollbar {
-  width: 10px;
+  width: 11px;
 }
 ::-webkit-scrollbar-track {
-  background: #eef2f8;
+  background: #ecebef;
 }
 ::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, #2563eb, #4f46e5);
+  background: #b66dc7;
   border-radius: 999px;
-  border: 2px solid #eef2f8;
+  border: 3px solid #ecebef;
+}
+
+@layer base {
+  h1,
+  h2,
+  h3,
+  h4 {
+    @apply font-display;
+    letter-spacing: -0.02em;
+  }
 }
 
 @layer components {
-  .container-max {
-    @apply mx-auto w-full max-w-7xl px-5 sm:px-8;
+  .container-site {
+    @apply mx-auto w-full max-w-site px-6 sm:px-10;
   }
 
-  .gradient-text {
-    @apply bg-gradient-to-r from-brand-600 via-accent-indigo to-accent-cyan bg-clip-text text-transparent;
+  /* White pill button with dark circular arrow (the site's signature CTA) */
+  .pill-light {
+    @apply inline-flex items-center gap-3 rounded-full bg-white py-2 pl-7 pr-2 text-[15px] font-semibold text-ink shadow-[0_8px_30px_-10px_rgba(0,0,0,0.3)] transition-transform duration-300 hover:-translate-y-0.5;
+  }
+  /* Dark pill (Join page) */
+  .pill-dark {
+    @apply inline-flex items-center gap-3 rounded-full bg-ink py-2 pl-7 pr-2 text-[15px] font-semibold text-white transition-transform duration-300 hover:-translate-y-0.5;
+  }
+  /* Blue pill (Read More) */
+  .pill-blue {
+    @apply inline-flex items-center gap-3 rounded-full bg-electric py-2 pl-7 pr-2 text-[15px] font-semibold text-white transition-transform duration-300 hover:-translate-y-0.5;
+  }
+  /* Outline pill */
+  .pill-outline {
+    @apply inline-flex items-center rounded-full border border-ink/30 bg-white/60 px-7 py-3 text-[15px] font-semibold text-ink transition-all duration-300 hover:bg-white hover:-translate-y-0.5;
   }
 
-  .btn-primary {
-    @apply relative inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-brand-600 to-accent-indigo px-7 py-3.5 text-sm font-semibold text-white shadow-glow transition-all duration-300 hover:shadow-[0_25px_70px_-15px_rgba(37,99,235,0.6)] hover:-translate-y-0.5;
+  .arrow-dot {
+    @apply flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-ink text-white;
   }
 
-  .btn-ghost {
-    @apply inline-flex items-center justify-center gap-2 rounded-full border border-slate-200 bg-white/70 px-7 py-3.5 text-sm font-semibold text-ink backdrop-blur transition-all duration-300 hover:border-brand-300 hover:bg-white hover:-translate-y-0.5;
-  }
-
-  .card {
-    @apply rounded-3xl border border-slate-100 bg-white p-7 shadow-soft transition-all duration-300;
-  }
-
-  .eyebrow {
-    @apply inline-flex items-center gap-2 rounded-full border border-brand-100 bg-brand-50 px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-brand-700;
+  .section-label {
+    @apply text-xs font-bold uppercase tracking-[0.12em] text-ink/80;
   }
 }
 
-/* Mesh gradient background blob */
-.mesh-blob {
-  filter: blur(60px);
-  opacity: 0.55;
-  background: conic-gradient(
-    from 180deg at 50% 50%,
-    #2563eb,
-    #06b6d4,
-    #4f46e5,
-    #2563eb
-  );
-}
-
-.grid-fade {
-  background-image: linear-gradient(rgba(37, 99, 235, 0.06) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(37, 99, 235, 0.06) 1px, transparent 1px);
-  background-size: 56px 56px;
-  -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 0%, #000 30%, transparent 75%);
-  mask-image: radial-gradient(ellipse 70% 60% at 50% 0%, #000 30%, transparent 75%);
+/* Watermark text for the distribution band */
+.watermark {
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  color: rgba(255, 255, 255, 0.14);
+  text-transform: uppercase;
 }

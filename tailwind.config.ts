@@ -8,39 +8,36 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        ink: "#0B1220",
-        brand: {
-          50: "#eff6ff",
-          100: "#dbeafe",
-          200: "#bfdbfe",
-          300: "#93c5fd",
-          400: "#60a5fa",
-          500: "#3b82f6",
-          600: "#2563eb",
-          700: "#1d4ed8",
-          800: "#1e40af",
-          900: "#1e3a8a",
-        },
-        accent: {
-          cyan: "#06b6d4",
-          indigo: "#4f46e5",
-        },
+        // Dark surfaces (nav, footer, hero, dark cards)
+        night: "#141414",
+        dark: "#171717",
+        coal: "#111111",
+        ink: "#161616",
+        // Brand accents
+        electric: "#0200dd", // numbered headings, "Read More" pill
+        orchid: "#b66dc7", // INFINITE wordmark, "Join Us", "Guaranteed"
+        mauve: "#9b7bb3", // muted purple subheads (Delivery Proof)
+        // Soft surfaces
+        lavender: "#c3bff5", // process cards, CTA band, contact bg
+        "lavender-soft": "#d3d0f7",
+        mist: "#eeedf1", // light grey section bg
       },
       fontFamily: {
-        sans: ["var(--font-inter)", "system-ui", "sans-serif"],
-        display: ["var(--font-display)", "system-ui", "sans-serif"],
+        sans: ["var(--font-jakarta)", "system-ui", "sans-serif"],
+        display: ["var(--font-jakarta)", "system-ui", "sans-serif"],
+      },
+      maxWidth: {
+        site: "1280px",
       },
       borderRadius: {
         "4xl": "2rem",
-      },
-      boxShadow: {
-        glow: "0 0 0 1px rgba(37,99,235,0.08), 0 20px 60px -15px rgba(37,99,235,0.35)",
-        soft: "0 10px 40px -12px rgba(15,23,42,0.18)",
+        "5xl": "2.5rem",
       },
       keyframes: {
-        float: {
-          "0%, 100%": { transform: "translateY(0) rotate(0deg)" },
-          "50%": { transform: "translateY(-22px) rotate(6deg)" },
+        blob: {
+          "0%, 100%": { transform: "translate(0px, 0px) scale(1)" },
+          "33%": { transform: "translate(40px, -30px) scale(1.1)" },
+          "66%": { transform: "translate(-30px, 25px) scale(0.95)" },
         },
         "gradient-pan": {
           "0%, 100%": { backgroundPosition: "0% 50%" },
@@ -50,14 +47,15 @@ const config: Config = {
           "0%": { transform: "translateX(0)" },
           "100%": { transform: "translateX(-50%)" },
         },
-        shimmer: {
-          "100%": { transform: "translateX(100%)" },
+        "spin-slow": {
+          to: { transform: "rotate(360deg)" },
         },
       },
       animation: {
-        float: "float 7s ease-in-out infinite",
-        "gradient-pan": "gradient-pan 8s ease infinite",
-        marquee: "marquee 28s linear infinite",
+        blob: "blob 16s ease-in-out infinite",
+        "gradient-pan": "gradient-pan 10s ease infinite",
+        marquee: "marquee 30s linear infinite",
+        "spin-slow": "spin-slow 30s linear infinite",
       },
     },
   },

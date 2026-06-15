@@ -1,42 +1,30 @@
 import type { Metadata } from "next";
-import { Inter, Space_Grotesk } from "next/font/google";
+import { Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
+import Nav from "@/components/Nav";
+import Footer from "@/components/Footer";
+import ScrollProgress from "@/components/ScrollProgress";
 
-const inter = Inter({
+const jakarta = Plus_Jakarta_Sans({
   subsets: ["latin"],
-  variable: "--font-inter",
+  variable: "--font-jakarta",
   display: "swap",
-});
-
-const display = Space_Grotesk({
-  subsets: ["latin"],
-  variable: "--font-display",
-  display: "swap",
-  weight: ["500", "600", "700"],
+  weight: ["400", "500", "600", "700", "800"],
 });
 
 export const metadata: Metadata = {
-  title: "Infinite Distribution | Local Reach. Maximum Impact.",
+  title: "Infinite Distributions | Local Reach. Maximum Impact.",
   description:
-    "Melbourne's trusted letterbox flyer distribution. From your hand to the letterbox — no middleman, no hassle, delivery guaranteed. GPS-tracked drops, crease-free delivery, money-back guarantee.",
-  keywords: [
-    "letterbox distribution",
-    "flyer delivery Melbourne",
-    "leaflet distribution",
-    "direct marketing Melbourne",
-    "Infinite Distribution",
-  ],
-  metadataBase: new URL("https://infinitedistribution.com"),
+    "From your hand to the letterbox. Nothing else. No middleman. No hassle. Delivery guaranteed. Melbourne's trusted letterbox flyer distribution — GPS-tracked, crease-free, money-back guaranteed.",
+  metadataBase: new URL("https://infinitedistributions.com.au"),
   openGraph: {
-    title: "Infinite Distribution | Local Reach. Maximum Impact.",
+    title: "Infinite Distributions | Local Reach. Maximum Impact.",
     description:
-      "Melbourne's trusted letterbox flyer distribution. GPS-tracked, crease-free, delivery guaranteed.",
+      "From your hand to the letterbox. No middleman. No hassle. Delivery guaranteed.",
     type: "website",
     locale: "en_AU",
   },
-  icons: {
-    icon: "/favicon.svg",
-  },
+  icons: { icon: "/favicon.svg" },
 };
 
 export default function RootLayout({
@@ -45,8 +33,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${inter.variable} ${display.variable}`}>
-      <body className="font-sans antialiased">{children}</body>
+    <html lang="en" className={jakarta.variable}>
+      <body className="font-sans antialiased">
+        <ScrollProgress />
+        <Nav />
+        {children}
+        <Footer />
+      </body>
     </html>
   );
 }
