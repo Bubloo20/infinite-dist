@@ -190,45 +190,29 @@ export default function CaseStudies() {
 
 function BmwRoundel() {
   return (
-    <svg width="84" height="84" viewBox="0 0 100 100" aria-hidden>
-      <circle cx="50" cy="50" r="48" fill="#000" />
-      <circle cx="50" cy="50" r="37" fill="#fff" />
-      {/* quadrants */}
-      <path d="M50 13 A37 37 0 0 1 87 50 L50 50 Z" fill="#fff" />
-      <path d="M87 50 A37 37 0 0 1 50 87 L50 50 Z" fill="#0066b1" />
-      <path d="M50 87 A37 37 0 0 1 13 50 L50 50 Z" fill="#fff" />
-      <path d="M13 50 A37 37 0 0 1 50 13 L50 50 Z" fill="#0066b1" />
-      <circle cx="50" cy="50" r="37" fill="none" stroke="#000" strokeWidth="1.5" />
-      {/* letters */}
+    <svg width="86" height="86" viewBox="0 0 100 100" aria-hidden>
+      <defs>
+        <path id="bmwTopArc" d="M 11 50 A 39 39 0 0 1 89 50" fill="none" />
+      </defs>
+      {/* outer black ring */}
+      <circle cx="50" cy="50" r="49" fill="#000" />
+      {/* inner quadrants (white / blue alternating) */}
+      <path d="M50 13 A37 37 0 0 1 87 50 L50 50 Z" fill="#ffffff" />
+      <path d="M87 50 A37 37 0 0 1 50 87 L50 50 Z" fill="#1c69b3" />
+      <path d="M50 87 A37 37 0 0 1 13 50 L50 50 Z" fill="#ffffff" />
+      <path d="M13 50 A37 37 0 0 1 50 13 L50 50 Z" fill="#1c69b3" />
+      <circle cx="50" cy="50" r="37" fill="none" stroke="#000" strokeWidth="1" />
+      {/* BMW lettering curved along the top of the ring */}
       <text
-        x="22"
-        y="12"
         fill="#fff"
-        fontSize="13"
+        fontSize="9"
         fontWeight="700"
+        letterSpacing="2"
         fontFamily="Helvetica, Arial, sans-serif"
       >
-        B
-      </text>
-      <text
-        x="44"
-        y="11"
-        fill="#fff"
-        fontSize="13"
-        fontWeight="700"
-        fontFamily="Helvetica, Arial, sans-serif"
-      >
-        M
-      </text>
-      <text
-        x="69"
-        y="12"
-        fill="#fff"
-        fontSize="13"
-        fontWeight="700"
-        fontFamily="Helvetica, Arial, sans-serif"
-      >
-        W
+        <textPath href="#bmwTopArc" startOffset="50%" textAnchor="middle">
+          BMW
+        </textPath>
       </text>
     </svg>
   );
