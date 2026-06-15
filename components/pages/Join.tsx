@@ -5,11 +5,10 @@ import { motion } from "framer-motion";
 export default function Join() {
   return (
     <section className="grid min-h-[90vh] lg:grid-cols-2">
-      {/* Left graphic */}
-      <div className="relative min-h-[300px] overflow-hidden bg-night lg:min-h-full">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_45%,#2a2150,#150f2e_55%,#0d0d0d_85%)]" />
-        <div className="absolute right-[5%] top-[20%] h-[55%] w-[55%] animate-blob rounded-full bg-[radial-gradient(circle,#b66dc7,transparent_70%)] opacity-50 blur-[50px]" />
-        <div className="absolute left-[-10%] bottom-[-5%] h-[45%] w-[45%] rounded-full bg-[radial-gradient(circle,#5a6bff,transparent_70%)] opacity-40 blur-[50px]" />
+      {/* Left graphic — person reading a flyer */}
+      <div className="relative min-h-[360px] overflow-hidden bg-night lg:min-h-full">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_48%_46%,#3a45e0_0%,#241e8f_38%,#100c33_72%,#070712_100%)]" />
+        <PersonReading />
       </div>
 
       {/* Right copy */}
@@ -57,5 +56,42 @@ export default function Join() {
         </div>
       </div>
     </section>
+  );
+}
+
+function PersonReading() {
+  return (
+    <div className="absolute inset-0 flex items-center justify-center p-10">
+      <motion.svg
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 1, ease: [0.22, 1, 0.36, 1] }}
+        viewBox="0 0 400 440"
+        className="w-[68%] max-w-[420px] drop-shadow-[0_25px_60px_rgba(70,90,255,0.4)]"
+        fill="none"
+        stroke="#dde3ff"
+        strokeWidth="5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        {/* head */}
+        <circle cx="150" cy="78" r="42" />
+        {/* body + legs silhouette */}
+        <path d="M111 152 C111 133 189 133 189 152 L198 252 L183 412 L159 412 L150 302 L141 412 L117 412 L102 252 Z" />
+        {/* back arm */}
+        <path d="M114 168 L95 286" />
+        {/* front arm reaching to hold the flyer */}
+        <path d="M188 168 C214 182 232 206 250 214" />
+        {/* hand */}
+        <path d="M243 200 C256 200 266 208 268 220 C260 226 248 224 243 214" />
+        {/* flyer */}
+        <g transform="rotate(-9 296 200)">
+          <rect x="246" y="138" width="100" height="128" rx="5" />
+          <rect x="262" y="158" width="62" height="20" rx="2.5" fill="#c0533f" stroke="none" />
+          <line x1="262" y1="196" x2="330" y2="196" />
+          <line x1="262" y1="214" x2="312" y2="214" />
+        </g>
+      </motion.svg>
+    </div>
   );
 }
