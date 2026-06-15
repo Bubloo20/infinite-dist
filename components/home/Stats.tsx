@@ -4,9 +4,9 @@ import { motion } from "framer-motion";
 import Counter from "../ui/Counter";
 
 const stats = [
-  { value: 1, suffix: "+", label: "Completed campaigns" },
-  { value: 1600, suffix: "+", label: "Houses Delivered" },
-  { value: 40, suffix: "%", label: "Reviews" },
+  { value: 100, suffix: "+", label: "Completed campaigns" },
+  { value: 70, suffix: "k+", label: "Houses Delivered" },
+  { value: 90, suffix: "%", label: "Satisfaction rate" },
 ];
 
 export default function Stats() {
