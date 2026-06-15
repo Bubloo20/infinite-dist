@@ -29,7 +29,7 @@ type Field = {
   name: string;
   label: string;
   help?: string;
-  type: "radio" | "text" | "tel";
+  type: "radio" | "text" | "tel" | "textarea";
   required: boolean;
 };
 
@@ -44,7 +44,7 @@ const fields: Field[] = [
     required: true,
   },
   { name: "name", label: "What is your name?", type: "text", required: true },
-  { name: "age", label: "What is your age?", type: "text", required: false },
+  { name: "age", label: "What is your age?", type: "text", required: true },
   {
     name: "area",
     label: "What area can you work?",
@@ -64,6 +64,13 @@ const fields: Field[] = [
     name: "honest_reliable",
     label: "This job is for those who are honest and reliable. Do you fit both criteria?",
     type: "radio",
+    required: true,
+  },
+  {
+    name: "extra_responses",
+    label: "Optional space for responses",
+    help: "Anything else you'd like us to know? (optional)",
+    type: "textarea",
     required: false,
   },
 ];
@@ -158,7 +165,7 @@ export default function JoinFormModal({
             exit={{ opacity: 0, y: 20, scale: 0.98 }}
             transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
             onClick={(e) => e.stopPropagation()}
-            className="my-8 w-full max-w-2xl overflow-hidden rounded-3xl bg-white shadow-2xl"
+            className="my-6 w-full max-w-3xl overflow-hidden rounded-3xl bg-white shadow-2xl"
           >
             {/* Header */}
             <div className="relative bg-gradient-to-r from-electric to-[#3a2bd6] px-7 py-6 text-white sm:px-9">
@@ -194,7 +201,7 @@ export default function JoinFormModal({
                 </button>
               </div>
             ) : (
-              <form onSubmit={handleSubmit} className="max-h-[70vh] overflow-y-auto px-7 py-7 sm:px-9">
+              <form onSubmit={handleSubmit} className="max-h-[80vh] overflow-y-auto px-7 py-7 sm:px-10">
                 {/* Intro */}
                 <div className="space-y-5 border-b border-slate-100 pb-7 text-[15px] leading-relaxed text-slate-600">
                   <div>
@@ -268,6 +275,13 @@ export default function JoinFormModal({
                             </label>
                           ))}
                         </div>
+                      ) : f.type === "textarea" ? (
+                        <textarea
+                          name={f.name}
+                          required={f.required}
+                          rows={4}
+                          className="mt-3 w-full resize-y rounded-xl border border-slate-200 bg-slate-50/60 px-4 py-3 text-ink outline-none transition focus:border-electric focus:bg-white focus:ring-4 focus:ring-electric/10"
+                        />
                       ) : (
                         <input
                           type={f.type}
