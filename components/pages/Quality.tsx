@@ -93,7 +93,12 @@ export default function Quality() {
             </p>
           </motion.div>
           <motion.div {...fade} className="relative h-72 overflow-hidden rounded-4xl bg-[#e9ece6] shadow-soft sm:h-80">
-            <MapGraphic />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/images/quality-map.jpeg"
+              alt="GPS-tracked distribution route"
+              className="absolute inset-0 h-full w-full object-cover"
+            />
           </motion.div>
         </div>
       </section>
@@ -101,11 +106,13 @@ export default function Quality() {
       {/* Honesty */}
       <section className="bg-white py-16">
         <div className="container-site grid items-center gap-12 lg:grid-cols-2">
-          <motion.div {...fade} className="order-2 relative h-72 overflow-hidden rounded-4xl bg-night sm:h-80 lg:order-1">
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_40%_40%,#3b3bd6,#1a1233_55%,#0d0d0d_85%)]" />
-            <div className="absolute inset-0 flex items-center justify-center">
-              <span className="font-display text-5xl font-extrabold text-white/15">TRUST</span>
-            </div>
+          <motion.div {...fade} className="order-2 relative h-96 overflow-hidden rounded-4xl bg-mist shadow-soft sm:h-[420px] lg:order-1">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/images/quality-track.jpeg"
+              alt="Authenticated tracking data from a completed distribution walk"
+              className="absolute inset-0 h-full w-full object-contain p-4"
+            />
           </motion.div>
           <motion.div {...fade} className="order-1 lg:order-2">
             <h2 className="font-display text-4xl font-extrabold tracking-tight text-ink sm:text-5xl">
@@ -205,37 +212,5 @@ function PlanCard({
         ))}
       </ul>
     </motion.div>
-  );
-}
-
-function MapGraphic() {
-  return (
-    <svg viewBox="0 0 400 320" className="h-full w-full" preserveAspectRatio="xMidYMid slice">
-      <rect width="400" height="320" fill="#e9ece6" />
-      {/* roads */}
-      <g stroke="#cfd4cb" strokeWidth="10">
-        <line x1="0" y1="80" x2="400" y2="80" />
-        <line x1="0" y1="180" x2="400" y2="180" />
-        <line x1="0" y1="260" x2="400" y2="260" />
-        <line x1="90" y1="0" x2="90" y2="320" />
-        <line x1="220" y1="0" x2="220" y2="320" />
-        <line x1="320" y1="0" x2="320" y2="320" />
-      </g>
-      <g fill="#dfe3da">
-        <rect x="100" y="90" width="110" height="80" />
-        <rect x="230" y="190" width="80" height="60" />
-      </g>
-      {/* red route */}
-      <path
-        d="M40 290 L40 180 L90 180 L90 80 L220 80 L220 180 L320 180 L320 60"
-        fill="none"
-        stroke="#e0332f"
-        strokeWidth="5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <circle cx="40" cy="290" r="7" fill="#e0332f" />
-      <circle cx="320" cy="60" r="9" fill="#e0332f" stroke="#fff" strokeWidth="3" />
-    </svg>
   );
 }

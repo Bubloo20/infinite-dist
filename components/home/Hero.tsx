@@ -7,16 +7,21 @@ import ArrowPill from "../ui/ArrowPill";
 export default function Hero() {
   return (
     <section className="relative min-h-[100svh] overflow-hidden bg-night text-white">
-      {/* Gradient field */}
+      {/* Gradient field — the site's real hero image + animated glow */}
       <div className="absolute inset-0">
-        {/* base dark */}
         <div className="absolute inset-0 bg-night" />
-        {/* colorful soft blob on the right */}
-        <div className="absolute right-[-10%] top-[-5%] h-[90%] w-[70%] animate-blob rounded-full bg-[radial-gradient(circle_at_40%_40%,#8b7bff_0%,#5a6bff_30%,#7c5cff_55%,transparent_72%)] opacity-80 blur-[40px]" />
-        <div className="absolute right-[5%] top-[20%] h-[60%] w-[45%] animate-blob rounded-full bg-[radial-gradient(circle_at_60%_50%,#c98bd6_0%,#9a6bff_40%,transparent_70%)] opacity-60 blur-[50px] [animation-delay:3s]" />
-        <div className="absolute left-[-5%] bottom-[-10%] h-[50%] w-[40%] rounded-full bg-[radial-gradient(circle,#b5523f_0%,transparent_70%)] opacity-30 blur-[60px]" />
-        {/* angled glass panel */}
-        <div className="absolute right-0 top-0 h-full w-[55%] -skew-x-[14deg] origin-top-right bg-gradient-to-br from-white/10 via-white/5 to-transparent" />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/images/home-hero.jpg"
+          alt=""
+          aria-hidden
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+        {/* animated colorful glow layered over the photo for life */}
+        <div className="absolute right-[-10%] top-[-5%] h-[90%] w-[70%] animate-blob rounded-full bg-[radial-gradient(circle_at_40%_40%,#8b7bff_0%,#5a6bff_30%,transparent_70%)] opacity-40 blur-[50px] mix-blend-screen" />
+        {/* left-side dark gradient so the headline stays legible */}
+        <div className="absolute inset-0 bg-gradient-to-r from-night via-night/70 to-night/10" />
+        <div className="absolute inset-0 bg-gradient-to-t from-night/60 via-transparent to-transparent" />
       </div>
 
       <div className="container-site relative flex min-h-[100svh] flex-col justify-center pt-28 pb-20">

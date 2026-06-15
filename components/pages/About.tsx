@@ -3,9 +3,9 @@
 import { motion } from "framer-motion";
 
 const team = [
-  { name: "Bubloo Mohanrajh", role: "Director & Distributor", initials: "BM" },
-  { name: "Lucas Thomas", role: "Operations Management", initials: "LT" },
-  { name: "Sam Rhoades", role: "Distributor", initials: "SR" },
+  { name: "Bubloo Mohanrajh", role: "Director & Distributor", img: "/images/team-bubloo.jpg", photo: true },
+  { name: "Lucas Thomas", role: "Operations Management", img: "/images/team-icon.jpg", photo: false },
+  { name: "Sam Rhoades", role: "Distributor", img: "/images/team-icon.jpg", photo: false },
 ];
 
 export default function About() {
@@ -50,14 +50,25 @@ export default function About() {
                 transition={{ duration: 0.6, delay: i * 0.1 }}
                 className="group relative aspect-[4/5] overflow-hidden rounded-4xl bg-coal"
               >
-                {/* avatar gradient + initials */}
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_30%,#2a2150,#111111_70%)]" />
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <span className="font-display text-7xl font-extrabold text-white/15 transition-transform duration-500 group-hover:scale-110">
-                    {m.initials}
-                  </span>
-                </div>
-                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-7">
+                {m.photo ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={m.img}
+                    alt={m.name}
+                    className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                  />
+                ) : (
+                  <>
+                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_30%,#2a2150,#111111_70%)]" />
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={m.img}
+                      alt={m.name}
+                      className="absolute left-1/2 top-1/2 h-28 w-28 -translate-x-1/2 -translate-y-1/2 opacity-80 transition-transform duration-500 group-hover:scale-110"
+                    />
+                  </>
+                )}
+                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent p-7">
                   <h3 className="font-display text-2xl font-bold text-white">{m.name}</h3>
                   <p className="mt-1 text-white/70">{m.role}</p>
                 </div>

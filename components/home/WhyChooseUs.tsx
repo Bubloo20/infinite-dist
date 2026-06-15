@@ -50,20 +50,14 @@ export default function WhyChooseUs() {
           </div>
         </div>
 
-        {/* Right: dark device graphic */}
+        {/* Right: real device graphic */}
         <div className="relative min-h-[360px] overflow-hidden bg-night lg:min-h-full">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_40%,#3b3bd6_0%,#1a1233_45%,#0d0d0d_80%)]" />
-          <div className="absolute left-[-10%] bottom-[-10%] h-[60%] w-[60%] rounded-full bg-[radial-gradient(circle,#b5523f_0%,transparent_70%)] opacity-40 blur-[40px]" />
-          {/* tilted glass card */}
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="h-[280px] w-[360px] rotate-[-18deg] rounded-[2rem] border border-white/20 bg-gradient-to-br from-white/15 to-white/5 shadow-2xl backdrop-blur-sm">
-              <div className="flex h-full items-center justify-center">
-                <span className="rotate-[-2deg] text-2xl font-semibold tracking-wide text-white/70">
-                  SEND TO ADDRESS
-                </span>
-              </div>
-            </div>
-          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/images/home-send-card.jpg"
+            alt="Send to address — tracked delivery"
+            className="absolute inset-0 h-full w-full object-cover"
+          />
         </div>
       </div>
     </section>
