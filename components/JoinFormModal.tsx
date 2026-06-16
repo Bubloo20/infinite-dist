@@ -4,14 +4,13 @@ import { useEffect, useState, type FormEvent } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
 /**
- * Web3Forms access key — submissions are emailed to the address you register.
- * 1. Go to https://web3forms.com, enter  infinitetutoringmelb@gmail.com , and copy the key they email you.
- * 2. Paste it below (or set NEXT_PUBLIC_WEB3FORMS_ACCESS_KEY in your env / Vercel project).
+ * Applications are emailed here via FormSubmit (no API key needed).
+ * IMPORTANT: the FIRST time the form is submitted, FormSubmit sends a one-time
+ * "Activate Form" email to this address — click the link in it once, and from
+ * then on every application is delivered to your inbox automatically.
  */
-const ACCESS_KEY =
-  process.env.NEXT_PUBLIC_WEB3FORMS_ACCESS_KEY || "YOUR_WEB3FORMS_ACCESS_KEY";
-
 const RECIPIENT = "infinitetutoringmelb@gmail.com";
+const FORM_ENDPOINT = `https://formsubmit.co/ajax/${RECIPIENT}`;
 
 const areas = [
   "Manningham (Doncaster, Bulleen, Templestowe)",
@@ -110,33 +109,23 @@ export default function JoinFormModal({
 
     // Build a readable payload keyed by the question text
     const payload: Record<string, string> = {
-      access_key: ACCESS_KEY,
-      subject: "New Distributor Application — Infinite Distributions",
-      from_name: "Infinite Distributions — Join The Team",
+      _subject: "New Distributor Application — Infinite Distributions",
+      _template: "table",
+      _captcha: "false",
     };
     fields.forEach((f) => {
       payload[f.label] = (data.get(f.name) as string) || "—";
     });
 
-    if (ACCESS_KEY === "YOUR_WEB3FORMS_ACCESS_KEY") {
-      setStatus("error");
-      setErrorMsg(
-        "Email isn't connected yet. Add your free Web3Forms access key (see JoinFormModal.tsx) and applications will be delivered to " +
-          RECIPIENT +
-          ".",
-      );
-      return;
-    }
-
     setStatus("submitting");
     try {
-      const res = await fetch("https://api.web3forms.com/submit", {
+      const res = await fetch(FORM_ENDPOINT, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify(payload),
       });
       const json = await res.json();
-      if (json.success) {
+      if (json.success === "true" || json.success === true) {
         setStatus("success");
         form.reset();
       } else {
