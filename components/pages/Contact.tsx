@@ -2,15 +2,40 @@
 
 import { useState, type FormEvent } from "react";
 import { motion } from "framer-motion";
+import { submitForm } from "@/lib/forms";
 
 export default function Contact() {
   const [sent, setSent] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState("");
 
-  const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    // Front-end demo handler. Connect to a form backend (Formspree, Resend,
-    // or a Next.js route handler) to receive real submissions.
-    setSent(true);
+    const form = e.currentTarget;
+    const d = new FormData(form);
+    setSending(true);
+    setError("");
+    try {
+      const ok = await submitForm(
+        {
+          Name: `${d.get("firstName")} ${d.get("lastName")}`.trim(),
+          Email: (d.get("email") as string) || "—",
+          Phone: (d.get("phone") as string) || "—",
+          Message: (d.get("message") as string) || "—",
+        },
+        { subject: "New Quote Request — Infinite Distributions", from_name: "Website Contact Form" },
+      );
+      if (ok) {
+        setSent(true);
+        form.reset();
+      } else {
+        setError("Something went wrong. Please try again, or email us directly.");
+      }
+    } catch {
+      setError("Network error. Please check your connection and try again.");
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
@@ -95,10 +120,12 @@ export default function Contact() {
               <div className="sm:col-span-2">
                 <button
                   type="submit"
-                  className="rounded-full bg-ink px-10 py-4 text-base font-semibold text-white transition-transform hover:-translate-y-0.5"
+                  disabled={sending}
+                  className="rounded-full bg-ink px-10 py-4 text-base font-semibold text-white transition-transform hover:-translate-y-0.5 disabled:opacity-70"
                 >
-                  Send
+                  {sending ? "Sending…" : "Send"}
                 </button>
+                {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
               </div>
             </form>
           )}

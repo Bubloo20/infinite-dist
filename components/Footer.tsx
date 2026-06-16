@@ -1,13 +1,25 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import { submitForm } from "@/lib/forms";
 
 export default function Footer() {
   const [subscribed, setSubscribed] = useState(false);
 
-  const onSubscribe = (e: FormEvent<HTMLFormElement>) => {
+  const onSubscribe = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setSubscribed(true);
+    const form = e.currentTarget;
+    const email = (new FormData(form).get("email") as string) || "—";
+    setSubscribed(true); // optimistic — show confirmation immediately
+    form.reset();
+    try {
+      await submitForm(
+        { Email: email, "Sign-up": "Newsletter subscription" },
+        { subject: "New Newsletter Signup — Infinite Distributions", from_name: "Website Newsletter" },
+      );
+    } catch {
+      /* confirmation already shown; signup is best-effort */
+    }
   };
 
   return (
@@ -37,6 +49,7 @@ export default function Footer() {
                 </label>
                 <input
                   type="email"
+                  name="email"
                   required
                   aria-label="Email address"
                   className="mt-2 w-full border-0 border-b border-white/30 bg-transparent pb-2 text-white outline-none transition-colors focus:border-orchid"

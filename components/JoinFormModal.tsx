@@ -2,15 +2,9 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { submitForm } from "@/lib/forms";
 
-/**
- * Applications are emailed here via FormSubmit (no API key needed).
- * IMPORTANT: the FIRST time the form is submitted, FormSubmit sends a one-time
- * "Activate Form" email to this address — click the link in it once, and from
- * then on every application is delivered to your inbox automatically.
- */
-const RECIPIENT = "infinitetutoringmelb@gmail.com";
-const FORM_ENDPOINT = `https://formsubmit.co/ajax/${RECIPIENT}`;
+// Applications are emailed via Web3Forms to the verified account (infinitetutoringmelb@gmail.com).
 
 const areas = [
   "Manningham (Doncaster, Bulleen, Templestowe)",
@@ -108,29 +102,23 @@ export default function JoinFormModal({
     if (data.get("botcheck")) return;
 
     // Build a readable payload keyed by the question text
-    const payload: Record<string, string> = {
-      _subject: "New Distributor Application — Infinite Distributions",
-      _template: "table",
-      _captcha: "false",
-    };
+    const payload: Record<string, string> = {};
     fields.forEach((f) => {
       payload[f.label] = (data.get(f.name) as string) || "—";
     });
 
     setStatus("submitting");
     try {
-      const res = await fetch(FORM_ENDPOINT, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify(payload),
+      const ok = await submitForm(payload, {
+        subject: "New Distributor Application — Infinite Distributions",
+        from_name: "Join The Team — Infinite Distributions",
       });
-      const json = await res.json();
-      if (json.success === "true" || json.success === true) {
+      if (ok) {
         setStatus("success");
         form.reset();
       } else {
         setStatus("error");
-        setErrorMsg(json.message || "Something went wrong. Please try again.");
+        setErrorMsg("Something went wrong. Please try again.");
       }
     } catch {
       setStatus("error");
