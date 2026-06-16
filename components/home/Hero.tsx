@@ -61,9 +61,9 @@ export default function Hero() {
           <p className="text-lg sm:text-xl">
             Click{" "}
             <Link href="/join" className="font-semibold underline underline-offset-4 hover:text-orchid">
-              Join The Team
+              here
             </Link>{" "}
-            to apply
+            to apply to join the team
           </p>
         </motion.div>
       </div>
