@@ -3,9 +3,16 @@ import About from "@/components/pages/About";
 import CtaBand from "@/components/CtaBand";
 
 export const metadata: Metadata = {
-  title: "About | Infinite Distributions",
+  title: "About Us",
   description:
-    "As a previous small business owner, large letter distribution companies overcharged us. So we fixed that. Maximum impact. Minimum cost.",
+    "Founded by a former small-business owner tired of overpriced distribution. Infinite Distributions delivers Melbourne letterbox flyers at maximum impact, minimum cost — meet the team and our mission.",
+  alternates: { canonical: "/about" },
+  openGraph: {
+    title: "About Us | Infinite Distributions",
+    description:
+      "Melbourne letterbox flyer distribution built on fair pricing and reliability. Maximum impact. Minimum cost.",
+    url: "/about",
+  },
 };
 
 export default function AboutPage() {
