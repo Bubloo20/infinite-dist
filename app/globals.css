@@ -94,3 +94,21 @@ body {
   color: rgba(255, 255, 255, 0.14);
   text-transform: uppercase;
 }
+
+/* Leaflet suburb labels on the coverage map */
+.coverage-label {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 3px 10px;
+  font-weight: 700;
+  font-size: 12px;
+  color: #161616;
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.12);
+}
+.coverage-label.leaflet-tooltip-top::before {
+  display: none;
+}
+.leaflet-container {
+  font-family: var(--font-jakarta), system-ui, sans-serif;
+}

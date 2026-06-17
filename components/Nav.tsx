@@ -10,6 +10,7 @@ const links = [
   { label: "About", href: "/about" },
   { label: "100% Quality", href: "/quality" },
   { label: "Case Studies", href: "/case-studies" },
+  { label: "Locations", href: "/locations" },
   { label: "Contact", href: "/contact" },
   { label: "Join The Team", href: "/join" },
 ];
