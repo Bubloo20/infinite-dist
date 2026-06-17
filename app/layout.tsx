@@ -71,6 +71,9 @@ export const metadata: Metadata = {
   },
   icons: { icon: "/favicon.svg" },
   category: "business",
+  verification: {
+    google: "L5_PgfjJ0LKTNkR_VfJrRh76OjQWpR2tuf029XbkWlo",
+  },
 };
 
 const jsonLd = {
