@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
 import { motion } from "framer-motion";
-import JoinFormModal from "../JoinFormModal";
+
+const FORM_URL =
+  "https://docs.google.com/forms/d/18HeW-LXhJ0BuOjZeWkdysck_2JzKWbJjVA1foGbFSC8/viewform";
 
 export default function Join() {
-  const [formOpen, setFormOpen] = useState(false);
   return (
     <section className="grid min-h-[90vh] lg:grid-cols-2">
       {/* Left graphic — person reading a flyer */}
@@ -68,18 +68,17 @@ export default function Join() {
             transition={{ duration: 0.8, delay: 0.22 }}
             className="mt-10"
           >
-            <button
-              type="button"
-              onClick={() => setFormOpen(true)}
+            <a
+              href={FORM_URL}
+              target="_blank"
+              rel="noreferrer"
               className="inline-flex rounded-full bg-ink px-9 py-4 text-base font-semibold text-white transition-transform hover:-translate-y-0.5"
             >
               Give Me The Form
-            </button>
+            </a>
           </motion.div>
         </div>
       </div>
-
-      <JoinFormModal open={formOpen} onClose={() => setFormOpen(false)} />
     </section>
   );
 }
