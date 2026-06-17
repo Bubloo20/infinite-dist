@@ -8,10 +8,23 @@ export const metadata: Metadata = {
     "Our letterbox distribution coverage map — door-to-door flyer delivery within a 4km radius of Northcote, Thornbury, Ivanhoe and Heidelberg, plus nearby Melbourne suburbs like Preston, Macleod and Rosanna.",
   alternates: { canonical: "/locations" },
   openGraph: {
+    type: "website",
+    locale: "en_AU",
+    siteName: "Infinite Distributions",
     title: "Locations & Coverage Areas | Infinite Distributions",
     description:
       "See our Melbourne letterbox distribution coverage — Northcote, Thornbury, Ivanhoe, Heidelberg and surrounding suburbs.",
     url: "/locations",
+    images: [
+      { url: "/og.png", width: 1200, height: 630, alt: "Infinite Distributions — Letterbox Flyer Distribution in Melbourne" },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Locations & Coverage Areas | Infinite Distributions",
+    description:
+      "See our Melbourne letterbox distribution coverage — Northcote, Thornbury, Ivanhoe, Heidelberg and surrounding suburbs.",
+    images: ["/og.png"],
   },
 };
 

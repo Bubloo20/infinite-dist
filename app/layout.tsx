@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import Nav from "@/components/Nav";
@@ -43,7 +43,7 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     locale: "en_AU",
-    url: SITE_URL,
+    url: "/",
     siteName: "Infinite Distributions",
     title: "Infinite Distributions | Letterbox Flyer Distribution Melbourne",
     description:
@@ -69,47 +69,76 @@ export const metadata: Metadata = {
     follow: true,
     googleBot: { index: true, follow: true, "max-image-preview": "large" },
   },
-  icons: { icon: "/favicon.svg" },
+  icons: {
+    icon: [
+      { url: "/favicon.svg", type: "image/svg+xml" },
+      { url: "/favicon-32.png", type: "image/png", sizes: "32x32" },
+      { url: "/icon-192.png", type: "image/png", sizes: "192x192" },
+      { url: "/icon-512.png", type: "image/png", sizes: "512x512" },
+    ],
+  },
   category: "business",
   verification: {
     google: "L5_PgfjJ0LKTNkR_VfJrRh76OjQWpR2tuf029XbkWlo",
   },
 };
 
+export const viewport: Viewport = {
+  themeColor: "#0200dd",
+  colorScheme: "dark",
+};
+
 const jsonLd = {
   "@context": "https://schema.org",
-  "@type": "LocalBusiness",
-  "@id": `${SITE_URL}/#business`,
-  name: "Infinite Distributions",
-  description:
-    "Melbourne letterbox flyer and leaflet distribution. GPS-tracked, crease-free drops direct to residential letterboxes. Delivery guaranteed.",
-  url: SITE_URL,
-  email: "infinitedistributionsmelb@gmail.com",
-  telephone: "+61421042007",
-  priceRange: "From $75",
-  image: `${SITE_URL}/favicon.svg`,
-  address: {
-    "@type": "PostalAddress",
-    addressLocality: "Melbourne",
-    addressRegion: "VIC",
-    addressCountry: "AU",
-  },
-  areaServed: [
-    "Manningham",
-    "Doncaster",
-    "Bulleen",
-    "Templestowe",
-    "Ivanhoe",
-    "Heidelberg",
-    "Macleod",
-    "Rosanna",
-    "Northcote",
-    "Thornbury",
-    "Preston",
-    "Melbourne",
-  ].map((name) => ({ "@type": "Place", name })),
-  slogan: "Local Reach. Maximum Impact.",
-  knowsAbout: ["Letterbox distribution", "Flyer delivery", "Leaflet distribution", "Direct mail marketing"],
+  "@graph": [
+    {
+      "@type": "WebSite",
+      "@id": `${SITE_URL}/#website`,
+      name: "Infinite Distributions",
+      url: SITE_URL,
+      publisher: { "@id": `${SITE_URL}/#business` },
+    },
+    {
+      "@type": "LocalBusiness",
+      "@id": `${SITE_URL}/#business`,
+      name: "Infinite Distributions",
+      description:
+        "Melbourne letterbox flyer and leaflet distribution. GPS-tracked, crease-free drops direct to residential letterboxes. Delivery guaranteed.",
+      url: SITE_URL,
+      email: "infinitedistributionsmelb@gmail.com",
+      telephone: "+61421042007",
+      priceRange: "From $75",
+      image: `${SITE_URL}/og.png`,
+      logo: `${SITE_URL}/icon-512.png`,
+      address: {
+        "@type": "PostalAddress",
+        addressLocality: "Melbourne",
+        addressRegion: "VIC",
+        addressCountry: "AU",
+      },
+      geo: {
+        "@type": "GeoCoordinates",
+        latitude: -37.8136,
+        longitude: 144.9631,
+      },
+      areaServed: [
+        "Manningham",
+        "Doncaster",
+        "Bulleen",
+        "Templestowe",
+        "Ivanhoe",
+        "Heidelberg",
+        "Macleod",
+        "Rosanna",
+        "Northcote",
+        "Thornbury",
+        "Preston",
+        "Melbourne",
+      ].map((name) => ({ "@type": "Place", name })),
+      slogan: "Local Reach. Maximum Impact.",
+      knowsAbout: ["Letterbox distribution", "Flyer delivery", "Leaflet distribution", "Direct mail marketing"],
+    },
+  ],
 };
 
 export default function RootLayout({
