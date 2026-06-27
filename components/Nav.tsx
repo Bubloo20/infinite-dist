@@ -1,24 +1,27 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 
-const links = [
-  { label: "Home", href: "/" },
-  { label: "About", href: "/about" },
-  { label: "100% Quality", href: "/quality" },
-  { label: "Case Studies", href: "/case-studies" },
+const commonLinks = [
   { label: "Locations", href: "/locations" },
+  { label: "Case Studies", href: "/case-studies" },
+  { label: "About Us", href: "/about" },
   { label: "Contact", href: "/contact" },
   { label: "Join The Team", href: "/join" },
 ];
 
+const servicesPaths = ["/quality", "/courier"];
+
 export default function Nav() {
   const pathname = usePathname();
-  const [open, setOpen] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [mobileServicesOpen, setMobileServicesOpen] = useState(false);
+  const [desktopServicesOpen, setDesktopServicesOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const servicesRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20);
@@ -27,7 +30,23 @@ export default function Nav() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  useEffect(() => setOpen(false), [pathname]);
+  useEffect(() => {
+    setMobileOpen(false);
+    setMobileServicesOpen(false);
+    setDesktopServicesOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (servicesRef.current && !servicesRef.current.contains(e.target as Node)) {
+        setDesktopServicesOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const servicesActive = servicesPaths.includes(pathname);
 
   return (
     <header
@@ -43,53 +62,189 @@ export default function Nav() {
           Infinite Distributions
         </Link>
 
-        <nav className="hidden items-center gap-7 lg:flex">
-          {links.map((l) => {
-            const active = pathname === l.href;
-            return (
-              <Link
-                key={l.href}
-                href={l.href}
-                className={`text-[15px] transition-colors ${
-                  active ? "text-orchid" : "text-white/85 hover:text-white"
-                }`}
+        {/* Desktop nav */}
+        <nav className="hidden items-center gap-6 xl:flex">
+          <Link
+            href="/"
+            className={`text-[15px] transition-colors ${
+              pathname === "/" ? "text-orchid" : "text-white/85 hover:text-white"
+            }`}
+          >
+            Home
+          </Link>
+
+          {/* Services dropdown */}
+          <div ref={servicesRef} className="relative">
+            <button
+              onClick={() => setDesktopServicesOpen((v) => !v)}
+              className={`flex items-center gap-1.5 text-[15px] transition-colors ${
+                servicesActive ? "text-orchid" : "text-white/85 hover:text-white"
+              }`}
+            >
+              Services
+              <svg
+                className={`h-3.5 w-3.5 transition-transform duration-200 ${desktopServicesOpen ? "rotate-180" : ""}`}
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2.5}
               >
-                {l.label}
-              </Link>
-            );
-          })}
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+
+            <AnimatePresence>
+              {desktopServicesOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: 8, scale: 0.97 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 8, scale: 0.97 }}
+                  transition={{ duration: 0.18, ease: "easeOut" }}
+                  className="absolute left-1/2 top-full mt-3 w-[440px] -translate-x-1/2 overflow-hidden rounded-3xl bg-[#1e1e1e] p-2 shadow-[0_20px_60px_-10px_rgba(0,0,0,0.6)]"
+                >
+                  <div className="grid grid-cols-2 gap-2">
+                    {/* Leaflet Distribution */}
+                    <div className="rounded-2xl bg-[#262626] p-5">
+                      <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-orchid">
+                        Leaflet Distribution
+                      </p>
+                      <p className="mt-2 text-[13px] leading-relaxed text-white/55">
+                        GPS-tracked letterbox drops across Melbourne suburbs.
+                      </p>
+                      <Link
+                        href="/quality"
+                        className="mt-4 inline-block rounded-full border border-orchid/40 px-4 py-1.5 text-[12px] font-bold text-orchid transition-colors hover:bg-orchid/10"
+                      >
+                        View service →
+                      </Link>
+                    </div>
+
+                    {/* Courier */}
+                    <div className="rounded-2xl bg-electric/10 p-5">
+                      <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-electric/80">
+                        Courier
+                      </p>
+                      <p className="mt-2 text-[13px] leading-relaxed text-white/55">
+                        Fast, cheap same-day delivery anywhere in Melbourne.
+                      </p>
+                      <Link
+                        href="/courier"
+                        className="mt-4 inline-block rounded-full bg-electric px-4 py-1.5 text-[12px] font-bold text-white transition-opacity hover:opacity-90"
+                      >
+                        View service →
+                      </Link>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          {/* Common links */}
+          {commonLinks.map((l) => (
+            <Link
+              key={l.href}
+              href={l.href}
+              className={`text-[15px] transition-colors ${
+                pathname === l.href ? "text-orchid" : "text-white/85 hover:text-white"
+              }`}
+            >
+              {l.label}
+            </Link>
+          ))}
         </nav>
 
         <Link
           href="/contact"
-          className="hidden rounded-full bg-white px-6 py-2.5 text-[15px] font-semibold text-ink transition-transform hover:-translate-y-0.5 lg:inline-flex"
+          className="hidden rounded-full bg-white px-6 py-2.5 text-[15px] font-semibold text-ink transition-transform hover:-translate-y-0.5 xl:inline-flex"
         >
           Get A Quote
         </Link>
 
+        {/* Hamburger */}
         <button
           aria-label="Toggle menu"
-          onClick={() => setOpen((v) => !v)}
-          className="flex h-10 w-10 items-center justify-center lg:hidden"
+          onClick={() => setMobileOpen((v) => !v)}
+          className="flex h-10 w-10 items-center justify-center xl:hidden"
         >
           <div className="flex flex-col gap-1.5">
-            <span className={`h-0.5 w-6 bg-white transition-transform ${open ? "translate-y-2 rotate-45" : ""}`} />
-            <span className={`h-0.5 w-6 bg-white transition-opacity ${open ? "opacity-0" : ""}`} />
-            <span className={`h-0.5 w-6 bg-white transition-transform ${open ? "-translate-y-2 -rotate-45" : ""}`} />
+            <span className={`h-0.5 w-6 bg-white transition-transform ${mobileOpen ? "translate-y-2 rotate-45" : ""}`} />
+            <span className={`h-0.5 w-6 bg-white transition-opacity ${mobileOpen ? "opacity-0" : ""}`} />
+            <span className={`h-0.5 w-6 bg-white transition-transform ${mobileOpen ? "-translate-y-2 -rotate-45" : ""}`} />
           </div>
         </button>
       </div>
 
+      {/* Mobile menu */}
       <AnimatePresence>
-        {open && (
+        {mobileOpen && (
           <motion.nav
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
-            className="overflow-hidden bg-dark lg:hidden"
+            className="overflow-hidden bg-dark xl:hidden"
           >
             <div className="container-site flex flex-col gap-1 pb-5 pt-2">
-              {links.map((l) => (
+              <Link
+                href="/"
+                className={`rounded-xl px-3 py-3 text-base ${
+                  pathname === "/" ? "bg-white/10 text-orchid" : "text-white/85"
+                }`}
+              >
+                Home
+              </Link>
+
+              {/* Services accordion */}
+              <div>
+                <button
+                  onClick={() => setMobileServicesOpen((v) => !v)}
+                  className={`flex w-full items-center justify-between rounded-xl px-3 py-3 text-base ${
+                    servicesActive ? "text-orchid" : "text-white/85"
+                  }`}
+                >
+                  Services
+                  <svg
+                    className={`h-4 w-4 transition-transform ${mobileServicesOpen ? "rotate-180" : ""}`}
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2.5}
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+
+                <AnimatePresence>
+                  {mobileServicesOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: "auto" }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="overflow-hidden pl-3"
+                    >
+                      <Link
+                        href="/quality"
+                        className={`block rounded-xl px-3 py-2.5 text-[15px] font-semibold ${
+                          pathname === "/quality" ? "text-orchid" : "text-white/85"
+                        }`}
+                      >
+                        Leaflet Distribution
+                      </Link>
+                      <Link
+                        href="/courier"
+                        className={`block rounded-xl px-3 py-2.5 text-[15px] font-semibold ${
+                          pathname === "/courier" ? "text-electric" : "text-white/85"
+                        }`}
+                      >
+                        Courier Service
+                      </Link>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+
+              {/* Common links */}
+              {commonLinks.map((l) => (
                 <Link
                   key={l.href}
                   href={l.href}
@@ -100,6 +255,7 @@ export default function Nav() {
                   {l.label}
                 </Link>
               ))}
+
               <Link
                 href="/contact"
                 className="mt-2 rounded-full bg-white px-6 py-3 text-center text-base font-semibold text-ink"
