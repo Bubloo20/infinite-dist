@@ -120,8 +120,8 @@ export default function Nav() {
                     </div>
 
                     {/* Courier */}
-                    <div className="rounded-2xl bg-electric/10 p-5">
-                      <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-electric/80">
+                    <div className="rounded-2xl bg-[#262626] p-5 ring-1 ring-[#5a6bff]/30">
+                      <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#8b93ff]">
                         Courier
                       </p>
                       <p className="mt-2 text-[13px] leading-relaxed text-white/55">
@@ -129,7 +129,7 @@ export default function Nav() {
                       </p>
                       <Link
                         href="/courier"
-                        className="mt-4 inline-block rounded-full bg-electric px-4 py-1.5 text-[12px] font-bold text-white transition-opacity hover:opacity-90"
+                        className="mt-4 inline-block rounded-full bg-[#5a6bff] px-4 py-1.5 text-[12px] font-bold text-white shadow-[0_4px_14px_-2px_rgba(90,107,255,0.5)] transition-opacity hover:opacity-90"
                       >
                         View service →
                       </Link>
