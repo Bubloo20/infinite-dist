@@ -1,6 +1,6 @@
 import Hero from "@/components/home/Hero";
 import Stats from "@/components/home/Stats";
-import Process from "@/components/home/Process";
+import ServiceChooser from "@/components/home/ServiceChooser";
 import DistributionBand from "@/components/home/DistributionBand";
 import ServiceBlurb from "@/components/home/ServiceBlurb";
 import WhyChooseUs from "@/components/home/WhyChooseUs";
@@ -12,7 +12,7 @@ export default function Home() {
     <main>
       <Hero />
       <Stats />
-      <Process />
+      <ServiceChooser />
       <DistributionBand />
       <ServiceBlurb />
       <WhyChooseUs />
