@@ -19,6 +19,7 @@ export default function Contact() {
       const ok = await submitForm(
         {
           Name: `${d.get("firstName")} ${d.get("lastName")}`.trim(),
+          Service: (d.get("service") as string) || "—",
           Email: (d.get("email") as string) || "—",
           Phone: (d.get("phone") as string) || "—",
           Message: (d.get("message") as string) || "—",
@@ -55,7 +56,7 @@ export default function Contact() {
           transition={{ duration: 0.8, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
           className="mt-5 max-w-4xl font-display text-[clamp(2rem,5vw,3.75rem)] font-bold leading-[1.1] tracking-tight text-ink"
         >
-          Discover a new way of advertising
+          Leaflet distribution or courier delivery
           <br />
           Take the first step with a{" "}
           <span className="rounded-lg bg-white/70 px-2 text-ink">FREE</span> quote
@@ -104,6 +105,22 @@ export default function Contact() {
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="grid gap-7 sm:grid-cols-2">
+              <div className="sm:col-span-2">
+                <Label>Which service? *</Label>
+                <select
+                  name="service"
+                  required
+                  defaultValue=""
+                  className="w-full rounded-full border border-ink/15 bg-white/70 px-5 py-4 text-ink outline-none transition focus:border-electric focus:bg-white"
+                >
+                  <option value="" disabled>
+                    Select a service…
+                  </option>
+                  <option value="Leaflet distribution">Leaflet distribution</option>
+                  <option value="Courier / parcel delivery">Courier / parcel delivery</option>
+                  <option value="Both">Both</option>
+                </select>
+              </div>
               <Field label="First name" name="firstName" required />
               <Field label="Last name" name="lastName" required />
               <Field label="Email" name="email" type="email" required />

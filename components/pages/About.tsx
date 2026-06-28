@@ -89,9 +89,9 @@ export default function About() {
             transition={{ duration: 0.7 }}
             className="mt-6 max-w-3xl text-2xl leading-relaxed text-ink/80 sm:text-3xl"
           >
-            Deliver letters/pamphlets at a low cost with maximum effort. No Middleman. No hassle and
-            peace of mind, knowing that every letterbox in the region will receive your message,
-            allowing local/small businesses to thrive.
+            Deliver leaflets and parcels at a low cost with maximum effort. No middleman. No hassle —
+            just peace of mind, knowing every letterbox in the region gets your message and every parcel
+            reaches its door, allowing local/small businesses to thrive.
           </motion.p>
         </div>
       </section>

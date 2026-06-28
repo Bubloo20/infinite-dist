@@ -241,7 +241,7 @@ export default function Courier() {
           <div className="grid gap-8 lg:grid-cols-2">
             <motion.div {...fade} className="rounded-5xl bg-lavender p-10 sm:p-14">
               <div className="font-display text-right text-2xl font-bold text-ink">
-                Starting from $15
+                Starting from $20
               </div>
               <div className="mt-6 font-display text-5xl font-bold text-ink">01</div>
               <h3 className="mt-3 font-display text-3xl font-extrabold tracking-tight text-ink">
@@ -252,7 +252,7 @@ export default function Courier() {
                 or nearby area. Fast, affordable, and tracked.
               </p>
               <ul className="mt-8 space-y-3 text-ink/80">
-                {["Same-day pickup available", "GPS tracking included", "Proof of delivery photo", "Up to 5 kg"].map(
+                {["Same-day pickup available on request", "GPS tracking included", "Proof of delivery photo"].map(
                   (b) => (
                     <li key={b} className="flex gap-3">
                       <span className="mt-2.5 h-1.5 w-1.5 shrink-0 rounded-full bg-ink/60" />

@@ -10,6 +10,9 @@ const suburbs = [
   { name: "Thornbury", lat: -37.7561, lng: 144.9995 },
   { name: "Ivanhoe", lat: -37.7667, lng: 145.0419 },
   { name: "Heidelberg", lat: -37.7561, lng: 145.0667 },
+  { name: "Kew", lat: -37.806, lng: 145.033 },
+  { name: "Hawthorn", lat: -37.822, lng: 145.035 },
+  { name: "Balwyn", lat: -37.809, lng: 145.0815 },
 ];
 
 const nearby = [
@@ -131,10 +134,10 @@ export default function Locations() {
             transition={{ duration: 0.8, delay: 0.18 }}
             className="mt-6 max-w-2xl text-lg leading-relaxed text-ink/70"
           >
-            We cover Melbourne&apos;s inner north and north-east — door-to-door letterbox
+            We cover Melbourne&apos;s inner north, north-east and east — door-to-door letterbox
             distribution within roughly a <span className="font-semibold text-ink">4&nbsp;km radius</span>{" "}
-            of Northcote, Thornbury, Ivanhoe and Heidelberg, plus the surrounding suburbs. Not sure if
-            we reach your street? Just ask.
+            of Northcote, Thornbury, Ivanhoe, Heidelberg, Kew, Hawthorn and Balwyn, plus the surrounding
+            suburbs. Not sure if we reach your street? Just ask.
           </motion.p>
         </div>
       </section>
