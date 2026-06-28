@@ -11,7 +11,7 @@ const points = [
   {
     n: "02",
     title: "Commitment to Security",
-    body: "We take the security of your materials seriously. From the moment your pamphlets are handed to our trained team, they are carefully handled and delivered safely to every letterbox. Our structured process ensures nothing is lost, damaged, or misplaced — giving you complete peace of mind.",
+    body: "We take the security of your materials seriously. From the moment your pamphlets or parcels are handed to our trained team, they are carefully handled and delivered safely to every letterbox or doorstep. Our structured process ensures nothing is lost, damaged, or misplaced — giving you complete peace of mind.",
   },
   {
     n: "03",
