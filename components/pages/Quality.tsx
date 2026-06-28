@@ -1,6 +1,45 @@
 "use client";
 
 import { motion } from "framer-motion";
+import ProcessSteps, { type Step, type Aside } from "@/components/ProcessSteps";
+
+const leafletSteps: Step[] = [
+  {
+    n: "01",
+    title: "Send Us Your Flyers",
+    body: "Simply provide us with your flyers, brochures, or promotional material.",
+    dark: true,
+  },
+  {
+    n: "02",
+    title: "We Plan The Distribution",
+    body: "Our team maps out the best distribution routes, targeting the suburbs and streets that matter most to your campaign.",
+    dark: false,
+  },
+  {
+    n: "03",
+    title: "Reliable Delivery",
+    body: "Our trained distributors deliver your flyers directly into letterboxes across your chosen suburbs, on time and with accuracy.",
+    dark: true,
+  },
+  {
+    n: "04",
+    title: "Tracking & Reporting",
+    body: "We provide updates and tracking data (distance travelled, time spent) upon completion, so you always know your marketing is in safe hands. You can request pictures from the distributor at any time.",
+    dark: false,
+  },
+];
+
+const leafletAside: Aside[] = [
+  {
+    h: "Delivery Proof",
+    p: "All drops are tracked with tracking apps. We send the tracking data to you as proof of completion.",
+  },
+  {
+    h: "Our Guarantee",
+    p: "Every flier/leaflet placed in the letterbox will be tracked, and tracking will be provided upon job completion.",
+  },
+];
 
 const services = [
   { t: "Bulk Mail Distribution", d: "Efficient solutions for businesses with large-scale mailing needs." },
@@ -77,6 +116,9 @@ export default function Quality() {
           </ul>
         </div>
       </section>
+
+      {/* How it works */}
+      <ProcessSteps eyebrow="How Our Flawless System Works" steps={leafletSteps} aside={leafletAside} />
 
       {/* Tracking */}
       <section className="bg-white py-16">

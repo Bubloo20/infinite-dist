@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import Link from "next/link";
+import ProcessSteps, { type Step, type Aside } from "@/components/ProcessSteps";
 
 function IconBox({ children }: { children: React.ReactNode }) {
   return (
@@ -84,26 +85,41 @@ const features = [
   },
 ];
 
-const steps = [
+const courierSteps: Step[] = [
   {
     n: "01",
     title: "Book Online or Call Us",
-    desc: "Tell us your pickup address, destination, and preferred time. We'll confirm the booking instantly.",
+    body: "Tell us your pickup address, destination, and preferred time. We'll confirm the booking instantly.",
+    dark: true,
   },
   {
     n: "02",
     title: "We Pick It Up",
-    desc: "Our driver arrives on time at your door. We handle your items with care from the moment we collect them.",
+    body: "Our driver arrives on time at your door and handles your items with care from the moment we collect them.",
+    dark: false,
   },
   {
     n: "03",
     title: "Fast Delivery",
-    desc: "We take the fastest route to your recipient. No detours, no delays.",
+    body: "We take the fastest route straight to your recipient — anywhere across Melbourne. No detours, no delays.",
+    dark: true,
   },
   {
     n: "04",
     title: "Proof of Delivery",
-    desc: "You receive a delivery confirmation with photo evidence the moment it's done.",
+    body: "You receive a delivery confirmation with photo evidence and live GPS tracking the moment it's done.",
+    dark: false,
+  },
+];
+
+const courierAside: Aside[] = [
+  {
+    h: "Real-Time Tracking",
+    p: "Track your parcel live from pickup to doorstep — you always know exactly where your delivery is.",
+  },
+  {
+    h: "Fast & Affordable",
+    p: "Same-day pickups on request, rates that beat the competition, and proof of delivery on every job.",
   },
 ];
 
@@ -191,49 +207,7 @@ export default function Courier() {
       </section>
 
       {/* How it works */}
-      <section className="bg-dark py-24">
-        <div className="container-site">
-          <motion.div {...fade} className="max-w-2xl">
-            <p className="section-label text-white/50">The Process</p>
-            <h2 className="mt-4 font-display text-4xl font-extrabold tracking-tight text-white sm:text-5xl">
-              How it works
-            </h2>
-          </motion.div>
-
-          <div className="mt-14 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            {steps.map((s, i) => (
-              <motion.div
-                key={s.n}
-                {...fade}
-                transition={{ ...fade.transition, delay: i * 0.1 }}
-                className={`rounded-4xl p-8 ${i % 2 === 0 ? "bg-ink" : "bg-lavender"}`}
-              >
-                <div
-                  className={`font-display text-5xl font-extrabold ${
-                    i % 2 === 0 ? "text-orchid" : "text-electric"
-                  }`}
-                >
-                  {s.n}
-                </div>
-                <h3
-                  className={`mt-5 font-display text-xl font-extrabold tracking-tight ${
-                    i % 2 === 0 ? "text-white" : "text-ink"
-                  }`}
-                >
-                  {s.title}
-                </h3>
-                <p
-                  className={`mt-3 text-base leading-relaxed ${
-                    i % 2 === 0 ? "text-white/65" : "text-ink/75"
-                  }`}
-                >
-                  {s.desc}
-                </p>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </section>
+      <ProcessSteps eyebrow="How It Works" steps={courierSteps} aside={courierAside} />
 
       {/* Pricing callout */}
       <section className="bg-white py-24">
