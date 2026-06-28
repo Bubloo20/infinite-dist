@@ -58,8 +58,8 @@ const features = [
         </svg>
       </IconBox>
     ),
-    title: "Real-Time GPS Tracking",
-    desc: "Track your parcel live from pickup to doorstep. Always know exactly where your delivery is.",
+    title: "GPS Tracking & Proof",
+    desc: "Get GPS data, the completion time, and a photo as proof the moment your delivery is done.",
   },
   {
     icon: (
@@ -88,8 +88,8 @@ const features = [
 const courierSteps: Step[] = [
   {
     n: "01",
-    title: "Book Online or Call Us",
-    body: "Tell us your pickup address, destination, and preferred time. We'll confirm the booking instantly.",
+    title: "Call or Message Us",
+    body: "Call 0421 042 007 or message us with your pickup address, destination, and preferred time — we'll get a confirmation back to you quickly.",
     dark: true,
   },
   {
@@ -101,21 +101,21 @@ const courierSteps: Step[] = [
   {
     n: "03",
     title: "Fast Delivery",
-    body: "We take the fastest route straight to your recipient — anywhere across Melbourne. No detours, no delays.",
+    body: "We take the fastest route straight to your destination. No detours, no delays.",
     dark: true,
   },
   {
     n: "04",
     title: "Proof of Delivery",
-    body: "You receive a delivery confirmation with photo evidence and live GPS tracking the moment it's done.",
+    body: "You get a delivery confirmation with photo proof, GPS data and the completion time once it's delivered.",
     dark: false,
   },
 ];
 
 const courierAside: Aside[] = [
   {
-    h: "Real-Time Tracking",
-    p: "Track your parcel live from pickup to doorstep — you always know exactly where your delivery is.",
+    h: "Updates & Proof",
+    p: "Get updates and peace of mind when your delivery is completed — with GPS data, the time, and a photo.",
   },
   {
     h: "Fast & Affordable",

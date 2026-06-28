@@ -8,7 +8,7 @@ const services = [
     title: "Leaflet Distribution",
     desc: "GPS-tracked letterbox drops across Melbourne's suburbs — your flyers straight to the door.",
     href: "/quality",
-    img: "/images/home-distributions.jpg",
+    img: "/images/service-leaflet.jpg",
     cta: "View leaflet service",
     accent: "text-orchid",
     // orchid glow on hover
@@ -18,7 +18,7 @@ const services = [
     title: "Parcels & Courier",
     desc: "Fast, affordable same-day courier — parcels and documents anywhere in Melbourne.",
     href: "/courier",
-    img: "/images/home-send-card.jpg",
+    img: "/images/service-courier.jpg",
     cta: "View courier service",
     accent: "text-electric",
     // electric-blue glow on hover
@@ -72,7 +72,7 @@ export default function ServiceChooser() {
                 <div
                   className={`overflow-hidden rounded-4xl shadow-[0_10px_30px_-15px_rgba(0,0,0,0.25)] ring-1 ring-black/5 transition-all duration-300 group-hover:-translate-y-1.5 ${s.glow}`}
                 >
-                  <div className="relative aspect-[3/2] overflow-hidden bg-mist">
+                  <div className="relative aspect-square overflow-hidden bg-night">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={s.img}
