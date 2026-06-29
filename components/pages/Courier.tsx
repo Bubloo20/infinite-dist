@@ -160,7 +160,7 @@ export default function Courier() {
             className="mt-6 max-w-2xl text-xl leading-relaxed text-white/70"
           >
             Infinite Distributions offers a no-fuss courier service across Melbourne.
-            Same-day pickups, GPS tracking, and proof of delivery — at a price that won&apos;t
+            Same-day pickups on request, GPS tracking, and proof of delivery — at a price that won&apos;t
             break the bank.
           </motion.p>
           <motion.div

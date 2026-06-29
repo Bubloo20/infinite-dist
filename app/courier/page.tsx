@@ -5,7 +5,7 @@ import CtaBand from "@/components/CtaBand";
 export const metadata: Metadata = {
   title: "Courier Service Melbourne — Fast & Cheap Delivery",
   description:
-    "Same-day courier service across Melbourne. GPS-tracked, proof of delivery, low flat rates from $15. Book your local or metro courier run today.",
+    "Courier service across Melbourne, with same-day available on request. GPS-tracked, proof of delivery, low flat rates from $15. Book your local or metro courier run today.",
   alternates: { canonical: "/courier" },
   openGraph: {
     type: "website",
@@ -13,7 +13,7 @@ export const metadata: Metadata = {
     siteName: "Infinite Distributions",
     title: "Courier Service Melbourne | Infinite Distributions",
     description:
-      "Fast, cheap, and reliable courier service across Melbourne. Same-day pickup, GPS tracking, proof of delivery.",
+      "Fast, cheap, and reliable courier service across Melbourne. Same-day pickup on request, GPS tracking, proof of delivery.",
     url: "/courier",
     images: [
       { url: "/og.png", width: 1200, height: 630, alt: "Infinite Distributions — Courier Service Melbourne" },
@@ -23,7 +23,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Courier Service Melbourne | Infinite Distributions",
     description:
-      "Fast, cheap, and reliable courier service across Melbourne. Same-day pickup, GPS tracking, proof of delivery.",
+      "Fast, cheap, and reliable courier service across Melbourne. Same-day pickup on request, GPS tracking, proof of delivery.",
     images: ["/og.png"],
   },
 };

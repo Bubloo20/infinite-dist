@@ -16,7 +16,7 @@ const services = [
   },
   {
     title: "Parcels & Courier",
-    desc: "Fast, affordable same-day courier — parcels and documents anywhere in Melbourne.",
+    desc: "Fast, affordable courier for parcels and documents anywhere in Melbourne — same-day on request.",
     href: "/courier",
     img: "/images/service-courier.jpg",
     cta: "View courier service",
