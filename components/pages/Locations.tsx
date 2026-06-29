@@ -149,7 +149,7 @@ export default function Locations() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, margin: "-60px" }}
             transition={{ duration: 0.7 }}
-            className="overflow-hidden rounded-4xl border border-slate-200 shadow-soft"
+            className="relative z-0 overflow-hidden rounded-4xl border border-slate-200 shadow-soft"
           >
             <div
               ref={containerRef}
