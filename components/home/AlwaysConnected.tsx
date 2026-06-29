@@ -15,7 +15,7 @@ const features = [
   },
   {
     title: "Safe Delivery",
-    body: "Each and every pamphlet/letter is delivered with the utmost care. Upon completion of the drop, tracking data is provided.",
+    body: "Each and every pamphlet, letter or parcel is delivered with the utmost care. Upon completion, tracking data is provided.",
     icon: (
       <>
         <rect x="5" y="11" width="14" height="9" rx="2" />
