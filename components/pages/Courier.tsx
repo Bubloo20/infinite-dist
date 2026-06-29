@@ -101,7 +101,7 @@ const courierSteps: Step[] = [
   {
     n: "03",
     title: "Fast Delivery",
-    body: "We take the fastest route straight to your destination. No detours, no delays.",
+    body: "Fast and safe — and you'll know where your parcel is at any time.",
     dark: true,
   },
   {
