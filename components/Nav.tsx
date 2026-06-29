@@ -125,7 +125,7 @@ export default function Nav() {
                         Courier
                       </p>
                       <p className="mt-2 text-[13px] leading-relaxed text-white/55">
-                        Fast, cheap courier anywhere in Melbourne — same-day on request.
+                        Fast, cheap courier across Melbourne&apos;s north-east — same-day on request.
                       </p>
                       <Link
                         href="/courier"
