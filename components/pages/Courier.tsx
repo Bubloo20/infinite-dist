@@ -3,6 +3,7 @@
 import { motion } from "framer-motion";
 import Link from "next/link";
 import ProcessSteps, { type Step, type Aside } from "@/components/ProcessSteps";
+import GuaranteeBand from "@/components/GuaranteeBand";
 
 function IconBox({ children }: { children: React.ReactNode }) {
   return (
@@ -176,6 +177,9 @@ export default function Courier() {
           </motion.div>
         </div>
       </section>
+
+      {/* On-time guarantee */}
+      <GuaranteeBand />
 
       {/* Features grid */}
       <section className="bg-white py-24">

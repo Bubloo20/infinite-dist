@@ -1,5 +1,5 @@
 import Hero from "@/components/home/Hero";
-import GuaranteeBand from "@/components/home/GuaranteeBand";
+import GuaranteeBand from "@/components/GuaranteeBand";
 import Stats from "@/components/home/Stats";
 import ServiceChooser from "@/components/home/ServiceChooser";
 import DistributionBand from "@/components/home/DistributionBand";
