@@ -12,6 +12,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { path: "/courier", priority: 0.9, changeFrequency: "monthly" as const },
     { path: "/contact", priority: 0.9, changeFrequency: "monthly" as const },
     { path: "/join", priority: 0.6, changeFrequency: "monthly" as const },
+    { path: "/guarantee-terms", priority: 0.3, changeFrequency: "yearly" as const },
   ];
 
   const lastModified = new Date();

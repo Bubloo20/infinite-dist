@@ -1,6 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
+import Link from "next/link";
 
 export default function GuaranteeBand() {
   return (
@@ -66,7 +67,14 @@ export default function GuaranteeBand() {
               transition={{ duration: 0.6, delay: 0.28 }}
               className="mt-5 text-sm text-white/65"
             >
-              *Applies to delays within our control, on a deadline agreed in advance. Ask us for details.
+              *Applies to delays within our control, on a deadline agreed in advance.{" "}
+              <Link
+                href="/guarantee-terms"
+                className="font-semibold text-white underline decoration-white/50 underline-offset-2 transition-colors hover:decoration-white"
+              >
+                Click here for details
+              </Link>
+              .
             </motion.p>
           </div>
         </div>
