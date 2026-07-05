@@ -43,8 +43,8 @@ export default function Hero() {
           transition={{ duration: 0.8, delay: 0.25, ease: [0.22, 1, 0.36, 1] }}
           className="mt-10"
         >
-          <ArrowPill href="/contact" variant="light">
-            Get A Quote
+          <ArrowPill href="/courier" variant="light">
+            View Courier Services
           </ArrowPill>
         </motion.div>
 
@@ -55,7 +55,7 @@ export default function Hero() {
           className="mt-10 max-w-xl space-y-5 text-xl text-white/90 sm:text-2xl"
         >
           <p>
-            From your hand to letter box&apos;s. Nothing else. No middleman. No hassle. Delivery{" "}
+            From your hand to letterbox/doorstep. Nothing else. No middleman. No hassle. Delivery{" "}
             <span className="font-bold">Guaranteed</span>
           </p>
           <p className="text-lg sm:text-xl">
