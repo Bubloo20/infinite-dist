@@ -139,6 +139,25 @@ export default function Locations() {
             of Northcote, Thornbury, Ivanhoe, Heidelberg, Kew, Hawthorn and Balwyn, plus the surrounding
             suburbs. Not sure if we reach your street? Just ask.
           </motion.p>
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 0.26 }}
+            className="mt-8 flex max-w-2xl items-start gap-4 rounded-2xl border border-slate-200 bg-mist px-6 py-5"
+          >
+            <span className="mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-electric/10 text-electric">
+              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+                <path d="M3.3 7L12 12l8.7-5M12 22V12" />
+              </svg>
+            </span>
+            <p className="text-base leading-relaxed text-ink/75">
+              <span className="font-semibold text-ink">Couriering a parcel?</span> We deliver anywhere within a{" "}
+              <span className="font-semibold text-ink">10&nbsp;km radius</span> of your pickup location — prices vary
+              with distance.
+            </p>
+          </motion.div>
         </div>
       </section>
 

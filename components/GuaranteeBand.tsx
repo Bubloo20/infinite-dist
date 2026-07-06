@@ -31,9 +31,12 @@ export default function GuaranteeBand() {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, margin: "-80px" }}
               transition={{ duration: 0.5 }}
-              className="inline-flex items-center gap-2 rounded-full bg-white/15 px-4 py-1.5 text-xs font-bold uppercase tracking-[0.14em] text-white ring-1 ring-white/25"
+              className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-1.5 text-xs font-extrabold uppercase tracking-[0.14em] shadow-[0_8px_24px_-8px_rgba(0,0,0,0.45)]"
             >
-              On-time guarantee
+              <span className="bg-gradient-to-r from-[#7c3aed] to-orchid bg-clip-text text-transparent">
+                Superior
+              </span>
+              <span className="text-ink">Guarantee</span>
             </motion.span>
 
             <motion.h2
