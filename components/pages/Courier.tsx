@@ -84,6 +84,19 @@ const features = [
     title: "North-Eastern Suburbs",
     desc: "We specialise in Melbourne's north-eastern suburbs — local knowledge means faster, smarter routes.",
   },
+  {
+    icon: (
+      <IconBox>
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#b66dc7" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="4.5" y="10.5" width="15" height="9.5" rx="2.5" />
+          <path d="M8 10.5V7.5a4 4 0 0 1 8 0v3" />
+          <circle cx="12" cy="15" r="1.4" />
+        </svg>
+      </IconBox>
+    ),
+    title: "Secure & Confidential",
+    desc: "Legal documents, prescriptions and other sensitive items are handled discreetly and kept private — your data and privacy are never compromised.",
+  },
 ];
 
 const courierSteps: Step[] = [
