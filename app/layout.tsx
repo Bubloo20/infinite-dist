@@ -19,11 +19,11 @@ const jakarta = Plus_Jakarta_Sans({
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: "Infinite Distributions | Letterbox Flyer Distribution Melbourne",
+    default: "Infinite Distributions — Letterbox Distribution & Courier Melbourne",
     template: "%s | Infinite Distributions",
   },
   description:
-    "Melbourne's trusted letterbox flyer & leaflet distribution. From your hand to the letterbox — no middleman, no hassle, delivery guaranteed. GPS-tracked, crease-free drops across Manningham, Ivanhoe, Heidelberg, Northcote, Preston & more.",
+    "Melbourne letterbox flyer distribution and same-day courier — GPS-tracked, crease-free, and on-time delivery guaranteed or it's free. Door-to-door drops and parcel delivery across Northcote, Ivanhoe, Heidelberg, Kew, Hawthorn, Balwyn and Melbourne's north-east.",
   keywords: [
     "letterbox distribution Melbourne",
     "flyer distribution Melbourne",
@@ -45,7 +45,7 @@ export const metadata: Metadata = {
     locale: "en_AU",
     url: "/",
     siteName: "Infinite Distributions",
-    title: "Infinite Distributions | Letterbox Flyer Distribution Melbourne",
+    title: "Infinite Distributions — Letterbox Distribution & Courier Melbourne",
     description:
       "Melbourne's trusted letterbox flyer distribution — GPS-tracked, crease-free, delivery guaranteed. No middleman, no hassle.",
     images: [
@@ -59,7 +59,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Infinite Distributions | Letterbox Flyer Distribution Melbourne",
+    title: "Infinite Distributions — Letterbox Distribution & Courier Melbourne",
     description:
       "Melbourne's trusted letterbox flyer distribution — GPS-tracked, crease-free, delivery guaranteed.",
     images: ["/og.png"],
@@ -103,7 +103,7 @@ const jsonLd = {
       "@id": `${SITE_URL}/#business`,
       name: "Infinite Distributions",
       description:
-        "Melbourne letterbox flyer and leaflet distribution. GPS-tracked, crease-free drops direct to residential letterboxes. Delivery guaranteed.",
+        "Melbourne letterbox flyer distribution and courier service. GPS-tracked, crease-free drops direct to residential letterboxes, plus fast parcel and document courier — backed by an on-time delivery guarantee.",
       url: SITE_URL,
       email: "infinitedistributionsmelb@gmail.com",
       telephone: "+61421042007",
@@ -122,21 +122,58 @@ const jsonLd = {
         longitude: 144.9631,
       },
       areaServed: [
-        "Manningham",
-        "Doncaster",
-        "Bulleen",
-        "Templestowe",
-        "Ivanhoe",
-        "Heidelberg",
-        "Macleod",
-        "Rosanna",
         "Northcote",
         "Thornbury",
+        "Ivanhoe",
+        "Heidelberg",
+        "Kew",
+        "Hawthorn",
+        "Balwyn",
         "Preston",
+        "Fairfield",
+        "Alphington",
+        "Eaglemont",
+        "Macleod",
+        "Rosanna",
+        "Reservoir",
+        "Bulleen",
+        "Doncaster",
+        "Templestowe",
+        "Manningham",
         "Melbourne",
       ].map((name) => ({ "@type": "Place", name })),
       slogan: "Local Reach. Maximum Impact.",
-      knowsAbout: ["Letterbox distribution", "Flyer delivery", "Leaflet distribution", "Direct mail marketing"],
+      knowsAbout: [
+        "Letterbox distribution",
+        "Flyer delivery",
+        "Leaflet distribution",
+        "Direct mail marketing",
+        "Courier service",
+        "Same-day delivery",
+        "Parcel and document delivery",
+      ],
+    },
+    {
+      "@type": "Service",
+      "@id": `${SITE_URL}/#leaflet-distribution`,
+      serviceType: "Letterbox flyer distribution",
+      name: "Letterbox Distribution",
+      description:
+        "GPS-tracked, door-to-door letterbox flyer and leaflet distribution across Melbourne's inner north and north-east.",
+      provider: { "@id": `${SITE_URL}/#business` },
+      areaServed: { "@type": "City", name: "Melbourne" },
+      url: `${SITE_URL}/quality`,
+    },
+    {
+      "@type": "Service",
+      "@id": `${SITE_URL}/#courier`,
+      serviceType: "Courier and parcel delivery",
+      name: "Courier Service",
+      description:
+        "Fast, affordable courier for parcels and documents across Melbourne — same-day on request, GPS-tracked, with proof of delivery and an on-time guarantee.",
+      provider: { "@id": `${SITE_URL}/#business` },
+      areaServed: { "@type": "City", name: "Melbourne" },
+      url: `${SITE_URL}/courier`,
     },
   ],
 };
