@@ -1,9 +1,11 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import { usePathname } from "next/navigation";
 import { submitForm } from "@/lib/forms";
 
 export default function Footer() {
+  const pathname = usePathname();
   const [subscribed, setSubscribed] = useState(false);
 
   const onSubscribe = async (e: FormEvent<HTMLFormElement>) => {
@@ -21,6 +23,9 @@ export default function Footer() {
       /* confirmation already shown; signup is best-effort */
     }
   };
+
+  // The team portal is a standalone app — no marketing chrome.
+  if (pathname?.startsWith("/portal")) return null;
 
   return (
     <footer className="bg-night text-white">

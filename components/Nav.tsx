@@ -48,6 +48,9 @@ export default function Nav() {
 
   const servicesActive = servicesPaths.includes(pathname);
 
+  // The team portal is a standalone app — no marketing chrome.
+  if (pathname?.startsWith("/portal")) return null;
+
   return (
     <header
       className={`fixed inset-x-0 top-0 z-[60] transition-colors duration-300 ${
