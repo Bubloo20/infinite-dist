@@ -10,7 +10,19 @@ export async function GET() {
     return NextResponse.json({ ok: false, error: "Admin access required." }, { status: 401 });
   }
   if (!dbConfigured()) {
-    return NextResponse.json({ ok: true, dbConfigured: false, logs: [] });
+    // Names only, never values — helps diagnose a missing/misnamed env var.
+    return NextResponse.json({
+      ok: true,
+      dbConfigured: false,
+      logs: [],
+      diagnostic: {
+        dbEnvVarsVisible: Object.keys(process.env)
+          .filter((k) => /POSTGRES|DATABASE|NEON|PG/i.test(k))
+          .sort(),
+        portalSecretSet: Boolean(process.env.PORTAL_SECRET),
+        vercelEnv: process.env.VERCEL_ENV || null,
+      },
+    });
   }
   try {
     const logs = await listWorkLogs();
