@@ -16,6 +16,8 @@ export default function InvoicePage() {
   const [agent, setAgent] = useState<Agent | null>(null);
   const [loading, setLoading] = useState(true);
   const [denied, setDenied] = useState(false);
+  const [agencyAgents, setAgencyAgents] = useState<Agent[]>([]);
+  const [sendTo, setSendTo] = useState("");
 
   useEffect(() => {
     fetch("/api/portal/admin/clients")
@@ -26,7 +28,10 @@ export default function InvoicePage() {
         setJob(j || null);
         if (j) {
           setAgency((d.agencies || []).find((a: Agency) => a.id === j.agency_id) || null);
-          setAgent((d.agents || []).find((a: Agent) => a.id === j.agent_id) || null);
+          const all: Agent[] = d.agents || [];
+          setAgent(all.find((a) => a.id === j.agent_id) || null);
+          setAgencyAgents(all.filter((a) => a.agency_id === j.agency_id));
+          if (j.agent_id) setSendTo(String(j.agent_id));
         }
       })
       .catch(() => setDenied(true))
@@ -52,6 +57,50 @@ export default function InvoicePage() {
         >
           Save as PDF / Print
         </button>
+      </div>
+
+      {/* Send to an agent — opens Gmail composing from your account. */}
+      <div className="mx-auto mb-6 max-w-[820px] rounded-2xl border border-slate-200 bg-white px-6 py-5 shadow-sm print:hidden">
+        <p className="font-display text-base font-bold text-ink">Send this invoice</p>
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          <select value={sendTo} onChange={(e) => setSendTo(e.target.value)}
+            className="min-w-[240px] flex-1 rounded-xl border border-slate-300 px-4 py-2.5 text-sm text-ink outline-none focus:border-ink">
+            <option value="">Choose an agent…</option>
+            {agencyAgents.map((a) => (
+              <option key={a.id} value={a.id} disabled={!a.email}>
+                {a.name}{a.email ? ` — ${a.email}` : " (no email on file)"}
+              </option>
+            ))}
+          </select>
+          <button
+            disabled={!sendTo || !agencyAgents.find((a) => String(a.id) === sendTo)?.email}
+            onClick={() => {
+              const to = agencyAgents.find((a) => String(a.id) === sendTo);
+              if (!to?.email) return;
+              const invNo = job.invoice_no || `00${job.id}`;
+              const subject = `Invoice ${invNo} — Infinite Distributions`;
+              const body =
+                `Hi ${to.name.split(" ")[0]},\n\n` +
+                `Please find attached invoice ${invNo} for ${qty ? qty.toLocaleString() : ""} leaflets` +
+                `${job.area ? ` in ${job.area}` : ""}${job.completed_on ? `, completed ${dateAu(job.completed_on)}` : ""}.\n\n` +
+                `Total amount due: $${money(total)}\n` +
+                `Payment terms: within 1 week of the invoice date.\n\n` +
+                `Bank details\nAccount name: Sarvesh Mohanrajh\nBSB: 670 - 864\nAccount No: 3878 5206\n\n` +
+                `Thanks,\nSarvesh Mohanrajh\nInfinite Distributions\nABN 66 177 274 211\n0421 042 007`;
+              window.open(
+                `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(to.email)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`,
+                "_blank", "noopener",
+              );
+            }}
+            className="rounded-xl bg-ink px-6 py-2.5 text-sm font-bold text-white transition hover:-translate-y-0.5 disabled:opacity-40 disabled:hover:translate-y-0"
+          >
+            Compose in Gmail
+          </button>
+        </div>
+        <p className="mt-2.5 text-[13px] text-ink/50">
+          Opens Gmail with the agent, subject and details filled in, sent from whichever account you&apos;re signed into.
+          Save the PDF above first and attach it. Agent emails come from the Agents tab.
+        </p>
       </div>
 
       <div className="mx-auto max-w-[820px] bg-white px-12 py-12 shadow-xl print:max-w-none print:px-0 print:py-0 print:shadow-none">
