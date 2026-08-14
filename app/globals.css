@@ -99,7 +99,7 @@ body {
    portal so white option text isn't drawn on a white background. */
 select option,
 select optgroup {
-  background-color: #141024;
+  background-color: #000000;
   color: #ffffff;
 }
 

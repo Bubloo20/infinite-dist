@@ -17,7 +17,7 @@ const btnGhost = "rounded-xl border border-white/12 bg-white/[0.05] px-4 py-2.5 
 
 /** red = yet to be sent · orange = out for delivery · green = completed */
 export const STATUS: Record<JobStatus, { label: string; cls: string; dot: string }> = {
-  to_send: { label: "Yet to be sent", cls: "border-rose-400/35 bg-rose-500/12 text-rose-300", dot: "bg-rose-400" },
+  to_send: { label: "Waiting for dispatch", cls: "border-rose-400/35 bg-rose-500/12 text-rose-300", dot: "bg-rose-400" },
   out_for_delivery: { label: "Out for delivery", cls: "border-amber-400/35 bg-amber-500/12 text-amber-300", dot: "bg-amber-400" },
   completed: { label: "Completed", cls: "border-emerald-400/35 bg-emerald-500/12 text-emerald-300", dot: "bg-emerald-400" },
 };
@@ -301,7 +301,7 @@ export function ClientJobsTab({ agencies, agents, jobs, workLogs, users, post, d
             <input className={input} placeholder="e.g. 0.13" inputMode="decimal" value={f.ratePerLeaflet} onChange={(e) => setF({ ...f, ratePerLeaflet: e.target.value })} />
           </label>
           <select className={input} value={f.status} onChange={(e) => setF({ ...f, status: e.target.value })}>
-            <option value="to_send">Yet to be sent</option>
+            <option value="to_send">Waiting for dispatch</option>
             <option value="out_for_delivery">Out for delivery</option>
             <option value="completed">Completed</option>
           </select>
@@ -454,7 +454,7 @@ function ClientJobRow({ job, agencyName, agentName, expenses, users, post, del }
           <div className="flex flex-wrap justify-end gap-2">
             <select className={`${input} !w-auto !py-2`} value={job.status}
               onChange={(e) => post({ entity: "job", id: job.id, ...jobPayload(job), status: e.target.value })}>
-              <option value="to_send">Yet to be sent</option>
+              <option value="to_send">Waiting for dispatch</option>
               <option value="out_for_delivery">Out for delivery</option>
               <option value="completed">Completed</option>
             </select>
