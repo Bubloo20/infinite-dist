@@ -72,7 +72,7 @@ export default function WorkLogForm({ onDone }: { onDone?: () => void }) {
             const res = await fetch("/api/portal/strava-check", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ url }),
+              body: JSON.stringify({ url, startedAt, endedAt }),
             });
             const d = await res.json();
             setChecks((c) => ({ ...c, [i]: { status: d.status, message: d.message } }));
@@ -83,7 +83,7 @@ export default function WorkLogForm({ onDone }: { onDone?: () => void }) {
       );
     });
     return () => timers.forEach(clearTimeout);
-  }, [stravaUrls]);
+  }, [stravaUrls, startedAt, endedAt]);
 
   const setAt = (arr: string[], i: number, v: string) => arr.map((x, k) => (k === i ? v : x));
   const blocked = Object.values(checks).some((c) => c.status === "invalid-format" || c.status === "not-found");

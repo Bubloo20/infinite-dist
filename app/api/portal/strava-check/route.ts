@@ -9,12 +9,15 @@ export async function POST(req: Request) {
   if (!isSignedIn()) {
     return NextResponse.json({ ok: false, error: "Not signed in." }, { status: 401 });
   }
-  let body: { url?: string };
+  let body: { url?: string; startedAt?: string; endedAt?: string };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ ok: false, error: "Bad request." }, { status: 400 });
   }
-  const result = await verifyStravaActivity(body.url || "");
+  const result = await verifyStravaActivity(body.url || "", {
+    startedAt: body.startedAt || null,
+    endedAt: body.endedAt || null,
+  });
   return NextResponse.json(result);
 }

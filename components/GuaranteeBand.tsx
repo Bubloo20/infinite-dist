@@ -5,10 +5,15 @@ import Link from "next/link";
 
 export default function GuaranteeBand() {
   return (
-    <section className="relative overflow-hidden bg-gradient-to-r from-electric via-[#4c1d95] to-[#7c3aed]">
-      {/* soft glow accents */}
-      <div className="pointer-events-none absolute -top-24 right-[8%] h-72 w-72 rounded-full bg-white/20 blur-3xl" />
-      <div className="pointer-events-none absolute -bottom-32 left-[4%] h-80 w-80 rounded-full bg-orchid/40 blur-3xl" />
+    <section className="relative overflow-hidden bg-[#0d0b16]">
+      {/* Deep ink base with soft violet light, so it flows out of the dark hero
+          instead of cutting across it with a flat blue. */}
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(120%_140%_at_15%_0%,#2a1c52_0%,transparent_55%)]" />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(90%_120%_at_92%_100%,#3b1f5e_0%,transparent_60%)]" />
+      <div className="pointer-events-none absolute -bottom-40 left-[30%] h-96 w-96 rounded-full bg-orchid/20 blur-[110px]" />
+      {/* hairline edges to separate it cleanly from the sections above/below */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-white/10" />
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-white/10" />
 
       <div className="container-site relative py-16 sm:py-20">
         <div className="flex flex-col items-start gap-7 lg:flex-row lg:items-center lg:gap-12">

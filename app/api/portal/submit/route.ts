@@ -72,8 +72,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: `"${badMapmy}" doesn't look like a MapMyRun/Ride/Walk URL.` }, { status: 400 });
   }
 
-  // Every Strava link must check out before the job is accepted.
-  const checks = await Promise.all(stravaUrls.map((u) => verifyStravaActivity(u)));
+  // Every Strava link must check out — exists, real athlete name, dated inside the shift.
+  const checks = await Promise.all(stravaUrls.map((u) => verifyStravaActivity(u, { startedAt, endedAt })));
   const bad = checks.findIndex((c) => !c.ok);
   if (bad !== -1) {
     return NextResponse.json(

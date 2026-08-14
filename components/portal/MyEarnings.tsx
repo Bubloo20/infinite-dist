@@ -30,7 +30,84 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: "ow
   );
 }
 
-function JobCard({ job }: { job: WorkLog }) {
+const editInput =
+  "w-full rounded-xl border border-white/12 bg-white/[0.05] px-4 py-2.5 text-sm text-white placeholder-white/25 outline-none transition focus:border-orchid/60 focus:bg-white/[0.08] [color-scheme:dark]";
+
+/** Inline editor — only reachable while a shift is unpaid. */
+function EditShift({ job, onDone, onCancel }: { job: WorkLog; onDone: () => void; onCancel: () => void }) {
+  const [f, setF] = useState({
+    jobNumber: job.job_number || "",
+    startedAt: (job.started_at || "").slice(0, 16),
+    endedAt: (job.ended_at || "").slice(0, 16),
+    timeSpent: job.time_spent || "",
+    leafletCount: job.leaflet_count ?? "",
+    areaWorked: job.area_worked || "",
+    notes: job.notes || "",
+  });
+  const [strava, setStrava] = useState<string[]>(unpackLinks(job.strava_urls).length ? unpackLinks(job.strava_urls) : [""]);
+  const [mapmy, setMapmy] = useState<string[]>(unpackLinks(job.mapmy_urls).length ? unpackLinks(job.mapmy_urls) : [""]);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  const save = async () => {
+    setBusy(true); setErr("");
+    try {
+      const r = await fetch("/api/portal/me/log", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: job.id, ...f, stravaUrls: strava, mapmyUrls: mapmy }),
+      });
+      const d = await r.json();
+      if (!d.ok) setErr(d.error || "Couldn't save.");
+      else onDone();
+    } catch { setErr("Network error."); }
+    finally { setBusy(false); }
+  };
+
+  const setAt = (arr: string[], i: number, v: string) => arr.map((x, k) => (k === i ? v : x));
+
+  return (
+    <GlassCard className="p-5 sm:p-6">
+      <p className="font-display text-lg font-bold text-white">Edit shift</p>
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <input className={editInput} placeholder="Job number" value={f.jobNumber} onChange={(e) => setF({ ...f, jobNumber: e.target.value })} />
+        <input className={editInput} placeholder="Area worked" value={f.areaWorked} onChange={(e) => setF({ ...f, areaWorked: e.target.value })} />
+        <input className={editInput} type="datetime-local" value={f.startedAt} onChange={(e) => setF({ ...f, startedAt: e.target.value })} />
+        <input className={editInput} type="datetime-local" value={f.endedAt} onChange={(e) => setF({ ...f, endedAt: e.target.value })} />
+        <input className={editInput} placeholder="Time spent" value={f.timeSpent} onChange={(e) => setF({ ...f, timeSpent: e.target.value })} />
+        <input className={editInput} placeholder="Leaflets" inputMode="numeric" value={String(f.leafletCount)} onChange={(e) => setF({ ...f, leafletCount: e.target.value })} />
+        <div className="sm:col-span-2 space-y-2">
+          {strava.map((u, i) => (
+            <div key={i} className="flex gap-2">
+              <input className={editInput} placeholder="Strava link" value={u} onChange={(e) => setStrava((a) => setAt(a, i, e.target.value))} />
+              {strava.length > 1 && <button onClick={() => setStrava((a) => a.filter((_, k) => k !== i))} className="rounded-xl border border-white/12 px-3 text-white/45">×</button>}
+            </div>
+          ))}
+          <button onClick={() => setStrava((a) => [...a, ""])} className="text-[13px] font-semibold text-orchid">+ Strava link</button>
+        </div>
+        <div className="sm:col-span-2 space-y-2">
+          {mapmy.map((u, i) => (
+            <div key={i} className="flex gap-2">
+              <input className={editInput} placeholder="Map My link (optional)" value={u} onChange={(e) => setMapmy((a) => setAt(a, i, e.target.value))} />
+              {mapmy.length > 1 && <button onClick={() => setMapmy((a) => a.filter((_, k) => k !== i))} className="rounded-xl border border-white/12 px-3 text-white/45">×</button>}
+            </div>
+          ))}
+          <button onClick={() => setMapmy((a) => [...a, ""])} className="text-[13px] font-semibold text-orchid">+ Map My link</button>
+        </div>
+        <textarea className={`${editInput} sm:col-span-2 resize-none`} rows={3} placeholder="Notes" value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} />
+      </div>
+      {err && <p className="mt-3 rounded-xl border border-rose-400/25 bg-rose-500/10 px-4 py-2.5 text-sm text-rose-200">{err}</p>}
+      <div className="mt-4 flex gap-2">
+        <button onClick={save} disabled={busy}
+          className="rounded-xl bg-gradient-to-r from-electric to-orchid px-5 py-2.5 text-sm font-bold text-white transition hover:-translate-y-0.5 disabled:opacity-40">
+          {busy ? "Saving…" : "Save changes"}
+        </button>
+        <button onClick={onCancel} className="rounded-xl border border-white/12 px-5 py-2.5 text-sm font-semibold text-white/60 transition hover:text-white">Cancel</button>
+      </div>
+    </GlassCard>
+  );
+}
+
+function JobCard({ job, onEdit }: { job: WorkLog; onEdit?: () => void }) {
   const strava = unpackLinks(job.strava_urls);
   const mapmy = unpackLinks(job.mapmy_urls);
   const paid = Boolean(job.paid_on);
@@ -75,6 +152,12 @@ function JobCard({ job }: { job: WorkLog }) {
             {job.amount === null ? "—" : money(num(job.amount))}
           </p>
           {job.amount === null && <p className="mt-1 text-[12px] text-white/35">rate pending</p>}
+          {onEdit && !paid && (
+            <button onClick={onEdit} className="mt-3 rounded-lg border border-white/12 bg-white/[0.05] px-3.5 py-1.5 text-[12px] font-bold text-white/70 transition hover:bg-white/[0.1] hover:text-white">
+              Edit
+            </button>
+          )}
+          {paid && <p className="mt-3 text-[11px] uppercase tracking-wide text-white/25">Locked — paid</p>}
         </div>
       </div>
     </GlassCard>
@@ -87,6 +170,8 @@ export default function MyEarnings() {
   const [totals, setTotals] = useState<Totals | null>(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<"unpaid" | "paid" | "payments">("unpaid");
+  const [editing, setEditing] = useState<number | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     fetch("/api/portal/me")
@@ -98,7 +183,7 @@ export default function MyEarnings() {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, []);
+  }, [reloadKey]);
 
   if (loading) {
     return <div className="grid place-items-center py-20"><span className="h-8 w-8 animate-spin rounded-full border-2 border-white/15 border-t-orchid" /></div>;
@@ -161,7 +246,15 @@ export default function MyEarnings() {
         ) : (
           (tab === "unpaid" ? unpaid : paidJobs).map((j, i) => (
             <motion.div key={j.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: Math.min(i * 0.04, 0.3) }}>
-              <JobCard job={j} />
+              {editing === j.id ? (
+                <EditShift
+                  job={j}
+                  onCancel={() => setEditing(null)}
+                  onDone={() => { setEditing(null); setReloadKey((n) => n + 1); }}
+                />
+              ) : (
+                <JobCard job={j} onEdit={() => setEditing(j.id)} />
+              )}
             </motion.div>
           ))
         )}
