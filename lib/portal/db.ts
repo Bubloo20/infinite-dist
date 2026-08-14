@@ -186,6 +186,9 @@ export async function ensureSchema() {
   await sql`ALTER TABLE client_jobs ADD COLUMN IF NOT EXISTS boundary TEXT;`;
   await sql`ALTER TABLE client_jobs ADD COLUMN IF NOT EXISTS map_center TEXT;`;
   await sql`ALTER TABLE client_jobs ADD COLUMN IF NOT EXISTS map_image TEXT;`;
+  // Reference the office uses, and how many of the quantity are actually out.
+  await sql`ALTER TABLE client_jobs ADD COLUMN IF NOT EXISTS job_number TEXT;`;
+  await sql`ALTER TABLE client_jobs ADD COLUMN IF NOT EXISTS delivered_count INTEGER;`;
 
   // Workers registering interest in a published job.
   await sql`
@@ -274,6 +277,8 @@ export type ClientJob = {
   boundary: string | null;
   map_center: string | null;
   map_image: string | null;
+  job_number: string | null;
+  delivered_count: number | null;
 };
 export type JobInterest = {
   id: number; job_id: number; user_id: number; note: string | null; created_at: string;
@@ -435,6 +440,11 @@ export async function setJobPublished(jobId: number, published: boolean) {
 }
 
 /** Worker-facing job settings: pay, time, boundary and map. */
+export async function setJobProgress(jobId: number, jobNumber: string | null, delivered: number | null) {
+  await ensureSchema();
+  await sql`UPDATE client_jobs SET job_number = ${jobNumber}, delivered_count = ${delivered} WHERE id = ${jobId};`;
+}
+
 export async function setJobBrief(jobId: number, b: {
   workerPay?: number | null; allocatedTime?: string | null; minHours?: string | null;
   boundary?: string | null; mapCenter?: string | null; mapImage?: string | null;

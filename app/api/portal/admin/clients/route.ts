@@ -4,7 +4,7 @@ import {
   listAgencies, upsertAgency, deleteAgency,
   listAgents, upsertAgent, deleteAgent,
   listClientJobs, upsertClientJob, deleteClientJob,
-  assignJob, setJobPublished, setJobBrief,
+  assignJob, setJobPublished, setJobBrief, setJobProgress,
   listAgencyPayments, addAgencyPayment, deleteAgencyPayment,
   dbConfigured,
 } from "@/lib/portal/db";
@@ -80,6 +80,9 @@ export async function POST(req: Request) {
           pickedOn: (b.pickedOn as string) || null, completedOn: (b.completedOn as string) || null,
           notes: (b.notes as string) || null,
         });
+        if (b.jobNumber !== undefined || b.deliveredCount !== undefined) {
+          await setJobProgress(id, (b.jobNumber as string) || null, n(b.deliveredCount));
+        }
         // Marketplace extras: assignment, publishing, worker brief and boundary.
         if (b.assignedUserId !== undefined) await assignJob(id, n(b.assignedUserId));
         if (b.published !== undefined) await setJobPublished(id, Boolean(b.published));

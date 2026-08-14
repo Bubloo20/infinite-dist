@@ -433,7 +433,12 @@ function ClientJobRow({ job, agencyName, agentName, expenses, users, post, del }
               {agencyName}{agentName ? <span className="text-white/55"> — {agentName}</span> : null}
             </h3>
           </div>
-          <p className="mt-1 text-[15px] font-semibold text-white/75">{job.title || `Job #${job.id}`}</p>
+          <div className="mt-1 flex flex-wrap items-center gap-2">
+            <p className="text-[15px] font-semibold text-white/75">{job.title || `Job #${job.id}`}</p>
+            <span className="rounded-md bg-white/[0.08] px-2 py-0.5 font-mono text-[11px] text-white/60">
+              {job.job_number || `#${job.id}`}
+            </span>
+          </div>
           <p className="mt-1.5 text-sm text-white/45">
             {job.quantity ? `${job.quantity.toLocaleString()} leaflets` : "—"}
             {job.rate_per_leaflet ? ` @ $${Number(job.rate_per_leaflet).toFixed(2)}` : ""}
@@ -442,6 +447,23 @@ function ClientJobRow({ job, agencyName, agentName, expenses, users, post, del }
           <p className="mt-1 text-[13px] text-white/40">
             Picked {job.picked_on ? day(job.picked_on) : "—"} · Completed {job.completed_on ? day(job.completed_on) : "—"}
           </p>
+
+          {job.quantity ? (
+            <div className="mt-3 max-w-sm">
+              <div className="flex items-center justify-between text-[12px]">
+                <span className="text-white/55">
+                  <span className="font-semibold text-emerald-300">{(job.delivered_count ?? 0).toLocaleString()}</span> delivered
+                  {" · "}
+                  <span className="font-semibold text-amber-300">{Math.max(0, job.quantity - (job.delivered_count ?? 0)).toLocaleString()}</span> remaining
+                </span>
+                <span className="text-white/35">of {job.quantity.toLocaleString()}</span>
+              </div>
+              <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-white/10">
+                <div className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-emerald-300"
+                  style={{ width: `${Math.min(100, ((job.delivered_count ?? 0) / job.quantity) * 100)}%` }} />
+              </div>
+            </div>
+          ) : null}
         </div>
 
         <div className="flex flex-col items-end gap-2">
@@ -489,6 +511,23 @@ function ClientJobRow({ job, agencyName, agentName, expenses, users, post, del }
 
       {open && (
         <div className="mt-5 border-t border-white/10 pt-4">
+          <div className="mb-5 grid gap-3 sm:grid-cols-3">
+            <label className="block">
+              <span className="mb-1 block text-[12px] font-semibold text-white/40">Job number</span>
+              <input className={input} defaultValue={job.job_number || ""} placeholder={`#${job.id}`}
+                onBlur={(e) => { if (e.target.value !== (job.job_number || "")) post({ entity: "job", id: job.id, ...jobPayload(job), jobNumber: e.target.value, deliveredCount: job.delivered_count }); }} />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-[12px] font-semibold text-white/40">Leaflets delivered so far</span>
+              <input className={input} inputMode="numeric" defaultValue={job.delivered_count ?? ""} placeholder="e.g. 300"
+                onBlur={(e) => { if (String(e.target.value) !== String(job.delivered_count ?? "")) post({ entity: "job", id: job.id, ...jobPayload(job), jobNumber: job.job_number, deliveredCount: e.target.value }); }} />
+            </label>
+            <div className="flex items-end">
+              <p className="text-[13px] text-white/40">
+                {job.quantity ? `${Math.max(0, job.quantity - (job.delivered_count ?? 0)).toLocaleString()} still to go` : "Set a quantity to track progress"}
+              </p>
+            </div>
+          </div>
           <p className="text-[12px] font-bold uppercase tracking-[0.12em] text-white/40">Worker costs on this job</p>
           {!expenses.length ? (
             <p className="mt-2 text-sm text-white/40">No worker payments recorded against this job yet.</p>
@@ -523,5 +562,6 @@ function jobPayload(j: ClientJob) {
     amount: j.amount, status: j.status, invoiceStatus: j.invoice_status,
     invoiceNo: j.invoice_no, invoiceDate: j.invoice_date,
     pickedOn: j.picked_on, completedOn: j.completed_on, notes: j.notes,
+    jobNumber: j.job_number, deliveredCount: j.delivered_count,
   };
 }
