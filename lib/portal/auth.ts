@@ -3,27 +3,22 @@ import { cookies } from "next/headers";
 
 export type Role = "worker" | "admin";
 
+export type Session = { role: Role; userId: number | null };
+
 export const COOKIE_NAME = "idp_session";
-const MAX_AGE = 60 * 60 * 12; // 12 hours
+const MAX_AGE = 60 * 60 * 24 * 14; // 14 days
 
 /**
- * Passwords are stored as SHA-256 hashes so no plaintext lives in the repo.
- * Override either one in Vercel → Settings → Environment Variables
- * (WORKER_PASSWORD / ADMIN_PASSWORD) and the env value wins.
+ * Admin password, stored as a SHA-256 hash so no plaintext lives in the repo.
+ * Override with ADMIN_PASSWORD in Vercel and the env value wins.
  */
-const DEFAULT_HASHES: Record<Role, string> = {
-  worker: "e1758189e385d0df7e28dcd943bdc19194746b61501c5b2fe4cb99b2356386ab",
-  admin: "b750a9185b0b7c8c9fb6b791fb4a250ec5c82bb46a103b3c981ae3bc6d3ad556",
-};
+const ADMIN_HASH = "b750a9185b0b7c8c9fb6b791fb4a250ec5c82bb46a103b3c981ae3bc6d3ad556";
+
+/** Shared team password, required to create a worker account. Override: WORKER_PASSWORD. */
+const TEAM_HASH = "704b7acbacf9cd963218680c4709da2bff5a4020a234f835bb84f454275b1376";
 
 const sha256 = (v: string) => crypto.createHash("sha256").update(v).digest("hex");
 
-function expectedHash(role: Role): string {
-  const override = role === "admin" ? process.env.ADMIN_PASSWORD : process.env.WORKER_PASSWORD;
-  return override ? sha256(override) : DEFAULT_HASHES[role];
-}
-
-/** Constant-time compare so timing can't be used to guess the password. */
 function safeEqual(a: string, b: string): boolean {
   const ab = Buffer.from(a);
   const bb = Buffer.from(b);
@@ -31,33 +26,63 @@ function safeEqual(a: string, b: string): boolean {
   return crypto.timingSafeEqual(ab, bb);
 }
 
-export function checkPassword(role: Role, password: string): boolean {
+export function checkAdminPassword(password: string): boolean {
   if (!password) return false;
-  return safeEqual(sha256(password), expectedHash(role));
+  const expected = process.env.ADMIN_PASSWORD ? sha256(process.env.ADMIN_PASSWORD) : ADMIN_HASH;
+  return safeEqual(sha256(password), expected);
 }
+
+/** Gate for creating a worker account, so only the team can sign up. */
+export function checkTeamPassword(password: string): boolean {
+  if (!password) return false;
+  const expected = process.env.WORKER_PASSWORD ? sha256(process.env.WORKER_PASSWORD) : TEAM_HASH;
+  return safeEqual(sha256(password), expected);
+}
+
+/* ------------------------- per-user password hashing ----------------------- */
+/** scrypt with a random per-user salt. No complexity rules — any password works. */
+export function hashPassword(password: string): string {
+  const salt = crypto.randomBytes(16).toString("hex");
+  const hash = crypto.scryptSync(password, salt, 64).toString("hex");
+  return `${salt}:${hash}`;
+}
+
+export function verifyPassword(password: string, stored: string): boolean {
+  const [salt, hash] = (stored || "").split(":");
+  if (!salt || !hash) return false;
+  try {
+    const candidate = crypto.scryptSync(password, salt, 64).toString("hex");
+    return safeEqual(candidate, hash);
+  } catch {
+    return false;
+  }
+}
+
+/* -------------------------------- sessions -------------------------------- */
 
 function secret(): string {
   return process.env.PORTAL_SECRET || "infinite-distributions-portal-fallback-secret";
 }
 
-/** token = role.expiry.hmac(role.expiry) */
-export function createToken(role: Role): string {
+/** token = role.userId.exp.hmac */
+export function createToken(role: Role, userId: number | null): string {
   const exp = Date.now() + MAX_AGE * 1000;
-  const body = `${role}.${exp}`;
+  const body = `${role}.${userId ?? 0}.${exp}`;
   const sig = crypto.createHmac("sha256", secret()).update(body).digest("hex");
   return `${body}.${sig}`;
 }
 
-export function verifyToken(token: string | undefined): Role | null {
+export function verifyToken(token: string | undefined): Session | null {
   if (!token) return null;
   const parts = token.split(".");
-  if (parts.length !== 3) return null;
-  const [role, exp, sig] = parts;
+  if (parts.length !== 4) return null;
+  const [role, uid, exp, sig] = parts;
   if (role !== "worker" && role !== "admin") return null;
-  const expected = crypto.createHmac("sha256", secret()).update(`${role}.${exp}`).digest("hex");
+  const expected = crypto.createHmac("sha256", secret()).update(`${role}.${uid}.${exp}`).digest("hex");
   if (!safeEqual(sig, expected)) return null;
   if (Number(exp) < Date.now()) return null;
-  return role;
+  const userId = Number(uid);
+  return { role, userId: userId > 0 ? userId : null };
 }
 
 export function sessionCookie(token: string) {
@@ -72,14 +97,15 @@ export function sessionCookie(token: string) {
   };
 }
 
-/** Role of the caller, read from the signed session cookie. */
-export function currentRole(): Role | null {
+export function currentSession(): Session | null {
   return verifyToken(cookies().get(COOKIE_NAME)?.value);
 }
 
-/** Admins can reach worker routes too. */
-export function hasAccess(required: Role): boolean {
-  const role = currentRole();
-  if (!role) return false;
-  return role === "admin" || role === required;
+export function isAdmin(): boolean {
+  return currentSession()?.role === "admin";
+}
+
+/** Any signed-in user (worker or admin). */
+export function isSignedIn(): boolean {
+  return currentSession() !== null;
 }

@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import { hasAccess } from "@/lib/portal/auth";
+import { isSignedIn } from "@/lib/portal/auth";
 import { verifyStravaActivity } from "@/lib/portal/strava";
 
 export const dynamic = "force-dynamic";
 
 /** Live "does this activity exist?" check, used for instant feedback in the form. */
 export async function POST(req: Request) {
-  if (!hasAccess("worker")) {
+  if (!isSignedIn()) {
     return NextResponse.json({ ok: false, error: "Not signed in." }, { status: 401 });
   }
   let body: { url?: string };

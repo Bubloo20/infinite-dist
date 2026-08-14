@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
-import { checkPassword, createToken, sessionCookie, type Role } from "@/lib/portal/auth";
+import { checkAdminPassword, verifyPassword, createToken, sessionCookie } from "@/lib/portal/auth";
+import { findUserByName, dbConfigured } from "@/lib/portal/db";
 
 export const dynamic = "force-dynamic";
 
 /** Small in-memory throttle to slow down password guessing. */
 const attempts = new Map<string, { count: number; first: number }>();
 const WINDOW = 10 * 60 * 1000;
-const MAX_ATTEMPTS = 8;
+const MAX_ATTEMPTS = 12;
 
 function rateLimited(ip: string): boolean {
   const now = Date.now();
@@ -25,28 +26,48 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "Too many attempts. Try again in a few minutes." }, { status: 429 });
   }
 
-  let body: { password?: string; role?: Role };
+  let b: { fullName?: string; password?: string; role?: string };
   try {
-    body = await req.json();
+    b = await req.json();
   } catch {
     return NextResponse.json({ ok: false, error: "Bad request." }, { status: 400 });
   }
 
-  const role: Role = body.role === "admin" ? "admin" : "worker";
-  const password = (body.password || "").trim();
+  const password = (b.password || "").trim();
+  const fullName = (b.fullName || "").trim();
 
-  if (!checkPassword(role, password)) {
-    // An admin password typed into the worker box should still let them in.
-    if (role === "worker" && checkPassword("admin", password)) {
-      const res = NextResponse.json({ ok: true, role: "admin" });
-      res.cookies.set(sessionCookie(createToken("admin")));
+  // Admin sign-in: password only, no account needed.
+  if (b.role === "admin" || !fullName) {
+    if (checkAdminPassword(password)) {
+      attempts.delete(ip);
+      const res = NextResponse.json({ ok: true, role: "admin", fullName: "Admin" });
+      res.cookies.set(sessionCookie(createToken("admin", null)));
       return res;
     }
-    return NextResponse.json({ ok: false, error: "Incorrect password." }, { status: 401 });
+    if (b.role === "admin") {
+      return NextResponse.json({ ok: false, error: "Incorrect admin password." }, { status: 401 });
+    }
+    return NextResponse.json({ ok: false, error: "Enter your full name." }, { status: 400 });
   }
 
-  attempts.delete(ip);
-  const res = NextResponse.json({ ok: true, role });
-  res.cookies.set(sessionCookie(createToken(role)));
-  return res;
+  // Worker sign-in with their own account.
+  if (!dbConfigured()) {
+    return NextResponse.json({ ok: false, error: "Accounts are unavailable — the database isn't connected yet." }, { status: 503 });
+  }
+
+  try {
+    const user = await findUserByName(fullName);
+    if (!user || !verifyPassword(password, user.password_hash)) {
+      return NextResponse.json({ ok: false, error: "Name or password is incorrect." }, { status: 401 });
+    }
+    attempts.delete(ip);
+    const res = NextResponse.json({ ok: true, role: "worker", fullName: user.full_name, userId: user.id });
+    res.cookies.set(sessionCookie(createToken("worker", user.id)));
+    return res;
+  } catch (e) {
+    return NextResponse.json(
+      { ok: false, error: e instanceof Error ? e.message : "Sign-in failed." },
+      { status: 500 },
+    );
+  }
 }

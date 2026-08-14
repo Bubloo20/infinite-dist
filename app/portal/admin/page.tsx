@@ -30,12 +30,7 @@ export default function AdminPage() {
           <span className="h-8 w-8 animate-spin rounded-full border-2 border-white/15 border-t-orchid" />
         </div>
       ) : role !== "admin" ? (
-        <LoginGate
-          role="admin"
-          title="Admin access"
-          subtitle="Enter the admin password to view submitted work logs."
-          onSuccess={setRole}
-        />
+        <LoginGate mode="admin" onSuccess={setRole} />
       ) : (
         <AdminDashboard onSignOut={signOut} />
       )}

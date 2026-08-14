@@ -11,6 +11,7 @@ const commonLinks = [
   { label: "About Us", href: "/about" },
   { label: "Contact", href: "/contact" },
   { label: "Join The Team", href: "/join" },
+  { label: "Worker Portal", href: "/portal" },
 ];
 
 const servicesPaths = ["/quality", "/courier"];

@@ -1,20 +1,21 @@
 import { NextResponse } from "next/server";
-import { currentRole } from "@/lib/portal/auth";
-import { listWorkLogs, dbConfigured } from "@/lib/portal/db";
+import { isAdmin } from "@/lib/portal/auth";
+import { listWorkLogs, listUsers, listPayments, dbConfigured } from "@/lib/portal/db";
 
 export const dynamic = "force-dynamic";
 
-/** Admin only — the dashboard's data source. */
+/** Admin only — everything the dashboard needs in one call. */
 export async function GET() {
-  if (currentRole() !== "admin") {
+  if (!isAdmin()) {
     return NextResponse.json({ ok: false, error: "Admin access required." }, { status: 401 });
   }
   if (!dbConfigured()) {
-    // Names only, never values — helps diagnose a missing/misnamed env var.
     return NextResponse.json({
       ok: true,
       dbConfigured: false,
       logs: [],
+      users: [],
+      payments: [],
       diagnostic: {
         dbEnvVarsVisible: Object.keys(process.env)
           .filter((k) => /POSTGRES|DATABASE|NEON|PG/i.test(k))
@@ -25,11 +26,11 @@ export async function GET() {
     });
   }
   try {
-    const logs = await listWorkLogs();
-    return NextResponse.json({ ok: true, dbConfigured: true, logs });
+    const [logs, users, payments] = await Promise.all([listWorkLogs(), listUsers(), listPayments()]);
+    return NextResponse.json({ ok: true, dbConfigured: true, logs, users, payments });
   } catch (e) {
     return NextResponse.json(
-      { ok: false, dbConfigured: true, logs: [], error: e instanceof Error ? e.message : "Query failed." },
+      { ok: false, dbConfigured: true, logs: [], users: [], payments: [], error: e instanceof Error ? e.message : "Query failed." },
       { status: 500 },
     );
   }
