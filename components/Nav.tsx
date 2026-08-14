@@ -59,11 +59,9 @@ export default function Nav() {
       }`}
     >
       <div className="container-site flex h-[68px] items-center justify-between">
-        <Link
-          href="/"
-          className="font-display text-lg font-extrabold uppercase tracking-tight text-white sm:text-xl"
-        >
-          Infinite Distributions
+        <Link href="/" className="flex items-center" aria-label="Infinite Distribution — home">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/images/logo.png" alt="Infinite Distribution" className="h-9 w-auto sm:h-10" />
         </Link>
 
         {/* Desktop nav */}

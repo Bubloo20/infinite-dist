@@ -1,0 +1,373 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import Link from "next/link";
+import { GlassCard } from "./PortalShell";
+import type { Agency, Agent, ClientJob, AgencyPayment, JobStatus, InvoiceStatus } from "@/lib/portal/db";
+
+const money = (v: number) => `$${v.toFixed(2)}`;
+const num = (v: string | null) => (v === null ? 0 : Number(v) || 0);
+const day = (d: string | null) => (d ? new Date(d).toLocaleDateString("en-AU", { day: "2-digit", month: "short", year: "numeric" }) : "—");
+
+const input =
+  "w-full rounded-xl border border-white/12 bg-white/[0.05] px-4 py-2.5 text-sm text-white placeholder-white/25 outline-none transition focus:border-orchid/60 focus:bg-white/[0.08] [color-scheme:dark]";
+const btn = "rounded-xl bg-gradient-to-r from-electric to-orchid px-4 py-2.5 text-sm font-bold text-white shadow-[0_12px_30px_-14px_rgba(182,109,199,0.9)] transition hover:-translate-y-0.5 disabled:opacity-40";
+const btnGhost = "rounded-xl border border-white/12 bg-white/[0.05] px-4 py-2.5 text-sm font-semibold text-white/70 transition hover:bg-white/[0.1] hover:text-white";
+
+/** red = yet to be sent · orange = out for delivery · green = completed */
+export const STATUS: Record<JobStatus, { label: string; cls: string; dot: string }> = {
+  to_send: { label: "Yet to be sent", cls: "border-rose-400/35 bg-rose-500/12 text-rose-300", dot: "bg-rose-400" },
+  out_for_delivery: { label: "Out for delivery", cls: "border-amber-400/35 bg-amber-500/12 text-amber-300", dot: "bg-amber-400" },
+  completed: { label: "Completed", cls: "border-emerald-400/35 bg-emerald-500/12 text-emerald-300", dot: "bg-emerald-400" },
+};
+
+export const INVOICE: Record<InvoiceStatus, { label: string; cls: string }> = {
+  not_sent: { label: "Invoice not sent", cls: "border-white/15 bg-white/[0.06] text-white/55" },
+  sent: { label: "Invoice sent", cls: "border-sky-400/35 bg-sky-500/12 text-sky-300" },
+  received: { label: "Payment received", cls: "border-emerald-400/35 bg-emerald-500/12 text-emerald-300" },
+};
+
+type Post = (body: Record<string, unknown>) => Promise<boolean>;
+type Del = (entity: string, id: number) => Promise<void>;
+
+export default function ClientsTab({
+  agencies, agents, jobs, agencyPayments, post, del,
+}: {
+  agencies: Agency[]; agents: Agent[]; jobs: ClientJob[]; agencyPayments: AgencyPayment[];
+  post: Post; del: Del;
+}) {
+  const [openId, setOpenId] = useState<number | null>(null);
+  const [newAgency, setNewAgency] = useState({ name: "", pricePerLeaflet: "", email: "", phone: "" });
+
+  const totalsFor = (agencyId: number) => {
+    const mine = jobs.filter((j) => j.agency_id === agencyId);
+    const invoiced = mine.filter((j) => j.invoice_status !== "not_sent").reduce((t, j) => t + num(j.amount), 0);
+    const received = mine.filter((j) => j.invoice_status === "received").reduce((t, j) => t + num(j.amount), 0);
+    const paidRecorded = agencyPayments.filter((p) => p.agency_id === agencyId).reduce((t, p) => t + num(p.amount), 0);
+    return { jobs: mine.length, invoiced, received, owed: invoiced - received, paidRecorded };
+  };
+
+  return (
+    <div className="mt-6 space-y-4">
+      <GlassCard className="p-6">
+        <h3 className="font-display text-lg font-bold text-white">Add an agency</h3>
+        <div className="mt-4 grid gap-3 sm:grid-cols-5">
+          <input className={input} placeholder="Agency name" value={newAgency.name} onChange={(e) => setNewAgency({ ...newAgency, name: e.target.value })} />
+          <input className={input} placeholder="Price / leaflet" inputMode="decimal" value={newAgency.pricePerLeaflet} onChange={(e) => setNewAgency({ ...newAgency, pricePerLeaflet: e.target.value })} />
+          <input className={input} placeholder="Email" value={newAgency.email} onChange={(e) => setNewAgency({ ...newAgency, email: e.target.value })} />
+          <input className={input} placeholder="Phone" value={newAgency.phone} onChange={(e) => setNewAgency({ ...newAgency, phone: e.target.value })} />
+          <button className={btn} disabled={!newAgency.name}
+            onClick={async () => { if (await post({ entity: "agency", ...newAgency })) setNewAgency({ name: "", pricePerLeaflet: "", email: "", phone: "" }); }}>
+            Add agency
+          </button>
+        </div>
+      </GlassCard>
+
+      {!agencies.length ? (
+        <GlassCard className="p-14 text-center"><p className="text-white/50">No agencies yet.</p></GlassCard>
+      ) : (
+        agencies.map((a) => {
+          const t = totalsFor(a.id);
+          const open = openId === a.id;
+          return (
+            <GlassCard key={a.id} className="p-5 sm:p-6">
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div>
+                  <h3 className="font-display text-xl font-bold text-white">{a.name}</h3>
+                  <p className="mt-1 text-sm text-white/45">
+                    {a.price_per_leaflet ? `$${Number(a.price_per_leaflet).toFixed(3).replace(/0$/, "")} per leaflet` : "No rate set"}
+                    {` · ${t.jobs} job${t.jobs === 1 ? "" : "s"}`}
+                    {agents.filter((g) => g.agency_id === a.id).length ? ` · ${agents.filter((g) => g.agency_id === a.id).length} agent(s)` : ""}
+                  </p>
+                </div>
+                <div className="flex items-center gap-5">
+                  <div className="text-right">
+                    <p className="text-[11px] font-bold uppercase tracking-wide text-white/35">Owes me</p>
+                    <p className="font-display text-xl font-extrabold text-amber-300">{money(t.owed)}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[11px] font-bold uppercase tracking-wide text-white/35">Paid me</p>
+                    <p className="font-display text-xl font-extrabold text-emerald-300">{money(t.paidRecorded)}</p>
+                  </div>
+                  <button onClick={() => setOpenId(open ? null : a.id)} className={btnGhost}>{open ? "Close" : "Open"}</button>
+                </div>
+              </div>
+
+              {open && (
+                <AgencyDetail
+                  agency={a}
+                  agents={agents.filter((g) => g.agency_id === a.id)}
+                  jobs={jobs.filter((j) => j.agency_id === a.id)}
+                  payments={agencyPayments.filter((p) => p.agency_id === a.id)}
+                  post={post} del={del}
+                />
+              )}
+            </GlassCard>
+          );
+        })
+      )}
+    </div>
+  );
+}
+
+function AgencyDetail({ agency, agents, jobs, payments, post, del }: {
+  agency: Agency; agents: Agent[]; jobs: ClientJob[]; payments: AgencyPayment[]; post: Post; del: Del;
+}) {
+  const [tab, setTab] = useState<"agents" | "jobs" | "payments" | "details">("agents");
+  const [newAgent, setNewAgent] = useState({ name: "", email: "", phone: "" });
+  const [pay, setPay] = useState({ amount: "", paidOn: new Date().toISOString().slice(0, 10), method: "", note: "" });
+  const [d, setD] = useState({
+    name: agency.name, pricePerLeaflet: agency.price_per_leaflet || "",
+    email: agency.email || "", phone: agency.phone || "", address: agency.address || "",
+  });
+
+  const tabs = [
+    { k: "agents" as const, label: `Agents (${agents.length})` },
+    { k: "jobs" as const, label: `Jobs (${jobs.length})` },
+    { k: "payments" as const, label: `Payments (${payments.length})` },
+    { k: "details" as const, label: "Details" },
+  ];
+
+  return (
+    <div className="mt-6 border-t border-white/10 pt-5">
+      <div className="flex flex-wrap gap-1 rounded-xl border border-white/10 bg-white/[0.03] p-1">
+        {tabs.map((t) => (
+          <button key={t.k} onClick={() => setTab(t.k)}
+            className={`flex-1 whitespace-nowrap rounded-lg px-3 py-2 text-[13px] font-bold transition ${
+              tab === t.k ? "bg-white/[0.12] text-white" : "text-white/45 hover:text-white/75"}`}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "agents" && (
+        <div className="mt-4 space-y-3">
+          <div className="grid gap-2 sm:grid-cols-4">
+            <input className={input} placeholder="Agent name" value={newAgent.name} onChange={(e) => setNewAgent({ ...newAgent, name: e.target.value })} />
+            <input className={input} placeholder="Email" value={newAgent.email} onChange={(e) => setNewAgent({ ...newAgent, email: e.target.value })} />
+            <input className={input} placeholder="Phone" value={newAgent.phone} onChange={(e) => setNewAgent({ ...newAgent, phone: e.target.value })} />
+            <button className={btn} disabled={!newAgent.name}
+              onClick={async () => { if (await post({ entity: "agent", agencyId: agency.id, ...newAgent })) setNewAgent({ name: "", email: "", phone: "" }); }}>
+              Add agent
+            </button>
+          </div>
+          {!agents.length ? <p className="py-4 text-sm text-white/40">No agents yet.</p> : agents.map((g) => {
+            const theirJobs = jobs.filter((j) => j.agent_id === g.id);
+            const owed = theirJobs.filter((j) => j.invoice_status !== "received").reduce((t, j) => t + num(j.amount), 0);
+            return (
+              <div key={g.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3">
+                <div>
+                  <p className="font-semibold text-white">{g.name}</p>
+                  <p className="text-[13px] text-white/45">
+                    {[g.email, g.phone].filter(Boolean).join(" · ") || "No contact details"} · {theirJobs.length} job(s)
+                  </p>
+                </div>
+                <div className="flex items-center gap-4">
+                  <span className="text-sm text-amber-300">{money(owed)} outstanding</span>
+                  <button onClick={() => del("agent", g.id)} className="text-sm text-white/30 hover:text-rose-300">Delete</button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {tab === "jobs" && (
+        <div className="mt-4 space-y-2">
+          {!jobs.length ? <p className="py-4 text-sm text-white/40">No jobs for this agency yet.</p> : jobs.map((j) => (
+            <div key={j.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3">
+              <div>
+                <p className="font-semibold text-white">{j.title || `Job #${j.id}`}</p>
+                <p className="text-[13px] text-white/45">
+                  {j.quantity ? `${j.quantity.toLocaleString()} leaflets` : "—"}
+                  {j.completed_on ? ` · completed ${day(j.completed_on)}` : ""}
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className={`rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase ${STATUS[j.status].cls}`}>{STATUS[j.status].label}</span>
+                <span className={`rounded-full border px-2.5 py-1 text-[11px] font-bold ${INVOICE[j.invoice_status].cls}`}>{INVOICE[j.invoice_status].label}</span>
+                <span className="font-display text-lg font-bold text-white">{money(num(j.amount))}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {tab === "payments" && (
+        <div className="mt-4 space-y-3">
+          <div className="grid gap-2 sm:grid-cols-5">
+            <input className={input} placeholder="Amount" inputMode="decimal" value={pay.amount} onChange={(e) => setPay({ ...pay, amount: e.target.value })} />
+            <input className={input} type="date" value={pay.paidOn} onChange={(e) => setPay({ ...pay, paidOn: e.target.value })} />
+            <input className={input} placeholder="Method" value={pay.method} onChange={(e) => setPay({ ...pay, method: e.target.value })} />
+            <input className={input} placeholder="Note" value={pay.note} onChange={(e) => setPay({ ...pay, note: e.target.value })} />
+            <button className={btn} disabled={!pay.amount}
+              onClick={async () => { if (await post({ entity: "agencyPayment", agencyId: agency.id, ...pay })) setPay({ ...pay, amount: "", note: "" }); }}>
+              Record payment
+            </button>
+          </div>
+          {!payments.length ? <p className="py-4 text-sm text-white/40">No payments received yet.</p> : payments.map((p) => (
+            <div key={p.id} className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3">
+              <div>
+                <p className="font-semibold text-white">{day(p.paid_on)}</p>
+                <p className="text-[13px] text-white/45">{[p.method, p.note].filter(Boolean).join(" · ") || "Payment received"}</p>
+              </div>
+              <div className="flex items-center gap-4">
+                <span className="font-display text-lg font-extrabold text-emerald-300">{money(num(p.amount))}</span>
+                <button onClick={() => del("agencyPayment", p.id)} className="text-sm text-white/30 hover:text-rose-300">Delete</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {tab === "details" && (
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <input className={input} placeholder="Agency name" value={d.name} onChange={(e) => setD({ ...d, name: e.target.value })} />
+          <input className={input} placeholder="Price per leaflet" inputMode="decimal" value={String(d.pricePerLeaflet)} onChange={(e) => setD({ ...d, pricePerLeaflet: e.target.value })} />
+          <input className={input} placeholder="Email" value={d.email} onChange={(e) => setD({ ...d, email: e.target.value })} />
+          <input className={input} placeholder="Phone" value={d.phone} onChange={(e) => setD({ ...d, phone: e.target.value })} />
+          <input className={`${input} sm:col-span-2`} placeholder="Address" value={d.address} onChange={(e) => setD({ ...d, address: e.target.value })} />
+          <div className="flex gap-2 sm:col-span-2">
+            <button className={btn} onClick={() => post({ entity: "agency", id: agency.id, ...d })}>Save details</button>
+            <button className="rounded-xl border border-rose-400/30 px-4 py-2.5 text-sm font-semibold text-rose-300 transition hover:bg-rose-500/10"
+              onClick={() => del("agency", agency.id)}>Delete agency</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------ client jobs ------------------------------- */
+
+export function ClientJobsTab({ agencies, agents, jobs, post, del }: {
+  agencies: Agency[]; agents: Agent[]; jobs: ClientJob[]; post: Post; del: Del;
+}) {
+  const blank = {
+    agencyId: "", agentId: "", title: "", area: "", leafletType: "", quantity: "",
+    ratePerLeaflet: "", status: "to_send", invoiceStatus: "not_sent",
+    pickedOn: "", completedOn: "", invoiceNo: "", invoiceDate: "",
+  };
+  const [f, setF] = useState(blank);
+  const [filter, setFilter] = useState<"all" | JobStatus>("all");
+
+  const shown = useMemo(() => (filter === "all" ? jobs : jobs.filter((j) => j.status === filter)), [jobs, filter]);
+  const agencyName = (id: number | null) => agencies.find((a) => a.id === id)?.name || "—";
+
+  // Default the rate from the agency when one is chosen.
+  const chooseAgency = (id: string) => {
+    const a = agencies.find((x) => String(x.id) === id);
+    setF((p) => ({ ...p, agencyId: id, agentId: "", ratePerLeaflet: a?.price_per_leaflet ? String(a.price_per_leaflet) : p.ratePerLeaflet }));
+  };
+
+  return (
+    <div className="mt-6 space-y-4">
+      <GlassCard className="p-6">
+        <h3 className="font-display text-lg font-bold text-white">Add a job</h3>
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          <select className={input} value={f.agencyId} onChange={(e) => chooseAgency(e.target.value)}>
+            <option value="">Agency…</option>
+            {agencies.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+          </select>
+          <select className={input} value={f.agentId} onChange={(e) => setF({ ...f, agentId: e.target.value })}>
+            <option value="">Agent (optional)…</option>
+            {agents.filter((g) => String(g.agency_id) === f.agencyId).map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+          </select>
+          <input className={input} placeholder="Job title / description" value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} />
+          <input className={input} placeholder="Area" value={f.area} onChange={(e) => setF({ ...f, area: e.target.value })} />
+          <input className={input} placeholder="Leaflet type" value={f.leafletType} onChange={(e) => setF({ ...f, leafletType: e.target.value })} />
+          <input className={input} placeholder="Quantity" inputMode="numeric" value={f.quantity} onChange={(e) => setF({ ...f, quantity: e.target.value })} />
+          <input className={input} placeholder="Rate per leaflet" inputMode="decimal" value={f.ratePerLeaflet} onChange={(e) => setF({ ...f, ratePerLeaflet: e.target.value })} />
+          <select className={input} value={f.status} onChange={(e) => setF({ ...f, status: e.target.value })}>
+            <option value="to_send">Yet to be sent</option>
+            <option value="out_for_delivery">Out for delivery</option>
+            <option value="completed">Completed</option>
+          </select>
+          <input className={input} type="date" value={f.completedOn} onChange={(e) => setF({ ...f, completedOn: e.target.value })} />
+          <div className="sm:col-span-3">
+            <button className={btn} disabled={!f.agencyId && !f.title}
+              onClick={async () => { if (await post({ entity: "job", ...f })) setF(blank); }}>
+              Add job
+            </button>
+          </div>
+        </div>
+      </GlassCard>
+
+      <div className="flex flex-wrap gap-2">
+        {(["all", "to_send", "out_for_delivery", "completed"] as const).map((k) => (
+          <button key={k} onClick={() => setFilter(k)}
+            className={`rounded-full border px-4 py-2 text-[13px] font-bold transition ${
+              filter === k ? "border-white/25 bg-white/[0.12] text-white" : "border-white/10 bg-white/[0.04] text-white/50 hover:text-white/80"}`}>
+            {k === "all" ? `All (${jobs.length})` : `${STATUS[k].label} (${jobs.filter((j) => j.status === k).length})`}
+          </button>
+        ))}
+      </div>
+
+      {!shown.length ? (
+        <GlassCard className="p-14 text-center"><p className="text-white/50">No jobs here yet.</p></GlassCard>
+      ) : shown.map((j) => <ClientJobRow key={j.id} job={j} agencyName={agencyName(j.agency_id)} post={post} del={del} />)}
+    </div>
+  );
+}
+
+function ClientJobRow({ job, agencyName, post, del }: {
+  job: ClientJob; agencyName: string; post: Post; del: Del;
+}) {
+  const s = STATUS[job.status];
+  return (
+    <GlassCard className={`border-l-4 p-5 ${
+      job.status === "completed" ? "border-l-emerald-400" : job.status === "out_for_delivery" ? "border-l-amber-400" : "border-l-rose-400"}`}>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <span className={`h-2.5 w-2.5 rounded-full ${s.dot}`} />
+            <h3 className="font-display text-lg font-bold text-white">{job.title || `Job #${job.id}`}</h3>
+            <span className="rounded-lg bg-white/[0.08] px-2.5 py-1 text-[12px] text-white/70">{agencyName}</span>
+          </div>
+          <p className="mt-2 text-sm text-white/50">
+            {job.quantity ? `${job.quantity.toLocaleString()} leaflets` : "—"}
+            {job.rate_per_leaflet ? ` @ $${Number(job.rate_per_leaflet).toFixed(2)}` : ""}
+            {job.area ? ` · ${job.area}` : ""}
+          </p>
+          <p className="mt-1 text-[13px] text-white/40">
+            {job.picked_on ? `Picked ${day(job.picked_on)}` : ""}
+            {job.completed_on ? ` · Completed ${day(job.completed_on)}` : ""}
+          </p>
+        </div>
+
+        <div className="flex flex-col items-end gap-2">
+          <p className="font-display text-2xl font-extrabold text-white">{money(num(job.amount))}</p>
+          <div className="flex flex-wrap justify-end gap-2">
+            <select className={`${input} !w-auto !py-2`} value={job.status}
+              onChange={(e) => post({ entity: "job", id: job.id, ...jobPayload(job), status: e.target.value })}>
+              <option value="to_send">Yet to be sent</option>
+              <option value="out_for_delivery">Out for delivery</option>
+              <option value="completed">Completed</option>
+            </select>
+            <select className={`${input} !w-auto !py-2`} value={job.invoice_status}
+              onChange={(e) => post({ entity: "job", id: job.id, ...jobPayload(job), invoiceStatus: e.target.value })}>
+              <option value="not_sent">Invoice not sent</option>
+              <option value="sent">Invoice sent</option>
+              <option value="received">Payment received</option>
+            </select>
+          </div>
+          <div className="flex gap-2">
+            <Link href={`/portal/admin/invoice/${job.id}`} className={btnGhost}>Invoice PDF ↗</Link>
+            <button onClick={() => del("job", job.id)} className="text-sm text-white/30 transition hover:text-rose-300">Delete</button>
+          </div>
+        </div>
+      </div>
+    </GlassCard>
+  );
+}
+
+/** Keeps the other columns intact when only one dropdown changes. */
+function jobPayload(j: ClientJob) {
+  return {
+    agencyId: j.agency_id, agentId: j.agent_id, title: j.title, area: j.area,
+    leafletType: j.leaflet_type, quantity: j.quantity, ratePerLeaflet: j.rate_per_leaflet,
+    amount: j.amount, status: j.status, invoiceStatus: j.invoice_status,
+    invoiceNo: j.invoice_no, invoiceDate: j.invoice_date,
+    pickedOn: j.picked_on, completedOn: j.completed_on, notes: j.notes,
+  };
+}

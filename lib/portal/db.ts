@@ -8,6 +8,7 @@ export type PortalUser = {
   bank_bsb: string | null;
   bank_account: string | null;
   payid: string | null;
+  area: string | null;
   created_at: string;
 };
 
@@ -93,6 +94,9 @@ export async function ensureSchema() {
     );
   `;
 
+  // Areas each worker covers (from the ledger's workforce list).
+  await sql`ALTER TABLE portal_users ADD COLUMN IF NOT EXISTS area TEXT;`;
+
   // Incremental upgrades — all safe to re-run.
   await sql`ALTER TABLE work_logs ALTER COLUMN strava_url DROP NOT NULL;`;
   await sql`ALTER TABLE work_logs ADD COLUMN IF NOT EXISTS user_id INTEGER;`;
@@ -115,6 +119,72 @@ export async function ensureSchema() {
     );
   `;
 
+  // Clients (real estate agencies etc.) and the agents inside them.
+  await sql`
+    CREATE TABLE IF NOT EXISTS agencies (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      price_per_leaflet NUMERIC(6,3),
+      email TEXT,
+      phone TEXT,
+      address TEXT,
+      notes TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS agents (
+      id SERIAL PRIMARY KEY,
+      agency_id INTEGER NOT NULL,
+      name TEXT NOT NULL,
+      email TEXT,
+      phone TEXT,
+      notes TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `;
+
+  /**
+   * A job we do for an agency.
+   *   status:  to_send (red) | out_for_delivery (orange) | completed (green)
+   *   invoice: not_sent | sent | received
+   */
+  await sql`
+    CREATE TABLE IF NOT EXISTS client_jobs (
+      id SERIAL PRIMARY KEY,
+      agency_id INTEGER,
+      agent_id INTEGER,
+      title TEXT,
+      area TEXT,
+      leaflet_type TEXT,
+      quantity INTEGER,
+      rate_per_leaflet NUMERIC(6,3),
+      amount NUMERIC(10,2),
+      status TEXT NOT NULL DEFAULT 'to_send',
+      invoice_status TEXT NOT NULL DEFAULT 'not_sent',
+      invoice_no TEXT,
+      invoice_date DATE,
+      picked_on DATE,
+      completed_on DATE,
+      notes TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `;
+
+  // Money an agency has paid us.
+  await sql`
+    CREATE TABLE IF NOT EXISTS agency_payments (
+      id SERIAL PRIMARY KEY,
+      agency_id INTEGER NOT NULL,
+      amount NUMERIC(10,2) NOT NULL,
+      paid_on DATE,
+      method TEXT,
+      note TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `;
+
   // Revenue and non-labour expenses, so profit can be reported.
   await sql`
     CREATE TABLE IF NOT EXISTS finance_entries (
@@ -129,6 +199,152 @@ export async function ensureSchema() {
   `;
 
   ready = true;
+}
+
+/* -------------------------- agencies, agents, jobs ------------------------- */
+
+export type Agency = {
+  id: number; name: string; price_per_leaflet: string | null;
+  email: string | null; phone: string | null; address: string | null;
+  notes: string | null; created_at: string;
+};
+export type Agent = {
+  id: number; agency_id: number; name: string;
+  email: string | null; phone: string | null; notes: string | null; created_at: string;
+};
+export type JobStatus = "to_send" | "out_for_delivery" | "completed";
+export type InvoiceStatus = "not_sent" | "sent" | "received";
+export type ClientJob = {
+  id: number; agency_id: number | null; agent_id: number | null;
+  title: string | null; area: string | null; leaflet_type: string | null;
+  quantity: number | null; rate_per_leaflet: string | null; amount: string | null;
+  status: JobStatus; invoice_status: InvoiceStatus;
+  invoice_no: string | null; invoice_date: string | null;
+  picked_on: string | null; completed_on: string | null;
+  notes: string | null; created_at: string;
+};
+export type AgencyPayment = {
+  id: number; agency_id: number; amount: string;
+  paid_on: string | null; method: string | null; note: string | null; created_at: string;
+};
+
+export async function listAgencies(): Promise<Agency[]> {
+  await ensureSchema();
+  return (await sql<Agency>`SELECT * FROM agencies ORDER BY name ASC;`).rows;
+}
+export async function upsertAgency(a: {
+  id?: number | null; name: string; pricePerLeaflet?: number | null;
+  email?: string | null; phone?: string | null; address?: string | null; notes?: string | null;
+}) {
+  await ensureSchema();
+  if (a.id) {
+    await sql`
+      UPDATE agencies SET name=${a.name}, price_per_leaflet=${a.pricePerLeaflet ?? null},
+        email=${a.email ?? null}, phone=${a.phone ?? null}, address=${a.address ?? null}, notes=${a.notes ?? null}
+      WHERE id=${a.id};`;
+    return a.id;
+  }
+  const r = await sql<{ id: number }>`
+    INSERT INTO agencies (name, price_per_leaflet, email, phone, address, notes)
+    VALUES (${a.name}, ${a.pricePerLeaflet ?? null}, ${a.email ?? null}, ${a.phone ?? null}, ${a.address ?? null}, ${a.notes ?? null})
+    RETURNING id;`;
+  return r.rows[0].id;
+}
+export async function deleteAgency(id: number) {
+  await ensureSchema();
+  await sql`DELETE FROM agents WHERE agency_id=${id};`;
+  await sql`DELETE FROM agency_payments WHERE agency_id=${id};`;
+  await sql`UPDATE client_jobs SET agency_id=NULL WHERE agency_id=${id};`;
+  await sql`DELETE FROM agencies WHERE id=${id};`;
+}
+
+export async function listAgents(): Promise<Agent[]> {
+  await ensureSchema();
+  return (await sql<Agent>`SELECT * FROM agents ORDER BY name ASC;`).rows;
+}
+export async function upsertAgent(a: {
+  id?: number | null; agencyId: number; name: string;
+  email?: string | null; phone?: string | null; notes?: string | null;
+}) {
+  await ensureSchema();
+  if (a.id) {
+    await sql`UPDATE agents SET name=${a.name}, email=${a.email ?? null}, phone=${a.phone ?? null}, notes=${a.notes ?? null} WHERE id=${a.id};`;
+    return a.id;
+  }
+  const r = await sql<{ id: number }>`
+    INSERT INTO agents (agency_id, name, email, phone, notes)
+    VALUES (${a.agencyId}, ${a.name}, ${a.email ?? null}, ${a.phone ?? null}, ${a.notes ?? null})
+    RETURNING id;`;
+  return r.rows[0].id;
+}
+export async function deleteAgent(id: number) {
+  await ensureSchema();
+  await sql`UPDATE client_jobs SET agent_id=NULL WHERE agent_id=${id};`;
+  await sql`DELETE FROM agents WHERE id=${id};`;
+}
+
+export async function listClientJobs(limit = 500): Promise<ClientJob[]> {
+  await ensureSchema();
+  return (await sql<ClientJob>`SELECT * FROM client_jobs ORDER BY COALESCE(completed_on, picked_on, created_at::date) DESC, id DESC LIMIT ${limit};`).rows;
+}
+export async function getClientJob(id: number): Promise<ClientJob | null> {
+  await ensureSchema();
+  return (await sql<ClientJob>`SELECT * FROM client_jobs WHERE id=${id} LIMIT 1;`).rows[0] || null;
+}
+export async function upsertClientJob(j: {
+  id?: number | null; agencyId?: number | null; agentId?: number | null;
+  title?: string | null; area?: string | null; leafletType?: string | null;
+  quantity?: number | null; ratePerLeaflet?: number | null; amount?: number | null;
+  status?: JobStatus; invoiceStatus?: InvoiceStatus; invoiceNo?: string | null;
+  invoiceDate?: string | null; pickedOn?: string | null; completedOn?: string | null; notes?: string | null;
+}) {
+  await ensureSchema();
+  if (j.id) {
+    await sql`
+      UPDATE client_jobs SET
+        agency_id=${j.agencyId ?? null}, agent_id=${j.agentId ?? null}, title=${j.title ?? null},
+        area=${j.area ?? null}, leaflet_type=${j.leafletType ?? null}, quantity=${j.quantity ?? null},
+        rate_per_leaflet=${j.ratePerLeaflet ?? null}, amount=${j.amount ?? null},
+        status=${j.status ?? "to_send"}, invoice_status=${j.invoiceStatus ?? "not_sent"},
+        invoice_no=${j.invoiceNo ?? null}, invoice_date=${j.invoiceDate ?? null},
+        picked_on=${j.pickedOn ?? null}, completed_on=${j.completedOn ?? null}, notes=${j.notes ?? null}
+      WHERE id=${j.id};`;
+    return j.id;
+  }
+  const r = await sql<{ id: number }>`
+    INSERT INTO client_jobs
+      (agency_id, agent_id, title, area, leaflet_type, quantity, rate_per_leaflet, amount,
+       status, invoice_status, invoice_no, invoice_date, picked_on, completed_on, notes)
+    VALUES
+      (${j.agencyId ?? null}, ${j.agentId ?? null}, ${j.title ?? null}, ${j.area ?? null},
+       ${j.leafletType ?? null}, ${j.quantity ?? null}, ${j.ratePerLeaflet ?? null}, ${j.amount ?? null},
+       ${j.status ?? "to_send"}, ${j.invoiceStatus ?? "not_sent"}, ${j.invoiceNo ?? null},
+       ${j.invoiceDate ?? null}, ${j.pickedOn ?? null}, ${j.completedOn ?? null}, ${j.notes ?? null})
+    RETURNING id;`;
+  return r.rows[0].id;
+}
+export async function deleteClientJob(id: number) {
+  await ensureSchema();
+  await sql`DELETE FROM client_jobs WHERE id=${id};`;
+}
+
+export async function listAgencyPayments(): Promise<AgencyPayment[]> {
+  await ensureSchema();
+  return (await sql<AgencyPayment>`SELECT * FROM agency_payments ORDER BY COALESCE(paid_on, created_at::date) DESC, id DESC LIMIT 500;`).rows;
+}
+export async function addAgencyPayment(p: {
+  agencyId: number; amount: number; paidOn?: string | null; method?: string | null; note?: string | null;
+}) {
+  await ensureSchema();
+  const r = await sql<{ id: number }>`
+    INSERT INTO agency_payments (agency_id, amount, paid_on, method, note)
+    VALUES (${p.agencyId}, ${p.amount}, ${p.paidOn || null}, ${p.method || null}, ${p.note || null})
+    RETURNING id;`;
+  return r.rows[0].id;
+}
+export async function deleteAgencyPayment(id: number) {
+  await ensureSchema();
+  await sql`DELETE FROM agency_payments WHERE id=${id};`;
 }
 
 /* --------------------------------- finance -------------------------------- */
@@ -204,7 +420,7 @@ export async function createUser(fullName: string, passwordHash: string) {
 export async function listUsers(): Promise<PortalUser[]> {
   await ensureSchema();
   const r = await sql<PortalUser>`
-    SELECT id, full_name, name_key, bank_name, bank_bsb, bank_account, payid, created_at
+    SELECT id, full_name, name_key, bank_name, bank_bsb, bank_account, payid, area, created_at
     FROM portal_users ORDER BY full_name ASC;
   `;
   return r.rows;

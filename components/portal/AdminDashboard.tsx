@@ -4,7 +4,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { GlassCard, PortalMark } from "./PortalShell";
-import { unpackLinks, type WorkLog, type Payment, type PortalUser, type FinanceEntry } from "@/lib/portal/db";
+import { unpackLinks, type WorkLog, type Payment, type PortalUser, type FinanceEntry,
+  type Agency, type Agent, type ClientJob, type AgencyPayment } from "@/lib/portal/db";
+import ClientsTab, { ClientJobsTab } from "./ClientsTab";
 
 const money = (v: number) => `$${v.toFixed(2)}`;
 const num = (v: string | null) => (v === null ? 0 : Number(v) || 0);
@@ -36,9 +38,13 @@ export default function AdminDashboard({ onSignOut }: { onSignOut: () => void })
   const [users, setUsers] = useState<PortalUser[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [finance, setFinance] = useState<FinanceEntry[]>([]);
+  const [agencies, setAgencies] = useState<Agency[]>([]);
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [clientJobs, setClientJobs] = useState<ClientJob[]>([]);
+  const [agencyPayments, setAgencyPayments] = useState<AgencyPayment[]>([]);
   const [dbOn, setDbOn] = useState(true);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<"jobs" | "workers" | "payments" | "finance">("jobs");
+  const [tab, setTab] = useState<"clientjobs" | "agencies" | "workers" | "shifts" | "payments" | "finance">("clientjobs");
   const [q, setQ] = useState("");
   const [msg, setMsg] = useState("");
 
@@ -47,10 +53,13 @@ export default function AdminDashboard({ onSignOut }: { onSignOut: () => void })
     Promise.all([
       fetch("/api/portal/logs").then((r) => r.json()),
       fetch("/api/portal/admin/finance").then((r) => r.json()).catch(() => ({ entries: [] })),
+      fetch("/api/portal/admin/clients").then((r) => r.json()).catch(() => ({})),
     ])
-      .then(([d, f]) => {
+      .then(([d, f, c]) => {
         setLogs(d.logs || []); setUsers(d.users || []); setPayments(d.payments || []);
         setDbOn(Boolean(d.dbConfigured)); setFinance(f.entries || []);
+        setAgencies(c.agencies || []); setAgents(c.agents || []);
+        setClientJobs(c.jobs || []); setAgencyPayments(c.agencyPayments || []);
       })
       .catch(() => setMsg("Couldn't load data."))
       .finally(() => setLoading(false));
@@ -68,10 +77,27 @@ export default function AdminDashboard({ onSignOut }: { onSignOut: () => void })
   const totals = useMemo(() => {
     const owed = logs.filter((l) => !l.paid_on).reduce((t, l) => t + num(l.amount), 0);
     const paid = logs.filter((l) => l.paid_on).reduce((t, l) => t + num(l.amount), 0);
-    const revenue = finance.filter((f) => f.kind === "revenue").reduce((t, f) => t + num(f.amount), 0);
+    // Client work counts as revenue too, alongside anything logged manually.
+    const jobRevenue = clientJobs.reduce((t, j) => t + num(j.amount), 0);
+    const revenue = finance.filter((f) => f.kind === "revenue").reduce((t, f) => t + num(f.amount), 0) + jobRevenue;
     const expenses = finance.filter((f) => f.kind === "expense").reduce((t, f) => t + num(f.amount), 0);
-    return { owed, paid, revenue, expenses, profit: revenue - expenses - (owed + paid) };
-  }, [logs, finance]);
+    const agenciesOwe = clientJobs.filter((j) => j.invoice_status !== "received").reduce((t, j) => t + num(j.amount), 0);
+    return { owed, paid, revenue, expenses, agenciesOwe, profit: revenue - expenses - (owed + paid) };
+  }, [logs, finance, clientJobs]);
+
+  const postClient = async (body: Record<string, unknown>) => {
+    const r = await fetch("/api/portal/admin/clients", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+    });
+    const d = await r.json();
+    if (!d.ok) { setMsg(d.error || "Save failed."); return false; }
+    setMsg(""); load(); return true;
+  };
+  const delClient = async (entity: string, id: number) => {
+    const r = await fetch(`/api/portal/admin/clients?entity=${entity}&id=${id}`, { method: "DELETE" });
+    const d = await r.json();
+    if (!d.ok) setMsg(d.error || "Delete failed."); else load();
+  };
 
   const filtered = useMemo(() => {
     const t = q.trim().toLowerCase();
@@ -89,9 +115,11 @@ export default function AdminDashboard({ onSignOut }: { onSignOut: () => void })
   };
 
   const tabs = [
-    { k: "jobs" as const, label: `Jobs (${logs.length})` },
+    { k: "clientjobs" as const, label: `Jobs (${clientJobs.length})` },
+    { k: "agencies" as const, label: `Agencies (${agencies.length})` },
     { k: "workers" as const, label: `Workers (${users.length})` },
-    { k: "payments" as const, label: `Payments (${payments.length})` },
+    { k: "shifts" as const, label: `Shifts (${logs.length})` },
+    { k: "payments" as const, label: `Pay runs (${payments.length})` },
     { k: "finance" as const, label: "Finance" },
   ];
 
@@ -112,10 +140,11 @@ export default function AdminDashboard({ onSignOut }: { onSignOut: () => void })
         </h1>
       </motion.div>
 
-      <div className="mt-9 grid gap-4 sm:grid-cols-4">
+      <div className="mt-9 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <Stat label="Agencies owe me" value={money(totals.agenciesOwe)} tone="accent" />
         <Stat label="Owed to team" value={money(totals.owed)} tone="owed" />
         <Stat label="Paid to team" value={money(totals.paid)} tone="paid" />
-        <Stat label="Revenue" value={money(totals.revenue)} tone="accent" />
+        <Stat label="Revenue" value={money(totals.revenue)} />
         <Stat label="Profit" value={money(totals.profit)} />
       </div>
 
@@ -140,7 +169,11 @@ export default function AdminDashboard({ onSignOut }: { onSignOut: () => void })
 
       {loading ? (
         <div className="grid place-items-center py-20"><span className="h-8 w-8 animate-spin rounded-full border-2 border-white/15 border-t-orchid" /></div>
-      ) : tab === "jobs" ? (
+      ) : tab === "clientjobs" ? (
+        <ClientJobsTab agencies={agencies} agents={agents} jobs={clientJobs} post={postClient} del={delClient} />
+      ) : tab === "agencies" ? (
+        <ClientsTab agencies={agencies} agents={agents} jobs={clientJobs} agencyPayments={agencyPayments} post={postClient} del={delClient} />
+      ) : tab === "shifts" ? (
         <JobsTab logs={filtered} q={q} setQ={setQ} post={post} />
       ) : tab === "workers" ? (
         <WorkersTab users={users} totals={userTotals} post={post} />

@@ -30,12 +30,10 @@ export default function Footer() {
   return (
     <footer className="bg-night text-white">
       <div className="container-site py-16">
-        {/* Big wordmark */}
-        <h2 className="font-display text-[clamp(2.5rem,9vw,7.5rem)] font-extrabold uppercase leading-[0.95] tracking-tight">
-          <span className="text-orchid">Infinite</span>{" "}
-          <span className="text-white">Distributions</span>
-        </h2>
-        <p className="mt-3 text-lg text-white/70">A part of the Infinite Group</p>
+        {/* Brand mark */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/images/logo.png" alt="Infinite Distribution" className="w-full max-w-2xl" />
+        <p className="mt-5 text-lg text-white/70">A part of the Infinite Group</p>
 
         <div className="mt-14 grid gap-12 border-t border-white/10 pt-12 md:grid-cols-2">
           {/* Newsletter */}
