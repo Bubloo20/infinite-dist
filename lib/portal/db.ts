@@ -9,6 +9,7 @@ export type PortalUser = {
   bank_account: string | null;
   payid: string | null;
   area: string | null;
+  notes: string | null;
   created_at: string;
 };
 
@@ -24,6 +25,7 @@ export type WorkLog = {
   area_worked: string | null;
   amount: string | null;
   paid_on: string | null;
+  client_job_id: number | null;
   strava_urls: string | null;
   mapmy_urls: string | null;
   strava_status: string | null;
@@ -96,6 +98,7 @@ export async function ensureSchema() {
 
   // Areas each worker covers (from the ledger's workforce list).
   await sql`ALTER TABLE portal_users ADD COLUMN IF NOT EXISTS area TEXT;`;
+  await sql`ALTER TABLE portal_users ADD COLUMN IF NOT EXISTS notes TEXT;`;
 
   // Incremental upgrades — all safe to re-run.
   await sql`ALTER TABLE work_logs ALTER COLUMN strava_url DROP NOT NULL;`;
@@ -106,6 +109,8 @@ export async function ensureSchema() {
   await sql`ALTER TABLE work_logs ADD COLUMN IF NOT EXISTS paid_on DATE;`;
   await sql`ALTER TABLE work_logs ADD COLUMN IF NOT EXISTS strava_urls TEXT;`;
   await sql`ALTER TABLE work_logs ADD COLUMN IF NOT EXISTS mapmy_urls TEXT;`;
+  // Ties a worker's earnings to the agency job they were paid for.
+  await sql`ALTER TABLE work_logs ADD COLUMN IF NOT EXISTS client_job_id INTEGER;`;
 
   await sql`
     CREATE TABLE IF NOT EXISTS payments (
@@ -172,6 +177,44 @@ export async function ensureSchema() {
     );
   `;
 
+  // Marketplace + assignment fields on a job.
+  await sql`ALTER TABLE client_jobs ADD COLUMN IF NOT EXISTS published BOOLEAN DEFAULT FALSE;`;
+  await sql`ALTER TABLE client_jobs ADD COLUMN IF NOT EXISTS assigned_user_id INTEGER;`;
+  await sql`ALTER TABLE client_jobs ADD COLUMN IF NOT EXISTS worker_pay NUMERIC(10,2);`;
+  await sql`ALTER TABLE client_jobs ADD COLUMN IF NOT EXISTS allocated_time TEXT;`;
+  await sql`ALTER TABLE client_jobs ADD COLUMN IF NOT EXISTS min_hours TEXT;`;
+  await sql`ALTER TABLE client_jobs ADD COLUMN IF NOT EXISTS boundary TEXT;`;
+  await sql`ALTER TABLE client_jobs ADD COLUMN IF NOT EXISTS map_center TEXT;`;
+  await sql`ALTER TABLE client_jobs ADD COLUMN IF NOT EXISTS map_image TEXT;`;
+
+  // Workers registering interest in a published job.
+  await sql`
+    CREATE TABLE IF NOT EXISTS job_interest (
+      id SERIAL PRIMARY KEY,
+      job_id INTEGER NOT NULL,
+      user_id INTEGER NOT NULL,
+      note TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (job_id, user_id)
+    );
+  `;
+
+  // A signed contractor agreement for one job.
+  await sql`
+    CREATE TABLE IF NOT EXISTS job_contracts (
+      id SERIAL PRIMARY KEY,
+      job_id INTEGER NOT NULL,
+      user_id INTEGER NOT NULL,
+      signed_name TEXT NOT NULL,
+      signature_png TEXT NOT NULL,
+      signed_date DATE NOT NULL,
+      schedule TEXT,
+      agreed BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (job_id, user_id)
+    );
+  `;
+
   // Money an agency has paid us.
   await sql`
     CREATE TABLE IF NOT EXISTS agency_payments (
@@ -222,7 +265,25 @@ export type ClientJob = {
   invoice_no: string | null; invoice_date: string | null;
   picked_on: string | null; completed_on: string | null;
   notes: string | null; created_at: string;
+  // marketplace / assignment
+  published: boolean | null;
+  assigned_user_id: number | null;
+  worker_pay: string | null;
+  allocated_time: string | null;
+  min_hours: string | null;
+  boundary: string | null;
+  map_center: string | null;
+  map_image: string | null;
 };
+export type JobInterest = {
+  id: number; job_id: number; user_id: number; note: string | null; created_at: string;
+};
+export type JobContract = {
+  id: number; job_id: number; user_id: number; signed_name: string;
+  signature_png: string; signed_date: string; schedule: string | null;
+  agreed: boolean; created_at: string;
+};
+
 export type AgencyPayment = {
   id: number; agency_id: number; amount: string;
   paid_on: string | null; method: string | null; note: string | null; created_at: string;
@@ -328,6 +389,92 @@ export async function deleteClientJob(id: number) {
   await sql`DELETE FROM client_jobs WHERE id=${id};`;
 }
 
+/* ------------------------ marketplace: interest & contracts ---------------- */
+
+/** Published jobs with nobody assigned yet — what workers can put their hand up for. */
+export async function listOpenJobs(): Promise<ClientJob[]> {
+  await ensureSchema();
+  return (await sql<ClientJob>`
+    SELECT * FROM client_jobs
+    WHERE published = TRUE AND assigned_user_id IS NULL
+    ORDER BY created_at DESC LIMIT 100;`).rows;
+}
+
+export async function listJobsForWorker(userId: number): Promise<ClientJob[]> {
+  await ensureSchema();
+  return (await sql<ClientJob>`
+    SELECT * FROM client_jobs WHERE assigned_user_id = ${userId}
+    ORDER BY created_at DESC LIMIT 100;`).rows;
+}
+
+export async function listInterest(): Promise<JobInterest[]> {
+  await ensureSchema();
+  return (await sql<JobInterest>`SELECT * FROM job_interest ORDER BY created_at DESC LIMIT 500;`).rows;
+}
+
+export async function addInterest(jobId: number, userId: number, note?: string | null) {
+  await ensureSchema();
+  await sql`
+    INSERT INTO job_interest (job_id, user_id, note) VALUES (${jobId}, ${userId}, ${note || null})
+    ON CONFLICT (job_id, user_id) DO UPDATE SET note = EXCLUDED.note;`;
+}
+
+export async function removeInterest(jobId: number, userId: number) {
+  await ensureSchema();
+  await sql`DELETE FROM job_interest WHERE job_id = ${jobId} AND user_id = ${userId};`;
+}
+
+export async function assignJob(jobId: number, userId: number | null) {
+  await ensureSchema();
+  await sql`UPDATE client_jobs SET assigned_user_id = ${userId} WHERE id = ${jobId};`;
+}
+
+export async function setJobPublished(jobId: number, published: boolean) {
+  await ensureSchema();
+  await sql`UPDATE client_jobs SET published = ${published} WHERE id = ${jobId};`;
+}
+
+/** Worker-facing job settings: pay, time, boundary and map. */
+export async function setJobBrief(jobId: number, b: {
+  workerPay?: number | null; allocatedTime?: string | null; minHours?: string | null;
+  boundary?: string | null; mapCenter?: string | null; mapImage?: string | null;
+}) {
+  await ensureSchema();
+  await sql`
+    UPDATE client_jobs SET
+      worker_pay = ${b.workerPay ?? null},
+      allocated_time = ${b.allocatedTime ?? null},
+      min_hours = ${b.minHours ?? null},
+      boundary = ${b.boundary ?? null},
+      map_center = ${b.mapCenter ?? null},
+      map_image = ${b.mapImage ?? null}
+    WHERE id = ${jobId};`;
+}
+
+export async function listContracts(): Promise<JobContract[]> {
+  await ensureSchema();
+  return (await sql<JobContract>`SELECT * FROM job_contracts ORDER BY created_at DESC LIMIT 500;`).rows;
+}
+
+export async function getContract(jobId: number, userId: number): Promise<JobContract | null> {
+  await ensureSchema();
+  return (await sql<JobContract>`
+    SELECT * FROM job_contracts WHERE job_id=${jobId} AND user_id=${userId} LIMIT 1;`).rows[0] || null;
+}
+
+export async function saveContract(c: {
+  jobId: number; userId: number; signedName: string;
+  signaturePng: string; signedDate: string; schedule?: string | null;
+}) {
+  await ensureSchema();
+  await sql`
+    INSERT INTO job_contracts (job_id, user_id, signed_name, signature_png, signed_date, schedule, agreed)
+    VALUES (${c.jobId}, ${c.userId}, ${c.signedName}, ${c.signaturePng}, ${c.signedDate}, ${c.schedule || null}, TRUE)
+    ON CONFLICT (job_id, user_id) DO UPDATE SET
+      signed_name = EXCLUDED.signed_name, signature_png = EXCLUDED.signature_png,
+      signed_date = EXCLUDED.signed_date, schedule = EXCLUDED.schedule, created_at = NOW();`;
+}
+
 export async function listAgencyPayments(): Promise<AgencyPayment[]> {
   await ensureSchema();
   return (await sql<AgencyPayment>`SELECT * FROM agency_payments ORDER BY COALESCE(paid_on, created_at::date) DESC, id DESC LIMIT 500;`).rows;
@@ -420,10 +567,24 @@ export async function createUser(fullName: string, passwordHash: string) {
 export async function listUsers(): Promise<PortalUser[]> {
   await ensureSchema();
   const r = await sql<PortalUser>`
-    SELECT id, full_name, name_key, bank_name, bank_bsb, bank_account, payid, area, created_at
+    SELECT id, full_name, name_key, bank_name, bank_bsb, bank_account, payid, area, notes, created_at
     FROM portal_users ORDER BY full_name ASC;
   `;
   return r.rows;
+}
+
+export async function deleteUser(id: number) {
+  await ensureSchema();
+  await sql`UPDATE work_logs SET user_id = NULL WHERE user_id = ${id};`;
+  await sql`DELETE FROM payments WHERE user_id = ${id};`;
+  await sql`DELETE FROM job_interest WHERE user_id = ${id};`;
+  await sql`UPDATE client_jobs SET assigned_user_id = NULL WHERE assigned_user_id = ${id};`;
+  await sql`DELETE FROM portal_users WHERE id = ${id};`;
+}
+
+export async function updateUserNotes(id: number, notes: string | null, area: string | null) {
+  await ensureSchema();
+  await sql`UPDATE portal_users SET notes = ${notes}, area = ${area} WHERE id = ${id};`;
 }
 
 export async function updateUserPayDetails(

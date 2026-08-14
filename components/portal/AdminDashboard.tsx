@@ -7,6 +7,7 @@ import { GlassCard, PortalMark } from "./PortalShell";
 import { unpackLinks, type WorkLog, type Payment, type PortalUser, type FinanceEntry,
   type Agency, type Agent, type ClientJob, type AgencyPayment } from "@/lib/portal/db";
 import ClientsTab, { ClientJobsTab } from "./ClientsTab";
+import TrendChart, { type TrendPoint } from "./TrendChart";
 
 const money = (v: number) => `$${v.toFixed(2)}`;
 const num = (v: string | null) => (v === null ? 0 : Number(v) || 0);
@@ -47,6 +48,7 @@ export default function AdminDashboard({ onSignOut }: { onSignOut: () => void })
   const [tab, setTab] = useState<"clientjobs" | "agencies" | "workers" | "shifts" | "payments" | "finance">("clientjobs");
   const [q, setQ] = useState("");
   const [msg, setMsg] = useState("");
+  const [period, setPeriod] = useState<"week" | "fortnight" | "month" | "year" | "all">("all");
 
   const load = useCallback(() => {
     setLoading(true);
@@ -74,16 +76,69 @@ export default function AdminDashboard({ onSignOut }: { onSignOut: () => void })
     setMsg(""); load(); return true;
   };
 
+  // Period window: the week runs Sunday -> Saturday.
+  const since = useMemo(() => {
+    if (period === "all") return null;
+    const now = new Date();
+    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    if (period === "week") { d.setDate(d.getDate() - d.getDay()); return d; }
+    if (period === "fortnight") { d.setDate(d.getDate() - d.getDay() - 7); return d; }
+    if (period === "month") return new Date(now.getFullYear(), now.getMonth(), 1);
+    return new Date(now.getFullYear(), 0, 1);
+  }, [period]);
+
+  const inPeriod = useCallback((iso: string | null) => {
+    if (!since) return true;
+    if (!iso) return false;
+    const t = new Date(iso).getTime();
+    return Number.isFinite(t) && t >= since.getTime();
+  }, [since]);
+
   const totals = useMemo(() => {
-    const owed = logs.filter((l) => !l.paid_on).reduce((t, l) => t + num(l.amount), 0);
-    const paid = logs.filter((l) => l.paid_on).reduce((t, l) => t + num(l.amount), 0);
-    // Client work counts as revenue too, alongside anything logged manually.
-    const jobRevenue = clientJobs.reduce((t, j) => t + num(j.amount), 0);
-    const revenue = finance.filter((f) => f.kind === "revenue").reduce((t, f) => t + num(f.amount), 0) + jobRevenue;
-    const expenses = finance.filter((f) => f.kind === "expense").reduce((t, f) => t + num(f.amount), 0);
-    const agenciesOwe = clientJobs.filter((j) => j.invoice_status !== "received").reduce((t, j) => t + num(j.amount), 0);
+    const lg = logs.filter((l) => inPeriod(l.created_at));
+    const cj = clientJobs.filter((j) => inPeriod(j.completed_on || j.picked_on || j.created_at));
+    const fe = finance.filter((f) => inPeriod(f.entry_date));
+    const owed = lg.filter((l) => !l.paid_on).reduce((t, l) => t + num(l.amount), 0);
+    const paid = lg.filter((l) => l.paid_on).reduce((t, l) => t + num(l.amount), 0);
+    const jobRevenue = cj.reduce((t, j) => t + num(j.amount), 0);
+    const revenue = fe.filter((f) => f.kind === "revenue").reduce((t, f) => t + num(f.amount), 0) + jobRevenue;
+    const expenses = fe.filter((f) => f.kind === "expense").reduce((t, f) => t + num(f.amount), 0);
+    const agenciesOwe = cj.filter((j) => j.invoice_status !== "received").reduce((t, j) => t + num(j.amount), 0);
     return { owed, paid, revenue, expenses, agenciesOwe, profit: revenue - expenses - (owed + paid) };
-  }, [logs, finance, clientJobs]);
+  }, [logs, finance, clientJobs, inPeriod]);
+
+  // Revenue and profit grouped by month for the finance chart.
+  const trend = useMemo<TrendPoint[]>(() => {
+    const buckets: Record<string, { revenue: number; cost: number }> = {};
+    const key = (d: string) => {
+      const dt = new Date(d);
+      return Number.isNaN(dt.getTime()) ? null : `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}`;
+    };
+    clientJobs.forEach((j) => {
+      const k = key(j.completed_on || j.picked_on || j.created_at);
+      if (!k) return;
+      buckets[k] = buckets[k] || { revenue: 0, cost: 0 };
+      buckets[k].revenue += num(j.amount);
+    });
+    logs.forEach((l) => {
+      const k = key(l.created_at);
+      if (!k) return;
+      buckets[k] = buckets[k] || { revenue: 0, cost: 0 };
+      buckets[k].cost += num(l.amount);
+    });
+    finance.forEach((f) => {
+      const k = key(f.entry_date);
+      if (!k) return;
+      buckets[k] = buckets[k] || { revenue: 0, cost: 0 };
+      if (f.kind === "revenue") buckets[k].revenue += num(f.amount);
+      else buckets[k].cost += num(f.amount);
+    });
+    return Object.keys(buckets).sort().map((k) => {
+      const [y, m] = k.split("-");
+      const label = new Date(Number(y), Number(m) - 1, 1).toLocaleDateString("en-AU", { month: "short", year: "2-digit" });
+      return { month: label, revenue: Math.round(buckets[k].revenue * 100) / 100, profit: Math.round((buckets[k].revenue - buckets[k].cost) * 100) / 100 };
+    });
+  }, [clientJobs, logs, finance]);
 
   const postClient = async (body: Record<string, unknown>) => {
     const r = await fetch("/api/portal/admin/clients", {
@@ -140,7 +195,17 @@ export default function AdminDashboard({ onSignOut }: { onSignOut: () => void })
         </h1>
       </motion.div>
 
-      <div className="mt-9 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="mt-8 flex flex-wrap gap-2">
+        {([["week","This week (Sun-Sat)"],["fortnight","Fortnight"],["month","This month"],["year","This year"],["all","All time"]] as const).map(([k,label]) => (
+          <button key={k} onClick={() => setPeriod(k)}
+            className={`rounded-full border px-4 py-2 text-[13px] font-bold transition ${
+              period === k ? "border-white/25 bg-white/[0.12] text-white" : "border-white/10 bg-white/[0.04] text-white/50 hover:text-white/80"}`}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <Stat label="Agencies owe me" value={money(totals.agenciesOwe)} tone="accent" />
         <Stat label="Owed to team" value={money(totals.owed)} tone="owed" />
         <Stat label="Paid to team" value={money(totals.paid)} tone="paid" />
@@ -170,17 +235,17 @@ export default function AdminDashboard({ onSignOut }: { onSignOut: () => void })
       {loading ? (
         <div className="grid place-items-center py-20"><span className="h-8 w-8 animate-spin rounded-full border-2 border-white/15 border-t-orchid" /></div>
       ) : tab === "clientjobs" ? (
-        <ClientJobsTab agencies={agencies} agents={agents} jobs={clientJobs} post={postClient} del={delClient} />
+        <ClientJobsTab agencies={agencies} agents={agents} jobs={clientJobs} workLogs={logs} users={users} post={postClient} del={delClient} />
       ) : tab === "agencies" ? (
         <ClientsTab agencies={agencies} agents={agents} jobs={clientJobs} agencyPayments={agencyPayments} post={postClient} del={delClient} />
       ) : tab === "shifts" ? (
         <JobsTab logs={filtered} q={q} setQ={setQ} post={post} />
       ) : tab === "workers" ? (
-        <WorkersTab users={users} totals={userTotals} post={post} />
+        <WorkersTab users={users} totals={userTotals} post={post} reload={load} setMsg={setMsg} />
       ) : tab === "payments" ? (
         <PaymentsTab users={users} payments={payments} post={post} reload={load} setMsg={setMsg} />
       ) : (
-        <FinanceTab entries={finance} totals={totals} post={post} reload={load} />
+        <FinanceTab entries={finance} totals={totals} post={post} reload={load} trend={trend} />
       )}
     </div>
   );
@@ -278,28 +343,64 @@ function JobRow({ log, post }: { log: WorkLog; post: (u: string, b: unknown) => 
 
 /* --------------------------------- workers -------------------------------- */
 
-function WorkersTab({ users, totals, post }: {
+function WorkersTab({ users, totals, post, reload, setMsg }: {
   users: PortalUser[];
   totals: (id: number) => { owed: number; paid: number; jobs: number };
   post: (u: string, b: unknown) => Promise<boolean>;
+  reload: () => void;
+  setMsg: (m: string) => void;
 }) {
-  if (!users.length) return <GlassCard className="mt-6 p-14 text-center"><p className="text-white/50">No accounts yet. Workers create their own at /portal.</p></GlassCard>;
+  const [nw, setNw] = useState({ fullName: "", area: "", notes: "" });
+
+  const removeWorker = async (id: number, name: string) => {
+    if (!window.confirm(`Delete ${name}? Their shifts stay in the ledger but are unlinked.`)) return;
+    const r = await fetch(`/api/portal/admin/user?id=${id}`, { method: "DELETE" });
+    const d = await r.json();
+    if (!d.ok) setMsg(d.error || "Delete failed."); else reload();
+  };
+
   return (
     <div className="mt-6 space-y-3">
-      {users.map((u) => <WorkerRow key={u.id} user={u} t={totals(u.id)} post={post} />)}
+      <GlassCard className="p-6">
+        <h3 className="font-display text-lg font-bold text-white">Add a worker</h3>
+        <div className="mt-4 grid gap-3 sm:grid-cols-4">
+          <input className={input} placeholder="Full name" value={nw.fullName} onChange={(e) => setNw({ ...nw, fullName: e.target.value })} />
+          <input className={input} placeholder="Suburbs they cover" value={nw.area} onChange={(e) => setNw({ ...nw, area: e.target.value })} />
+          <input className={input} placeholder="Notes" value={nw.notes} onChange={(e) => setNw({ ...nw, notes: e.target.value })} />
+          <button className={btn} disabled={!nw.fullName.trim()}
+            onClick={async () => { if (await post("/api/portal/admin/user", { action: "create", ...nw })) setNw({ fullName: "", area: "", notes: "" }); }}>
+            Add worker
+          </button>
+        </div>
+        <p className="mt-2 text-[13px] text-white/35">They sign in with this name and the team password until they set their own.</p>
+      </GlassCard>
+
+      {!users.length ? (
+        <GlassCard className="p-14 text-center"><p className="text-white/50">No workers yet.</p></GlassCard>
+      ) : users.map((u) => <WorkerRow key={u.id} user={u} t={totals(u.id)} post={post} onDelete={() => removeWorker(u.id, u.full_name)} />)}
     </div>
   );
 }
 
-function WorkerRow({ user, t, post }: {
+function WorkerRow({ user, t, post, onDelete }: {
   user: PortalUser; t: { owed: number; paid: number; jobs: number };
   post: (u: string, b: unknown) => Promise<boolean>;
+  onDelete: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [f, setF] = useState({
     bankName: user.bank_name || "", bankBsb: user.bank_bsb || "",
     bankAccount: user.bank_account || "", payid: user.payid || "",
   });
+  const [n, setN] = useState({ area: user.area || "", notes: user.notes || "" });
+
+  const viewAs = async () => {
+    const r = await fetch("/api/portal/admin/impersonate", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId: user.id }),
+    });
+    if ((await r.json()).ok) window.location.href = "/portal";
+  };
 
   return (
     <GlassCard className="p-5 sm:p-6">
@@ -307,12 +408,14 @@ function WorkerRow({ user, t, post }: {
         <div>
           <h3 className="font-display text-lg font-bold text-white">{user.full_name}</h3>
           <p className="mt-1 text-sm text-white/45">{t.jobs} job{t.jobs === 1 ? "" : "s"} · joined {day(user.created_at)}</p>
+          {user.area && <p className="mt-1 text-[13px] text-white/45">Covers: {user.area}</p>}
           {(user.payid || user.bank_account) && (
             <p className="mt-1 text-[13px] text-white/40">
               {user.payid ? `PayID ${user.payid}` : ""}{user.payid && user.bank_account ? " · " : ""}
               {user.bank_account ? `${user.bank_bsb || ""} ${user.bank_account}` : ""}
             </p>
           )}
+          {user.notes && <p className="mt-1.5 max-w-xl text-[13px] text-white/50">{user.notes}</p>}
         </div>
         <div className="flex items-center gap-5">
           <div className="text-right">
@@ -323,7 +426,8 @@ function WorkerRow({ user, t, post }: {
             <p className="text-[11px] font-bold uppercase tracking-wide text-white/35">Paid</p>
             <p className="font-display text-xl font-extrabold text-emerald-300">{money(t.paid)}</p>
           </div>
-          <button onClick={() => setOpen((v) => !v)} className={btnGhost}>{open ? "Close" : "Pay details"}</button>
+          <button onClick={viewAs} className={btnGhost}>View as</button>
+          <button onClick={() => setOpen((v) => !v)} className={btnGhost}>{open ? "Close" : "Edit"}</button>
         </div>
       </div>
 
@@ -333,8 +437,12 @@ function WorkerRow({ user, t, post }: {
           <input className={input} placeholder="Bank name" value={f.bankName} onChange={(e) => setF({ ...f, bankName: e.target.value })} />
           <input className={input} placeholder="BSB" value={f.bankBsb} onChange={(e) => setF({ ...f, bankBsb: e.target.value })} />
           <input className={input} placeholder="Account number" value={f.bankAccount} onChange={(e) => setF({ ...f, bankAccount: e.target.value })} />
-          <div className="sm:col-span-2">
+          <input className={input} placeholder="Suburbs they work / can work" value={n.area} onChange={(e) => setN({ ...n, area: e.target.value })} />
+          <input className={input} placeholder="Notes about this worker" value={n.notes} onChange={(e) => setN({ ...n, notes: e.target.value })} />
+          <div className="flex flex-wrap gap-2 sm:col-span-2">
             <button onClick={() => post("/api/portal/admin/user", { id: user.id, ...f })} className={btn}>Save pay details</button>
+            <button onClick={() => post("/api/portal/admin/user", { action: "notes", id: user.id, ...n })} className={btn}>Save notes &amp; suburbs</button>
+            <button onClick={onDelete} className="rounded-xl border border-rose-400/30 px-4 py-2.5 text-sm font-semibold text-rose-300 transition hover:bg-rose-500/10">Delete worker</button>
           </div>
         </div>
       )}
@@ -399,11 +507,12 @@ function PaymentsTab({ users, payments, post, reload, setMsg }: {
 
 /* --------------------------------- finance -------------------------------- */
 
-function FinanceTab({ entries, totals, post, reload }: {
+function FinanceTab({ entries, totals, post, reload, trend }: {
   entries: FinanceEntry[];
   totals: { revenue: number; expenses: number; owed: number; paid: number; profit: number };
   post: (u: string, b: unknown) => Promise<boolean>;
   reload: () => void;
+  trend: TrendPoint[];
 }) {
   const [f, setF] = useState({ kind: "revenue", amount: "", category: "", description: "", entryDate: new Date().toISOString().slice(0, 10) });
 
@@ -419,6 +528,8 @@ function FinanceTab({ entries, totals, post, reload }: {
         <Stat label="Expenses (incl. labour)" value={money(totals.expenses + totals.owed + totals.paid)} />
         <Stat label="Profit" value={money(totals.profit)} tone={totals.profit >= 0 ? "paid" : "owed"} />
       </div>
+
+      <div className="mt-5"><TrendChart points={trend} /></div>
 
       <GlassCard className="mt-5 p-6">
         <h3 className="font-display text-lg font-bold text-white">Add revenue or expense</h3>

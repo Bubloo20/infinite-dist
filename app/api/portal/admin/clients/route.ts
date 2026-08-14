@@ -4,6 +4,7 @@ import {
   listAgencies, upsertAgency, deleteAgency,
   listAgents, upsertAgent, deleteAgent,
   listClientJobs, upsertClientJob, deleteClientJob,
+  assignJob, setJobPublished, setJobBrief,
   listAgencyPayments, addAgencyPayment, deleteAgencyPayment,
   dbConfigured,
 } from "@/lib/portal/db";
@@ -79,6 +80,19 @@ export async function POST(req: Request) {
           pickedOn: (b.pickedOn as string) || null, completedOn: (b.completedOn as string) || null,
           notes: (b.notes as string) || null,
         });
+        // Marketplace extras: assignment, publishing, worker brief and boundary.
+        if (b.assignedUserId !== undefined) await assignJob(id, n(b.assignedUserId));
+        if (b.published !== undefined) await setJobPublished(id, Boolean(b.published));
+        if (b.workerPay !== undefined || b.allocatedTime !== undefined || b.minHours !== undefined || b.boundary !== undefined) {
+          await setJobBrief(id, {
+            workerPay: n(b.workerPay),
+            allocatedTime: (b.allocatedTime as string) || null,
+            minHours: (b.minHours as string) || null,
+            boundary: (b.boundary as string) || null,
+            mapCenter: (b.mapCenter as string) || null,
+            mapImage: (b.mapImage as string) || null,
+          });
+        }
         return NextResponse.json({ ok: true, id });
       }
       case "agencyPayment": {

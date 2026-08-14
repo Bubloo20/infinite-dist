@@ -7,12 +7,13 @@ import { PortalBackdrop, PortalMark } from "@/components/portal/PortalShell";
 import LoginGate from "@/components/portal/LoginGate";
 import WorkLogForm from "@/components/portal/WorkLogForm";
 import MyEarnings from "@/components/portal/MyEarnings";
+import JobMarket from "@/components/portal/JobMarket";
 
 export default function PortalPage() {
   const [role, setRole] = useState<"worker" | "admin" | null>(null);
   const [fullName, setFullName] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<"log" | "earnings">("log");
+  const [tab, setTab] = useState<"jobs" | "log" | "earnings">("jobs");
   const [refreshKey, setRefreshKey] = useState(0);
 
   const loadSession = useCallback(() => {
@@ -64,8 +65,8 @@ export default function PortalPage() {
             </h1>
           </motion.div>
 
-          <div className="mb-7 grid grid-cols-2 gap-1 rounded-2xl border border-white/10 bg-white/[0.04] p-1">
-            {([["log", "Log a shift"], ["earnings", "Earnings & history"]] as const).map(([k, label]) => (
+          <div className="mb-7 grid grid-cols-3 gap-1 rounded-2xl border border-white/10 bg-white/[0.04] p-1">
+            {([["jobs", "Jobs"], ["log", "Log a shift"], ["earnings", "Earnings"]] as const).map(([k, label]) => (
               <button key={k} onClick={() => { setTab(k); if (k === "earnings") setRefreshKey((n) => n + 1); }}
                 className={`rounded-xl py-2.5 text-sm font-bold transition ${
                   tab === k ? "bg-gradient-to-r from-electric to-orchid text-white shadow-[0_10px_26px_-12px_rgba(182,109,199,0.9)]" : "text-white/50 hover:text-white/80"}`}>
@@ -74,7 +75,9 @@ export default function PortalPage() {
             ))}
           </div>
 
-          {tab === "log" ? (
+          {tab === "jobs" ? (
+            <JobMarket workerName={fullName || ""} />
+          ) : tab === "log" ? (
             <WorkLogForm onDone={() => setRefreshKey((n) => n + 1)} />
           ) : (
             <MyEarnings key={refreshKey} />

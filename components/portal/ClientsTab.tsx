@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { GlassCard } from "./PortalShell";
 import type { Agency, Agent, ClientJob, AgencyPayment, JobStatus, InvoiceStatus } from "@/lib/portal/db";
+import BoundaryMap, { type LatLng } from "./BoundaryMap";
 
 const money = (v: number) => `$${v.toFixed(2)}`;
 const num = (v: string | null) => (v === null ? 0 : Number(v) || 0);
@@ -240,19 +241,37 @@ function AgencyDetail({ agency, agents, jobs, payments, post, del }: {
 
 /* ------------------------------ client jobs ------------------------------- */
 
-export function ClientJobsTab({ agencies, agents, jobs, post, del }: {
-  agencies: Agency[]; agents: Agent[]; jobs: ClientJob[]; post: Post; del: Del;
+export function ClientJobsTab({ agencies, agents, jobs, workLogs, users, post, del }: {
+  agencies: Agency[]; agents: Agent[]; jobs: ClientJob[];
+  workLogs: WorkLogLite[]; users: { id: number; full_name: string }[];
+  post: Post; del: Del;
 }) {
   const blank = {
     agencyId: "", agentId: "", title: "", area: "", leafletType: "", quantity: "",
     ratePerLeaflet: "", status: "to_send", invoiceStatus: "not_sent",
     pickedOn: "", completedOn: "", invoiceNo: "", invoiceDate: "",
+    assignedUserId: "", workerPay: "", allocatedTime: "", minHours: "", published: false,
   };
   const [f, setF] = useState(blank);
+  const [pts, setPts] = useState<LatLng[]>([]);
+  const [mapCenter, setMapCenter] = useState<[number, number, number] | null>(null);
+  const [showMap, setShowMap] = useState(false);
   const [filter, setFilter] = useState<"all" | JobStatus>("all");
+  const [sort, setSort] = useState<"newest" | "oldest" | "amount" | "agency">("newest");
 
-  const shown = useMemo(() => (filter === "all" ? jobs : jobs.filter((j) => j.status === filter)), [jobs, filter]);
-  const agencyName = (id: number | null) => agencies.find((a) => a.id === id)?.name || "—";
+  const shown = useMemo(() => {
+    const base = filter === "all" ? jobs : jobs.filter((j) => j.status === filter);
+    const when = (j: ClientJob) => new Date(j.completed_on || j.picked_on || j.created_at).getTime();
+    const copy = [...base];
+    if (sort === "newest") copy.sort((a, b) => when(b) - when(a));
+    if (sort === "oldest") copy.sort((a, b) => when(a) - when(b));
+    if (sort === "amount") copy.sort((a, b) => num(b.amount) - num(a.amount));
+    if (sort === "agency") copy.sort((a, b) => (agencies.find((x) => x.id === a.agency_id)?.name || "").localeCompare(agencies.find((x) => x.id === b.agency_id)?.name || ""));
+    return copy;
+  }, [jobs, filter, sort, agencies]);
+
+  const agencyName = (id: number | null) => agencies.find((a) => a.id === id)?.name || "Unassigned agency";
+  const agentName = (id: number | null) => agents.find((a) => a.id === id)?.name || null;
 
   // Default the rate from the agency when one is chosen.
   const chooseAgency = (id: string) => {
@@ -277,23 +296,68 @@ export function ClientJobsTab({ agencies, agents, jobs, post, del }: {
           <input className={input} placeholder="Area" value={f.area} onChange={(e) => setF({ ...f, area: e.target.value })} />
           <input className={input} placeholder="Leaflet type" value={f.leafletType} onChange={(e) => setF({ ...f, leafletType: e.target.value })} />
           <input className={input} placeholder="Quantity" inputMode="numeric" value={f.quantity} onChange={(e) => setF({ ...f, quantity: e.target.value })} />
-          <input className={input} placeholder="Rate per leaflet" inputMode="decimal" value={f.ratePerLeaflet} onChange={(e) => setF({ ...f, ratePerLeaflet: e.target.value })} />
+          <label className="block">
+            <span className="mb-1 block text-[12px] font-semibold text-orchid">Rate per leaflet — what the agency pays you</span>
+            <input className={input} placeholder="e.g. 0.13" inputMode="decimal" value={f.ratePerLeaflet} onChange={(e) => setF({ ...f, ratePerLeaflet: e.target.value })} />
+          </label>
           <select className={input} value={f.status} onChange={(e) => setF({ ...f, status: e.target.value })}>
             <option value="to_send">Yet to be sent</option>
             <option value="out_for_delivery">Out for delivery</option>
             <option value="completed">Completed</option>
           </select>
-          <input className={input} type="date" value={f.completedOn} onChange={(e) => setF({ ...f, completedOn: e.target.value })} />
+          <label className="block">
+            <span className="mb-1 block text-[12px] font-semibold text-white/40">Pick-up date (optional)</span>
+            <input className={input} type="date" value={f.pickedOn} onChange={(e) => setF({ ...f, pickedOn: e.target.value })} />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-[12px] font-semibold text-white/40">Completion date (optional)</span>
+            <input className={input} type="date" value={f.completedOn} onChange={(e) => setF({ ...f, completedOn: e.target.value })} />
+          </label>
+          <select className={input} value={f.assignedUserId} onChange={(e) => setF({ ...f, assignedUserId: e.target.value })}>
+            <option value="">Assign to worker (optional)…</option>
+            {users.map((u) => <option key={u.id} value={u.id}>{u.full_name}</option>)}
+          </select>
+          <label className="block">
+            <span className="mb-1 block text-[12px] font-semibold text-emerald-300">Worker pay — total $ you pay them</span>
+            <input className={input} placeholder="e.g. 120" inputMode="decimal" value={f.workerPay} onChange={(e) => setF({ ...f, workerPay: e.target.value })} />
+          </label>
+          <input className={input} placeholder="Allocated time (e.g. 3 days)" value={f.allocatedTime} onChange={(e) => setF({ ...f, allocatedTime: e.target.value })} />
+          <input className={input} placeholder="Minimum hours" value={f.minHours} onChange={(e) => setF({ ...f, minHours: e.target.value })} />
+          <label className="flex items-center gap-2.5 rounded-xl border border-white/12 bg-white/[0.05] px-4 py-2.5 text-sm text-white/75">
+            <input type="checkbox" checked={f.published} onChange={(e) => setF({ ...f, published: e.target.checked })} className="h-4 w-4 accent-[#7c3aed]" />
+            Publish to workers
+          </label>
+          <button type="button" onClick={() => setShowMap((v) => !v)} className={btnGhost}>
+            {showMap ? "Hide map" : pts.length ? `Delivery area (${pts.length} pts)` : "Draw delivery area"}
+          </button>
+
+          {showMap && (
+            <div className="sm:col-span-3">
+              <p className="mb-2 text-[13px] text-white/45">
+                Click the map to trace the boundary. Workers get this as a fully interactive map they can zoom and pan.
+              </p>
+              <BoundaryMap boundary={pts} editable height={420}
+                onChange={(p, c) => { setPts(p); setMapCenter(c); }} />
+            </div>
+          )}
+
           <div className="sm:col-span-3">
             <button className={btn} disabled={!f.agencyId && !f.title}
-              onClick={async () => { if (await post({ entity: "job", ...f })) setF(blank); }}>
+              onClick={async () => {
+                const ok = await post({
+                  entity: "job", ...f,
+                  boundary: pts.length >= 3 ? JSON.stringify(pts) : null,
+                  mapCenter: mapCenter ? JSON.stringify(mapCenter) : null,
+                });
+                if (ok) { setF(blank); setPts([]); setShowMap(false); }
+              }}>
               Add job
             </button>
           </div>
         </div>
       </GlassCard>
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {(["all", "to_send", "out_for_delivery", "completed"] as const).map((k) => (
           <button key={k} onClick={() => setFilter(k)}
             className={`rounded-full border px-4 py-2 text-[13px] font-bold transition ${
@@ -301,42 +365,92 @@ export function ClientJobsTab({ agencies, agents, jobs, post, del }: {
             {k === "all" ? `All (${jobs.length})` : `${STATUS[k].label} (${jobs.filter((j) => j.status === k).length})`}
           </button>
         ))}
+        <select value={sort} onChange={(e) => setSort(e.target.value as typeof sort)}
+          className={`${input} ml-auto !w-auto`} aria-label="Sort jobs">
+          <option value="newest">Sort: newest first</option>
+          <option value="oldest">Sort: oldest first</option>
+          <option value="amount">Sort: highest value</option>
+          <option value="agency">Sort: agency A–Z</option>
+        </select>
       </div>
 
       {!shown.length ? (
         <GlassCard className="p-14 text-center"><p className="text-white/50">No jobs here yet.</p></GlassCard>
-      ) : shown.map((j) => <ClientJobRow key={j.id} job={j} agencyName={agencyName(j.agency_id)} post={post} del={del} />)}
+      ) : shown.map((j) => (
+        <ClientJobRow key={j.id} job={j}
+          agencyName={agencyName(j.agency_id)} agentName={agentName(j.agent_id)}
+          expenses={workLogs.filter((w) => w.client_job_id === j.id)}
+          users={users} post={post} del={del} />
+      ))}
     </div>
   );
 }
 
-function ClientJobRow({ job, agencyName, post, del }: {
-  job: ClientJob; agencyName: string; post: Post; del: Del;
+export type WorkLogLite = {
+  id: number; client_job_id: number | null; user_id: number | null;
+  worker_name: string; amount: string | null; paid_on: string | null;
+};
+
+/** An invoice sitting on "sent" for over a week needs chasing. */
+export function effectiveInvoice(job: ClientJob): InvoiceStatus | "follow_up" {
+  if (job.invoice_status === "received") return "received";
+  if (job.invoice_status !== "sent") return job.invoice_status;
+  const sent = job.invoice_date || job.completed_on;
+  if (!sent) return "sent";
+  const days = (Date.now() - new Date(sent).getTime()) / 86400000;
+  return days > 7 ? "follow_up" : "sent";
+}
+
+const INVOICE_VIEW: Record<string, { label: string; cls: string }> = {
+  not_sent: { label: "Invoice not sent", cls: "border-white/15 bg-white/[0.06] text-white/55" },
+  sent: { label: "Invoice sent", cls: "border-amber-400/40 bg-amber-500/12 text-amber-300" },
+  follow_up: { label: "Follow up", cls: "border-rose-400/45 bg-rose-500/15 text-rose-300" },
+  received: { label: "Paid", cls: "border-emerald-400/40 bg-emerald-500/12 text-emerald-300" },
+};
+
+function ClientJobRow({ job, agencyName, agentName, expenses, users, post, del }: {
+  job: ClientJob; agencyName: string; agentName: string | null;
+  expenses: WorkLogLite[]; users: { id: number; full_name: string }[];
+  post: Post; del: Del;
 }) {
+  const [open, setOpen] = useState(false);
   const s = STATUS[job.status];
+  const inv = effectiveInvoice(job);
+  const revenue = num(job.amount);
+  const labour = expenses.reduce((t, w) => t + num(w.amount), 0);
+  const profit = revenue - labour;
+  const nameOf = (w: WorkLogLite) => users.find((u) => u.id === w.user_id)?.full_name || w.worker_name;
+
   return (
     <GlassCard className={`border-l-4 p-5 ${
       job.status === "completed" ? "border-l-emerald-400" : job.status === "out_for_delivery" ? "border-l-amber-400" : "border-l-rose-400"}`}>
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
+          {/* Agency — Agent is the header, the job title sits under it. */}
           <div className="flex flex-wrap items-center gap-2.5">
             <span className={`h-2.5 w-2.5 rounded-full ${s.dot}`} />
-            <h3 className="font-display text-lg font-bold text-white">{job.title || `Job #${job.id}`}</h3>
-            <span className="rounded-lg bg-white/[0.08] px-2.5 py-1 text-[12px] text-white/70">{agencyName}</span>
+            <h3 className="font-display text-lg font-bold text-white">
+              {agencyName}{agentName ? <span className="text-white/55"> — {agentName}</span> : null}
+            </h3>
           </div>
-          <p className="mt-2 text-sm text-white/50">
+          <p className="mt-1 text-[15px] font-semibold text-white/75">{job.title || `Job #${job.id}`}</p>
+          <p className="mt-1.5 text-sm text-white/45">
             {job.quantity ? `${job.quantity.toLocaleString()} leaflets` : "—"}
             {job.rate_per_leaflet ? ` @ $${Number(job.rate_per_leaflet).toFixed(2)}` : ""}
             {job.area ? ` · ${job.area}` : ""}
           </p>
           <p className="mt-1 text-[13px] text-white/40">
-            {job.picked_on ? `Picked ${day(job.picked_on)}` : ""}
-            {job.completed_on ? ` · Completed ${day(job.completed_on)}` : ""}
+            Picked {job.picked_on ? day(job.picked_on) : "—"} · Completed {job.completed_on ? day(job.completed_on) : "—"}
           </p>
         </div>
 
         <div className="flex flex-col items-end gap-2">
-          <p className="font-display text-2xl font-extrabold text-white">{money(num(job.amount))}</p>
+          <div className="text-right">
+            <p className="font-display text-2xl font-extrabold text-white">{money(revenue)}</p>
+            <p className={`text-[13px] font-bold ${profit >= 0 ? "text-emerald-300" : "text-rose-300"}`}>
+              Profit {money(profit)}
+            </p>
+          </div>
           <div className="flex flex-wrap justify-end gap-2">
             <select className={`${input} !w-auto !py-2`} value={job.status}
               onChange={(e) => post({ entity: "job", id: job.id, ...jobPayload(job), status: e.target.value })}>
@@ -348,15 +462,55 @@ function ClientJobRow({ job, agencyName, post, del }: {
               onChange={(e) => post({ entity: "job", id: job.id, ...jobPayload(job), invoiceStatus: e.target.value })}>
               <option value="not_sent">Invoice not sent</option>
               <option value="sent">Invoice sent</option>
-              <option value="received">Payment received</option>
+              <option value="received">Paid</option>
             </select>
           </div>
-          <div className="flex gap-2">
+          <span className={`rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase ${INVOICE_VIEW[inv].cls}`}>
+            {INVOICE_VIEW[inv].label}
+            {inv === "received" && job.invoice_date ? ` ${day(job.invoice_date)}` : ""}
+          </span>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <input className={`${input} !w-28 !py-1.5 !text-[12px]`} placeholder="Invoice no."
+              defaultValue={job.invoice_no || ""} aria-label="Invoice number"
+              onBlur={(e) => { if (e.target.value !== (job.invoice_no || "")) post({ entity: "job", id: job.id, ...jobPayload(job), invoiceNo: e.target.value }); }} />
+            <input type="date" className={`${input} !w-auto !py-1.5 !text-[12px]`}
+              value={job.invoice_date || ""} aria-label="Invoice / paid date"
+              onChange={(e) => post({ entity: "job", id: job.id, ...jobPayload(job), invoiceDate: e.target.value })} />
             <Link href={`/portal/admin/invoice/${job.id}`} className={btnGhost}>Invoice PDF ↗</Link>
+          </div>
+          <div className="flex gap-3">
+            <button onClick={() => setOpen((v) => !v)} className="text-sm font-semibold text-white/50 transition hover:text-white">
+              {open ? "Hide costs" : `Costs (${expenses.length})`}
+            </button>
             <button onClick={() => del("job", job.id)} className="text-sm text-white/30 transition hover:text-rose-300">Delete</button>
           </div>
         </div>
       </div>
+
+      {open && (
+        <div className="mt-5 border-t border-white/10 pt-4">
+          <p className="text-[12px] font-bold uppercase tracking-[0.12em] text-white/40">Worker costs on this job</p>
+          {!expenses.length ? (
+            <p className="mt-2 text-sm text-white/40">No worker payments recorded against this job yet.</p>
+          ) : (
+            <div className="mt-3 space-y-1.5">
+              {expenses.map((w) => (
+                <div key={w.id} className="flex items-center justify-between rounded-lg bg-white/[0.04] px-3.5 py-2 text-sm">
+                  <span className="text-white/75">{nameOf(w)}</span>
+                  <span className="flex items-center gap-3">
+                    <span className={w.paid_on ? "text-emerald-300" : "text-amber-300"}>{w.paid_on ? "paid" : "unpaid"}</span>
+                    <span className="font-semibold text-white">{money(num(w.amount))}</span>
+                  </span>
+                </div>
+              ))}
+              <div className="flex items-center justify-between border-t border-white/10 px-3.5 pt-2.5 text-sm">
+                <span className="font-semibold text-white/70">Total costs</span>
+                <span className="font-display text-lg font-extrabold text-white">{money(labour)}</span>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </GlassCard>
   );
 }

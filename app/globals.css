@@ -95,6 +95,14 @@ body {
   text-transform: uppercase;
 }
 
+/* Native select popups render with the OS palette — force them dark in the
+   portal so white option text isn't drawn on a white background. */
+select option,
+select optgroup {
+  background-color: #141024;
+  color: #ffffff;
+}
+
 /* Leaflet suburb labels on the coverage map */
 .coverage-label {
   background: #ffffff;
