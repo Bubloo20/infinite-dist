@@ -5,7 +5,7 @@ import {
   listAgents, upsertAgent, deleteAgent,
   listClientJobs, upsertClientJob, deleteClientJob,
   assignJob, setJobPublished, setJobBrief, setJobProgress,
-  listAgencyPayments, addAgencyPayment, deleteAgencyPayment,
+  listAgencyPayments, addAgencyPayment, deleteAgencyPayment, listInterest,
   dbConfigured,
 } from "@/lib/portal/db";
 
@@ -22,10 +22,10 @@ export async function GET() {
   if (!isAdmin()) return NextResponse.json({ ok: false, error: "Admin access required." }, { status: 401 });
   if (!dbConfigured()) return NextResponse.json({ ok: true, dbConfigured: false, agencies: [], agents: [], jobs: [], agencyPayments: [] });
   try {
-    const [agencies, agents, jobs, agencyPayments] = await Promise.all([
-      listAgencies(), listAgents(), listClientJobs(), listAgencyPayments(),
+    const [agencies, agents, jobs, agencyPayments, interest] = await Promise.all([
+      listAgencies(), listAgents(), listClientJobs(), listAgencyPayments(), listInterest(),
     ]);
-    return NextResponse.json({ ok: true, dbConfigured: true, agencies, agents, jobs, agencyPayments });
+    return NextResponse.json({ ok: true, dbConfigured: true, agencies, agents, jobs, agencyPayments, interest });
   } catch (e) {
     return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "Query failed." }, { status: 500 });
   }

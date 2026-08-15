@@ -247,15 +247,11 @@ export function ClientJobsTab({ agencies, agents, jobs, workLogs, users, post, d
   post: Post; del: Del;
 }) {
   const blank = {
-    agencyId: "", agentId: "", title: "", area: "", leafletType: "", quantity: "",
+    agencyId: "", agentId: "", title: "", area: "", quantity: "",
     ratePerLeaflet: "", status: "to_send", invoiceStatus: "not_sent",
-    pickedOn: "", completedOn: "", invoiceNo: "", invoiceDate: "",
-    assignedUserId: "", workerPay: "", allocatedTime: "", minHours: "", published: false,
+    pickedOn: "", completedOn: "",
   };
   const [f, setF] = useState(blank);
-  const [pts, setPts] = useState<LatLng[]>([]);
-  const [mapCenter, setMapCenter] = useState<[number, number, number] | null>(null);
-  const [showMap, setShowMap] = useState(false);
   const [filter, setFilter] = useState<"all" | JobStatus>("all");
   const [sort, setSort] = useState<"newest" | "oldest" | "amount" | "agency">("newest");
 
@@ -273,7 +269,7 @@ export function ClientJobsTab({ agencies, agents, jobs, workLogs, users, post, d
   const agencyName = (id: number | null) => agencies.find((a) => a.id === id)?.name || "Unassigned agency";
   const agentName = (id: number | null) => agents.find((a) => a.id === id)?.name || null;
 
-  // Default the rate from the agency when one is chosen.
+  // Picking an agency pre-fills its per-leaflet rate.
   const chooseAgency = (id: string) => {
     const a = agencies.find((x) => String(x.id) === id);
     setF((p) => ({ ...p, agencyId: id, agentId: "", ratePerLeaflet: a?.price_per_leaflet ? String(a.price_per_leaflet) : p.ratePerLeaflet }));
@@ -283,6 +279,7 @@ export function ClientJobsTab({ agencies, agents, jobs, workLogs, users, post, d
     <div className="mt-6 space-y-4">
       <GlassCard className="p-6">
         <h3 className="font-display text-lg font-bold text-white">Add a job</h3>
+        <p className="mt-1 text-[13px] text-white/40">Your internal record. Publish it to workers from the Workers tab.</p>
         <div className="mt-4 grid gap-3 sm:grid-cols-3">
           <select className={input} value={f.agencyId} onChange={(e) => chooseAgency(e.target.value)}>
             <option value="">Agency…</option>
@@ -293,13 +290,17 @@ export function ClientJobsTab({ agencies, agents, jobs, workLogs, users, post, d
             {agents.filter((g) => String(g.agency_id) === f.agencyId).map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
           </select>
           <input className={input} placeholder="Job title / description" value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} />
+
           <input className={input} placeholder="Area" value={f.area} onChange={(e) => setF({ ...f, area: e.target.value })} />
-          <input className={input} placeholder="Leaflet type" value={f.leafletType} onChange={(e) => setF({ ...f, leafletType: e.target.value })} />
-          <input className={input} placeholder="Quantity" inputMode="numeric" value={f.quantity} onChange={(e) => setF({ ...f, quantity: e.target.value })} />
           <label className="block">
-            <span className="mb-1 block text-[12px] font-semibold text-orchid">Rate per leaflet — what the agency pays you</span>
+            <span className="mb-1 block text-[12px] font-semibold text-white/40">Leaflet amount</span>
+            <input className={input} placeholder="e.g. 2000" inputMode="numeric" value={f.quantity} onChange={(e) => setF({ ...f, quantity: e.target.value })} />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-[12px] font-semibold text-orchid">Leaflet rate — what the agency pays you</span>
             <input className={input} placeholder="e.g. 0.13" inputMode="decimal" value={f.ratePerLeaflet} onChange={(e) => setF({ ...f, ratePerLeaflet: e.target.value })} />
           </label>
+
           <select className={input} value={f.status} onChange={(e) => setF({ ...f, status: e.target.value })}>
             <option value="to_send">Waiting for dispatch</option>
             <option value="out_for_delivery">Out for delivery</option>
@@ -313,44 +314,10 @@ export function ClientJobsTab({ agencies, agents, jobs, workLogs, users, post, d
             <span className="mb-1 block text-[12px] font-semibold text-white/40">Completion date (optional)</span>
             <input className={input} type="date" value={f.completedOn} onChange={(e) => setF({ ...f, completedOn: e.target.value })} />
           </label>
-          <select className={input} value={f.assignedUserId} onChange={(e) => setF({ ...f, assignedUserId: e.target.value })}>
-            <option value="">Assign to worker (optional)…</option>
-            {users.map((u) => <option key={u.id} value={u.id}>{u.full_name}</option>)}
-          </select>
-          <label className="block">
-            <span className="mb-1 block text-[12px] font-semibold text-emerald-300">Worker pay — total $ you pay them</span>
-            <input className={input} placeholder="e.g. 120" inputMode="decimal" value={f.workerPay} onChange={(e) => setF({ ...f, workerPay: e.target.value })} />
-          </label>
-          <input className={input} placeholder="Allocated time (e.g. 3 days)" value={f.allocatedTime} onChange={(e) => setF({ ...f, allocatedTime: e.target.value })} />
-          <input className={input} placeholder="Minimum hours" value={f.minHours} onChange={(e) => setF({ ...f, minHours: e.target.value })} />
-          <label className="flex items-center gap-2.5 rounded-xl border border-white/12 bg-white/[0.05] px-4 py-2.5 text-sm text-white/75">
-            <input type="checkbox" checked={f.published} onChange={(e) => setF({ ...f, published: e.target.checked })} className="h-4 w-4 accent-[#7c3aed]" />
-            Publish to workers
-          </label>
-          <button type="button" onClick={() => setShowMap((v) => !v)} className={btnGhost}>
-            {showMap ? "Hide map" : pts.length ? `Delivery area (${pts.length} pts)` : "Draw delivery area"}
-          </button>
-
-          {showMap && (
-            <div className="sm:col-span-3">
-              <p className="mb-2 text-[13px] text-white/45">
-                Click the map to trace the boundary. Workers get this as a fully interactive map they can zoom and pan.
-              </p>
-              <BoundaryMap boundary={pts} editable height={420}
-                onChange={(p, c) => { setPts(p); setMapCenter(c); }} />
-            </div>
-          )}
 
           <div className="sm:col-span-3">
             <button className={btn} disabled={!f.agencyId && !f.title}
-              onClick={async () => {
-                const ok = await post({
-                  entity: "job", ...f,
-                  boundary: pts.length >= 3 ? JSON.stringify(pts) : null,
-                  mapCenter: mapCenter ? JSON.stringify(mapCenter) : null,
-                });
-                if (ok) { setF(blank); setPts([]); setShowMap(false); }
-              }}>
+              onClick={async () => { if (await post({ entity: "job", ...f })) setF(blank); }}>
               Add job
             </button>
           </div>

@@ -61,15 +61,25 @@ export default function JobMarket({ workerName }: { workerName: string }) {
 
   useEffect(load, [load]);
 
-  const act = async (jobId: number, action: "interest" | "withdraw") => {
+  const act = async (jobId: number, action: "interest" | "withdraw", note?: string) => {
     setBusyId(jobId);
     try {
       await fetch("/api/portal/jobs", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action, jobId }),
+        body: JSON.stringify({ action, jobId, note }),
       });
       load();
     } finally { setBusyId(null); }
+  };
+
+  const askQuestion = (jobId: number) => {
+    const q = window.prompt("What would you like to ask the office about this job?");
+    if (q && q.trim()) act(jobId, "interest", q.trim());
+  };
+
+  const decline = (jobId: number) => {
+    const why = window.prompt("Let the office know why you're passing (optional):") ?? "";
+    act(jobId, "interest", `[declined] ${why}`.trim());
   };
 
   if (loading) {
@@ -124,15 +134,25 @@ export default function JobMarket({ workerName }: { workerName: string }) {
                       <div className="mt-4"><BoundaryMap boundary={pts} center={parseCenter(j.map_center)} height={340} /></div>
                     )}
 
-                    <button
-                      onClick={() => act(j.id, keen ? "withdraw" : "interest")}
-                      disabled={busyId === j.id}
-                      className={`mt-5 rounded-2xl px-6 py-3 font-display text-[15px] font-bold transition hover:-translate-y-0.5 disabled:opacity-50 ${
-                        keen ? "border border-white/15 bg-white/[0.06] text-white/70"
-                             : "bg-gradient-to-r from-electric to-orchid text-white shadow-[0_14px_34px_-14px_rgba(182,109,199,0.9)]"}`}>
-                      {busyId === j.id ? "…" : keen ? "Interested ✓ — withdraw" : "I'm interested"}
-                    </button>
-                    {keen && <p className="mt-2 text-[13px] text-white/40">The office can see you&apos;re interested and will assign it if it&apos;s yours.</p>}
+                    <div className="mt-5 flex flex-wrap gap-2">
+                      <button
+                        onClick={() => act(j.id, keen ? "withdraw" : "interest")}
+                        disabled={busyId === j.id}
+                        className={`rounded-2xl px-6 py-3 font-display text-[15px] font-bold transition hover:-translate-y-0.5 disabled:opacity-50 ${
+                          keen ? "border border-white/15 bg-white/[0.06] text-white/70"
+                               : "bg-gradient-to-r from-electric to-orchid text-white shadow-[0_14px_34px_-14px_rgba(182,109,199,0.9)]"}`}>
+                        {busyId === j.id ? "…" : keen ? "Interested ✓ — withdraw" : "I'm interested"}
+                      </button>
+                      <button onClick={() => askQuestion(j.id)} disabled={busyId === j.id}
+                        className="rounded-2xl border border-white/15 bg-white/[0.06] px-5 py-3 font-display text-[15px] font-bold text-white/75 transition hover:bg-white/[0.1] hover:text-white disabled:opacity-50">
+                        Ask a question
+                      </button>
+                      <button onClick={() => decline(j.id)} disabled={busyId === j.id}
+                        className="rounded-2xl border border-rose-400/30 px-5 py-3 font-display text-[15px] font-bold text-rose-300 transition hover:bg-rose-500/10 disabled:opacity-50">
+                        Decline
+                      </button>
+                    </div>
+                    {keen && <p className="mt-2 text-[13px] text-white/40">The office can see your response and will assign it if it&apos;s yours.</p>}
                   </GlassCard>
                 </motion.div>
               );
