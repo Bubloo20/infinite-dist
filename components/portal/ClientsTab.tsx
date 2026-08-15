@@ -5,6 +5,8 @@ import Link from "next/link";
 import { GlassCard } from "./PortalShell";
 import type { Agency, Agent, ClientJob, AgencyPayment, JobStatus, InvoiceStatus } from "@/lib/portal/db";
 import BoundaryMap, { type LatLng } from "./BoundaryMap";
+import { SubContracts } from "./PublishToWorkers";
+import type { PortalUser, JobAssignment } from "@/lib/portal/db";
 
 const money = (v: number) => `$${v.toFixed(2)}`;
 const num = (v: string | null) => (v === null ? 0 : Number(v) || 0);
@@ -241,15 +243,15 @@ function AgencyDetail({ agency, agents, jobs, payments, post, del }: {
 
 /* ------------------------------ client jobs ------------------------------- */
 
-export function ClientJobsTab({ agencies, agents, jobs, workLogs, users, post, del }: {
+export function ClientJobsTab({ agencies, agents, jobs, workLogs, users, assignments, post, del }: {
   agencies: Agency[]; agents: Agent[]; jobs: ClientJob[];
-  workLogs: WorkLogLite[]; users: { id: number; full_name: string }[];
+  workLogs: WorkLogLite[]; users: PortalUser[]; assignments: JobAssignment[];
   post: Post; del: Del;
 }) {
   const blank = {
     agencyId: "", agentId: "", title: "", area: "", quantity: "",
     ratePerLeaflet: "", status: "to_send", invoiceStatus: "not_sent",
-    pickedOn: "", completedOn: "",
+    pickedOn: "", completedOn: "", workerPay: "", minHours: "",
   };
   const [f, setF] = useState(blank);
   const [filter, setFilter] = useState<"all" | JobStatus>("all");
@@ -320,6 +322,15 @@ export function ClientJobsTab({ agencies, agents, jobs, workLogs, users, post, d
             <input className={input} type="date" value={f.completedOn} onChange={(e) => setF({ ...f, completedOn: e.target.value })} />
           </label>
 
+          <label className="block">
+            <span className="mb-1 block text-[12px] font-semibold text-emerald-300">Worker pay (optional) — total $ they get</span>
+            <input className={input} placeholder="e.g. 120" inputMode="decimal" value={f.workerPay} onChange={(e) => setF({ ...f, workerPay: e.target.value })} />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-[12px] font-semibold text-white/40">Minimum hours (optional)</span>
+            <input className={input} placeholder="e.g. 6" value={f.minHours} onChange={(e) => setF({ ...f, minHours: e.target.value })} />
+          </label>
+
           <div className="sm:col-span-3">
             <button className={btn} disabled={!f.agencyId && !f.title}
               onClick={async () => { if (await post({ entity: "job", ...f })) setF(blank); }}>
@@ -352,7 +363,8 @@ export function ClientJobsTab({ agencies, agents, jobs, workLogs, users, post, d
         <ClientJobRow key={j.id} job={j}
           agencyName={agencyName(j.agency_id)} agentName={agentName(j.agent_id)}
           expenses={workLogs.filter((w) => w.client_job_id === j.id)}
-          users={users} post={post} del={del} />
+          users={users} assignments={assignments.filter((a) => a.job_id === j.id)}
+          post={post} del={del} />
       ))}
     </div>
   );
@@ -380,17 +392,27 @@ const INVOICE_VIEW: Record<string, { label: string; cls: string }> = {
   received: { label: "Paid", cls: "border-emerald-400/40 bg-emerald-500/12 text-emerald-300" },
 };
 
-function ClientJobRow({ job, agencyName, agentName, expenses, users, post, del }: {
+function ClientJobRow({ job, agencyName, agentName, expenses, users, assignments, post, del }: {
   job: ClientJob; agencyName: string; agentName: string | null;
-  expenses: WorkLogLite[]; users: { id: number; full_name: string }[];
+  expenses: WorkLogLite[]; users: PortalUser[]; assignments: JobAssignment[];
   post: Post; del: Del;
 }) {
   const [open, setOpen] = useState(false);
+  const [showMap, setShowMap] = useState(false);
+  const [pts, setPts] = useState<LatLng[]>(() => {
+    try { const v = JSON.parse(job.boundary || "[]"); return Array.isArray(v) ? v : []; } catch { return []; }
+  });
+  const [center, setCenter] = useState<[number, number, number] | null>(null);
+  const [brief, setBrief] = useState({ minHours: job.min_hours || "", allocatedTime: job.allocated_time || "" });
   const s = STATUS[job.status];
   const inv = effectiveInvoice(job);
-  // A completed job is fully delivered unless a partial count was entered.
-  const delivered = job.delivered_count ?? (job.status === "completed" ? (job.quantity ?? 0) : 0);
-  const remaining = Math.max(0, (job.quantity ?? 0) - delivered);
+  // Three buckets across the job's quantity: completed, out with a worker, and
+  // still waiting to be dispatched. A completed job counts as fully delivered
+  // unless a partial figure was entered.
+  const qty = job.quantity ?? 0;
+  const delivered = job.delivered_count ?? (job.status === "completed" ? qty : 0);
+  const out = Math.max(0, Math.min(job.out_count ?? (job.status === "out_for_delivery" && !job.delivered_count ? qty : 0), qty - delivered));
+  const remaining = Math.max(0, qty - delivered - out);
   const revenue = num(job.amount);
   const labour = expenses.reduce((t, w) => t + num(w.amount), 0);
   const profit = revenue - labour;
@@ -427,19 +449,15 @@ function ClientJobRow({ job, agencyName, agentName, expenses, users, post, del }
             <div className="mt-3 max-w-sm">
               <div className="flex items-center justify-between text-[12px]">
                 <span className="text-white/55">
-                  <span className="font-semibold text-emerald-300">{delivered.toLocaleString()}</span> delivered
-                  {remaining > 0 && (
-                    <>
-                      {" · "}
-                      <span className="font-semibold text-amber-300">{remaining.toLocaleString()}</span> remaining
-                    </>
-                  )}
+                  <span className="font-semibold text-emerald-300">{delivered.toLocaleString()}</span> completed
+                  {out > 0 && (<>{" · "}<span className="font-semibold text-amber-300">{out.toLocaleString()}</span> out</>)}
+                  {remaining > 0 && (<>{" · "}<span className="font-semibold text-rose-300">{remaining.toLocaleString()}</span> to dispatch</>)}
                 </span>
                 <span className="text-white/35">of {job.quantity.toLocaleString()}</span>
               </div>
-              <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-white/10">
-                <div className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-emerald-300"
-                  style={{ width: `${Math.min(100, (delivered / job.quantity) * 100)}%` }} />
+              <div className="mt-1.5 flex h-1.5 overflow-hidden rounded-full bg-rose-400/25">
+                <div className="h-full bg-emerald-400" style={{ width: `${(delivered / qty) * 100}%` }} />
+                <div className="h-full bg-amber-400" style={{ width: `${(out / qty) * 100}%` }} />
               </div>
             </div>
           ) : null}
@@ -448,9 +466,13 @@ function ClientJobRow({ job, agencyName, agentName, expenses, users, post, del }
         <div className="flex flex-col items-end gap-2">
           <div className="text-right">
             <p className="font-display text-2xl font-extrabold text-white">{money(revenue)}</p>
-            <p className={`text-[13px] font-bold ${profit >= 0 ? "text-emerald-300" : "text-rose-300"}`}>
-              Profit {money(profit)}
-            </p>
+            {job.invoice_status === "not_sent" ? (
+              <p className="text-[13px] font-bold text-white/40">Owed — not invoiced</p>
+            ) : (
+              <p className={`text-[13px] font-bold ${profit >= 0 ? "text-emerald-300" : "text-rose-300"}`}>
+                Profit {money(profit)}
+              </p>
+            )}
           </div>
           <div className="flex flex-wrap justify-end gap-2">
             <select className={`${input} !w-auto !py-2`} value={job.status}
@@ -481,7 +503,7 @@ function ClientJobRow({ job, agencyName, agentName, expenses, users, post, del }
           </div>
           <div className="flex gap-3">
             <button onClick={() => setOpen((v) => !v)} className="text-sm font-semibold text-white/50 transition hover:text-white">
-              {open ? "Hide costs" : `Costs (${expenses.length})`}
+              {open ? "Close" : `Assign work${assignments.length ? ` (${assignments.length})` : ""}`}
             </button>
             <button onClick={() => del("job", job.id)} className="text-sm text-white/30 transition hover:text-rose-300">Delete</button>
           </div>
@@ -497,7 +519,12 @@ function ClientJobRow({ job, agencyName, agentName, expenses, users, post, del }
                 onBlur={(e) => { if (e.target.value !== (job.job_number || "")) post({ entity: "job", id: job.id, ...jobPayload(job), jobNumber: e.target.value, deliveredCount: job.delivered_count }); }} />
             </label>
             <label className="block">
-              <span className="mb-1 block text-[12px] font-semibold text-white/40">Leaflets delivered so far</span>
+              <span className="mb-1 block text-[12px] font-semibold text-amber-300">Out for delivery</span>
+              <input className={input} inputMode="numeric" defaultValue={job.out_count ?? ""} placeholder="e.g. 200"
+                onBlur={(e) => { if (String(e.target.value) !== String(job.out_count ?? "")) post({ entity: "job", id: job.id, ...jobPayload(job), outCount: e.target.value }); }} />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-[12px] font-semibold text-emerald-300">Completed delivery</span>
               <input className={input} inputMode="numeric" defaultValue={job.delivered_count ?? ""} placeholder={job.status === "completed" ? `all ${job.quantity ?? 0}` : "e.g. 300"}
                 onBlur={(e) => { if (String(e.target.value) !== String(job.delivered_count ?? "")) post({ entity: "job", id: job.id, ...jobPayload(job), jobNumber: job.job_number, deliveredCount: e.target.value }); }} />
             </label>
@@ -509,6 +536,42 @@ function ClientJobRow({ job, agencyName, agentName, expenses, users, post, del }
               </p>
             </div>
           </div>
+          {/* Assign the work: who does what, for how much, by when. */}
+          <div className="mb-5">
+            <SubContracts job={job} users={users} rows={assignments} post={post} del={del} />
+          </div>
+
+          <div className="mb-5 grid gap-3 sm:grid-cols-3">
+            <label className="block">
+              <span className="mb-1 block text-[12px] font-semibold text-white/40">Minimum hours required</span>
+              <input className={input} value={brief.minHours} placeholder="e.g. 6"
+                onChange={(e) => setBrief({ ...brief, minHours: e.target.value })} />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-[12px] font-semibold text-white/40">Allocated time</span>
+              <input className={input} value={brief.allocatedTime} placeholder="e.g. 3 days"
+                onChange={(e) => setBrief({ ...brief, allocatedTime: e.target.value })} />
+            </label>
+            <div className="flex items-end gap-2">
+              <button className={btnGhost} onClick={() => setShowMap((v) => !v)}>
+                {showMap ? "Hide map" : pts.length ? `Delivery area (${pts.length})` : "Draw delivery area"}
+              </button>
+              <button className={btn}
+                onClick={() => post({ entity: "job", id: job.id, ...jobPayload(job),
+                  minHours: brief.minHours, allocatedTime: brief.allocatedTime,
+                  boundary: pts.length >= 3 ? JSON.stringify(pts) : job.boundary,
+                  mapCenter: center ? JSON.stringify(center) : job.map_center })}>
+                Save
+              </button>
+            </div>
+            {showMap && (
+              <div className="sm:col-span-3">
+                <p className="mb-2 text-[13px] text-white/45">Click to trace the boundary workers will see.</p>
+                <BoundaryMap boundary={pts} editable height={380} onChange={(p, c) => { setPts(p); setCenter(c); }} />
+              </div>
+            )}
+          </div>
+
           <p className="text-[12px] font-bold uppercase tracking-[0.12em] text-white/40">Worker costs on this job</p>
           {!expenses.length ? (
             <p className="mt-2 text-sm text-white/40">No worker payments recorded against this job yet.</p>
@@ -543,6 +606,6 @@ function jobPayload(j: ClientJob) {
     amount: j.amount, status: j.status, invoiceStatus: j.invoice_status,
     invoiceNo: j.invoice_no, invoiceDate: j.invoice_date,
     pickedOn: j.picked_on, completedOn: j.completed_on, notes: j.notes,
-    jobNumber: j.job_number, deliveredCount: j.delivered_count,
+    jobNumber: j.job_number, deliveredCount: j.delivered_count, outCount: j.out_count,
   };
 }

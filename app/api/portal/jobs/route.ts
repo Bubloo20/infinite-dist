@@ -3,6 +3,7 @@ import { currentSession } from "@/lib/portal/auth";
 import {
   listOpenJobs, listJobsForWorkerAll, listInterest, addInterest, removeInterest,
   getContract, saveContract, findUserById, dbConfigured, listAssignmentsForUser,
+  upsertAssignment,
 } from "@/lib/portal/db";
 
 export const dynamic = "force-dynamic";
@@ -51,6 +52,24 @@ export async function POST(req: Request) {
       await removeInterest(jobId, s.userId);
       return NextResponse.json({ ok: true });
     }
+    if (b.action === "accept") {
+      // Only someone actually on the job can accept it.
+      const mine = await listJobsForWorkerAll(s.userId);
+      const job = mine.find((j) => j.id === jobId);
+      if (!job) return NextResponse.json({ ok: false, error: "That job isn't assigned to you." }, { status: 403 });
+      const existing = (await listAssignmentsForUser(s.userId)).find((a) => a.job_id === jobId);
+      await upsertAssignment({
+        jobId, userId: s.userId, status: "accepted",
+        // Keep any sub-contract figures the office set; otherwise fall back to the job.
+        pay: existing?.pay != null ? Number(existing.pay) : (job.worker_pay != null ? Number(job.worker_pay) : null),
+        leafletShare: existing?.leaflet_share ?? null,
+        areaNote: existing?.area_note ?? null,
+        startDate: existing?.start_date ?? null,
+        dueDate: existing?.due_date ?? null,
+      });
+      return NextResponse.json({ ok: true });
+    }
+
     if (b.action === "sign") {
       const signaturePng = String(b.signaturePng || "");
       const signedName = String(b.signedName || "").trim();

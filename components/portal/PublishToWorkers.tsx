@@ -230,7 +230,7 @@ export default function PublishToWorkers({
  * its own pay, leaflet share and dates, so three people can run the same job on
  * different schedules.
  */
-function SubContracts({ job, users, rows, post, del }: {
+export function SubContracts({ job, users, rows, post, del }: {
   job: ClientJob; users: PortalUser[]; rows: JobAssignment[];
   post: (body: Record<string, unknown>) => Promise<boolean>;
   del: (entity: string, id: number) => Promise<void>;

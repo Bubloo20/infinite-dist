@@ -201,6 +201,7 @@ export async function ensureSchema() {
   // Reference the office uses, and how many of the quantity are actually out.
   await sql`ALTER TABLE client_jobs ADD COLUMN IF NOT EXISTS job_number TEXT;`;
   await sql`ALTER TABLE client_jobs ADD COLUMN IF NOT EXISTS delivered_count INTEGER;`;
+  await sql`ALTER TABLE client_jobs ADD COLUMN IF NOT EXISTS out_count INTEGER;`;
 
   /**
    * A job split across several workers. Each sub-contract carries its own pay,
@@ -312,6 +313,7 @@ export type ClientJob = {
   map_image: string | null;
   job_number: string | null;
   delivered_count: number | null;
+  out_count: number | null;
 };
 export type JobAssignment = {
   id: number; job_id: number; user_id: number;
@@ -523,9 +525,13 @@ export async function setJobPublished(jobId: number, published: boolean) {
 }
 
 /** Worker-facing job settings: pay, time, boundary and map. */
-export async function setJobProgress(jobId: number, jobNumber: string | null, delivered: number | null) {
+export async function setJobProgress(
+  jobId: number, jobNumber: string | null, delivered: number | null, out: number | null,
+) {
   await ensureSchema();
-  await sql`UPDATE client_jobs SET job_number = ${jobNumber}, delivered_count = ${delivered} WHERE id = ${jobId};`;
+  await sql`
+    UPDATE client_jobs SET job_number = ${jobNumber}, delivered_count = ${delivered}, out_count = ${out}
+    WHERE id = ${jobId};`;
 }
 
 export async function setJobBrief(jobId: number, b: {

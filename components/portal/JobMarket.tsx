@@ -75,6 +75,17 @@ export default function JobMarket({ workerName }: { workerName: string }) {
 
   useEffect(load, [load]);
 
+  const accept = async (jobId: number) => {
+    setBusyId(jobId);
+    try {
+      await fetch("/api/portal/jobs", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "accept", jobId }),
+      });
+      load();
+    } finally { setBusyId(null); }
+  };
+
   const act = async (jobId: number, action: "interest" | "withdraw", note?: string) => {
     setBusyId(jobId);
     try {
@@ -202,7 +213,22 @@ export default function JobMarket({ workerName }: { workerName: string }) {
                   )}
                 </GlassCard>
 
-                <JobContract job={j} workerName={workerName} signedDate={signedFor(j.id)} mine={mineFor(j.id)} onSigned={load} />
+                {mineFor(j.id)?.status === "accepted" || signedFor(j.id) ? (
+                  <JobContract job={j} workerName={workerName} signedDate={signedFor(j.id)} mine={mineFor(j.id)} onSigned={load} />
+                ) : (
+                  <GlassCard className="p-6 sm:p-8">
+                    <p className="text-xs font-bold uppercase tracking-[0.16em] text-orchid">Next step</p>
+                    <h3 className="mt-3 font-display text-2xl font-extrabold tracking-tight text-white">Accept this job</h3>
+                    <p className="mt-2 max-w-xl text-[15px] leading-relaxed text-white/55">
+                      Accepting draws up your contractor agreement with the pay, hours and dates above filled in.
+                      You&apos;ll then read the terms and sign it electronically, and a copy goes straight to the office.
+                    </p>
+                    <button onClick={() => accept(j.id)} disabled={busyId === j.id}
+                      className="mt-6 rounded-2xl bg-gradient-to-r from-electric to-orchid px-8 py-4 font-display text-[15px] font-bold text-white shadow-[0_16px_40px_-14px_rgba(182,109,199,0.85)] transition hover:-translate-y-0.5 disabled:opacity-50">
+                      {busyId === j.id ? "Accepting…" : "Accept job & view contract"}
+                    </button>
+                  </GlassCard>
+                )}
               </div>
             );
           })}

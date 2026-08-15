@@ -81,8 +81,8 @@ export async function POST(req: Request) {
           pickedOn: (b.pickedOn as string) || null, completedOn: (b.completedOn as string) || null,
           notes: (b.notes as string) || null,
         });
-        if (b.jobNumber !== undefined || b.deliveredCount !== undefined) {
-          await setJobProgress(id, (b.jobNumber as string) || null, n(b.deliveredCount));
+        if (b.jobNumber !== undefined || b.deliveredCount !== undefined || b.outCount !== undefined) {
+          await setJobProgress(id, (b.jobNumber as string) || null, n(b.deliveredCount), n(b.outCount));
         }
         // Marketplace extras: assignment, publishing, worker brief and boundary.
         if (b.assignedUserId !== undefined) await assignJob(id, n(b.assignedUserId));
