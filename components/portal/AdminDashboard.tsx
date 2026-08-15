@@ -249,7 +249,7 @@ export default function AdminDashboard({ onSignOut }: { onSignOut: () => void })
           <WorkersTab users={users} totals={userTotals} post={post} reload={load} setMsg={setMsg} />
         </div>
       ) : tab === "payments" ? (
-        <PaymentsTab users={users} payments={payments} post={post} reload={load} setMsg={setMsg} />
+        <PaymentsTab users={users} payments={payments} logs={logs} post={post} reload={load} setMsg={setMsg} />
       ) : (
         <FinanceTab entries={finance} totals={totals} post={post} reload={load} trend={trend} />
       )}
@@ -458,13 +458,36 @@ function WorkerRow({ user, t, post, onDelete }: {
 
 /* -------------------------------- payments -------------------------------- */
 
-function PaymentsTab({ users, payments, post, reload, setMsg }: {
-  users: PortalUser[]; payments: Payment[];
+function PaymentsTab({ users, payments, logs, post, reload, setMsg }: {
+  users: PortalUser[]; payments: Payment[]; logs: WorkLog[];
   post: (u: string, b: unknown) => Promise<boolean>;
   reload: () => void; setMsg: (m: string) => void;
 }) {
   const [f, setF] = useState({ userId: "", amount: "", paidOn: new Date().toISOString().slice(0, 10), method: "", note: "" });
+  const [target, setTarget] = useState<"all" | string>("all");
   const name = (id: number) => users.find((u) => u.id === id)?.full_name || `User ${id}`;
+
+  // Unpaid shifts for the chosen worker, and what they add up to.
+  const unpaid = useMemo(
+    () => (f.userId ? logs.filter((l) => String(l.user_id) === f.userId && !l.paid_on) : []),
+    [logs, f.userId],
+  );
+  const owedTotal = useMemo(() => unpaid.reduce((t, l) => t + num(l.amount), 0), [unpaid]);
+
+  // Choosing a worker fills in everything they are owed; choosing one job narrows it.
+  const chooseWorker = (id: string) => {
+    const mine = logs.filter((l) => String(l.user_id) === id && !l.paid_on);
+    setF((p) => ({ ...p, userId: id, amount: mine.reduce((t, l) => t + num(l.amount), 0).toFixed(2) }));
+    setTarget("all");
+  };
+  const chooseTarget = (v: string) => {
+    setTarget(v);
+    if (v === "all") setF((p) => ({ ...p, amount: owedTotal.toFixed(2) }));
+    else {
+      const l = unpaid.find((x) => String(x.id) === v);
+      setF((p) => ({ ...p, amount: l ? num(l.amount).toFixed(2) : p.amount }));
+    }
+  };
 
   const remove = async (id: number) => {
     const r = await fetch(`/api/portal/admin/payment?id=${id}`, { method: "DELETE" });
@@ -476,19 +499,49 @@ function PaymentsTab({ users, payments, post, reload, setMsg }: {
     <>
       <GlassCard className="mt-6 p-6">
         <h3 className="font-display text-lg font-bold text-white">Record a payment</h3>
-        <div className="mt-4 grid gap-3 sm:grid-cols-5">
-          <select className={input} value={f.userId} onChange={(e) => setF({ ...f, userId: e.target.value })}>
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          <select className={input} value={f.userId} onChange={(e) => chooseWorker(e.target.value)}>
             <option value="">Worker…</option>
             {users.map((u) => <option key={u.id} value={u.id}>{u.full_name}</option>)}
           </select>
-          <input className={input} placeholder="Amount" inputMode="decimal" value={f.amount} onChange={(e) => setF({ ...f, amount: e.target.value })} />
+
+          <select className={input} value={target} onChange={(e) => chooseTarget(e.target.value)} disabled={!f.userId}>
+            <option value="all">Everything outstanding{f.userId ? ` — ${money(owedTotal)}` : ""}</option>
+            {unpaid.map((l) => (
+              <option key={l.id} value={l.id}>
+                {l.job_number || `Shift #${l.id}`}{l.area_worked ? ` · ${l.area_worked}` : ""} — {money(num(l.amount))}
+              </option>
+            ))}
+          </select>
+
+          <label className="block">
+            <span className="mb-1 block text-[12px] font-semibold text-white/40">Amount (edit for a part payment)</span>
+            <input className={input} placeholder="Amount" inputMode="decimal" value={f.amount} onChange={(e) => setF({ ...f, amount: e.target.value })} />
+          </label>
+
           <input className={input} type="date" value={f.paidOn} onChange={(e) => setF({ ...f, paidOn: e.target.value })} />
           <input className={input} placeholder="Method (PayID…)" value={f.method} onChange={(e) => setF({ ...f, method: e.target.value })} />
           <button className={btn} disabled={!f.userId || !f.amount}
-            onClick={async () => { if (await post("/api/portal/admin/payment", { ...f, userId: Number(f.userId) })) setF({ ...f, amount: "", note: "" }); }}>
+            onClick={async () => {
+              const amt = Number(f.amount);
+              // Only settle shifts when the payment actually covers them.
+              const ids = target === "all"
+                ? (amt >= owedTotal - 0.001 ? unpaid.map((l) => l.id) : [])
+                : (amt >= num(unpaid.find((l) => String(l.id) === target)?.amount ?? null) - 0.001 ? [Number(target)] : []);
+              if (await post("/api/portal/admin/payment", { ...f, userId: Number(f.userId), workLogIds: ids })) {
+                setF({ ...f, amount: "", note: "" }); setTarget("all");
+              }
+            }}>
             Add payment
           </button>
         </div>
+        {f.userId && (
+          <p className="mt-2 text-[13px] text-white/40">
+            {unpaid.length
+              ? `${name(Number(f.userId))} is owed ${money(owedTotal)} across ${unpaid.length} shift${unpaid.length === 1 ? "" : "s"}. A smaller amount is recorded as a part payment and leaves the shift outstanding.`
+              : `${name(Number(f.userId))} has nothing outstanding.`}
+          </p>
+        )}
       </GlassCard>
 
       <div className="mt-5 space-y-3">

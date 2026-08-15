@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { isAdmin } from "@/lib/portal/auth";
-import { addPayment, deletePayment } from "@/lib/portal/db";
+import { addPayment, deletePayment, setWorkLogPaid } from "@/lib/portal/db";
 
 export const dynamic = "force-dynamic";
 
@@ -9,7 +9,8 @@ export async function POST(req: Request) {
   if (!isAdmin()) {
     return NextResponse.json({ ok: false, error: "Admin access required." }, { status: 401 });
   }
-  let b: { userId?: number; amount?: string | number; paidOn?: string; method?: string; note?: string };
+  let b: { userId?: number; amount?: string | number; paidOn?: string; method?: string; note?: string;
+           workLogIds?: number[] };
   try {
     b = await req.json();
   } catch {
@@ -21,13 +22,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "Enter a payment amount." }, { status: 400 });
   }
   try {
+    const paidOn = b.paidOn || new Date().toISOString().slice(0, 10);
     const id = await addPayment({
-      userId: b.userId,
-      amount,
-      paidOn: b.paidOn || new Date().toISOString().slice(0, 10),
-      method: b.method || null,
-      note: b.note || null,
+      userId: b.userId, amount, paidOn,
+      method: b.method || null, note: b.note || null,
     });
+    // Settling specific shifts marks them paid so they leave the owed column.
+    for (const logId of b.workLogIds || []) await setWorkLogPaid(logId, paidOn);
     return NextResponse.json({ ok: true, id });
   } catch (e) {
     return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "Save failed." }, { status: 500 });
