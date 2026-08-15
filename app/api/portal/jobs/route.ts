@@ -3,7 +3,7 @@ import { currentSession } from "@/lib/portal/auth";
 import {
   listOpenJobs, listJobsForWorkerAll, listInterest, addInterest, removeInterest,
   getContract, saveContract, findUserById, dbConfigured, listAssignmentsForUser,
-  upsertAssignment,
+  upsertAssignment, listWorkLogsForUser,
 } from "@/lib/portal/db";
 
 export const dynamic = "force-dynamic";
@@ -15,13 +15,20 @@ export async function GET() {
   if (!dbConfigured()) return NextResponse.json({ ok: true, open: [], mine: [], interest: [], contracts: [] });
 
   try {
-    const [open, mine, allInterest, assignments] = await Promise.all([
+    const [open, mine, allInterest, assignments, myLogs] = await Promise.all([
       listOpenJobs(), listJobsForWorkerAll(s.userId), listInterest(), listAssignmentsForUser(s.userId),
+      listWorkLogsForUser(s.userId),
     ]);
     const interest = allInterest.filter((i) => i.user_id === s.userId).map((i) => i.job_id);
     const contracts = await Promise.all(mine.map((j) => getContract(j.id, s.userId!)));
+    // Only what the job card needs to show progress and payment state.
+    const logs = myLogs.map((l) => ({
+      id: l.id, jobId: l.client_job_id, jobNumber: l.job_number,
+      startedAt: l.started_at, endedAt: l.ended_at, timeSpent: l.time_spent,
+      leaflets: l.leaflet_count, amount: l.amount, paidOn: l.paid_on, paidAt: l.paid_at,
+    }));
     return NextResponse.json({
-      ok: true, open, mine, interest, assignments,
+      ok: true, open, mine, interest, assignments, logs,
       contracts: contracts.filter(Boolean).map((c) => ({ jobId: c!.job_id, signedDate: c!.signed_date })),
     });
   } catch (e) {

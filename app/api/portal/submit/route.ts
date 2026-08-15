@@ -12,6 +12,7 @@ type Payload = {
   timeSpent?: string;
   leafletCount?: string | number;
   areaWorked?: string;
+  clientJobId?: number | string | null;
   stravaUrls?: string[];
   mapmyUrls?: string[];
   notes?: string;
@@ -102,6 +103,7 @@ export async function POST(req: Request) {
       timeSpent: b.timeSpent || null,
       leafletCount,
       areaWorked: areaWorked || null,
+      clientJobId: Number(b.clientJobId) || null,
       stravaUrls: normalised,
       stravaStatus: strava.status,
       stravaVerified: strava.verified,

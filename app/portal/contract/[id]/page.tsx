@@ -9,8 +9,16 @@ import type { ClientJob, JobAssignment } from "@/lib/portal/db";
 const dateAu = (d: string | null | undefined) =>
   d ? new Date(d).toLocaleDateString("en-AU", { day: "2-digit", month: "long", year: "numeric" }) : "____________________";
 
+/** Schedule keys are ISO dates; show them as "Monday 11 August". */
+const scheduleDay = (k: string) => {
+  const d = new Date(`${k}T00:00:00`);
+  return Number.isNaN(d.getTime())
+    ? k
+    : d.toLocaleDateString("en-AU", { weekday: "long", day: "numeric", month: "long" });
+};
+
 /**
- * The agreement as the worker reads it — the Word document's fields filled in
+ * The agreement as the worker reads it, and their signed copy once they've signed it — the Word document's fields filled in
  * from what the office entered, printable to PDF.
  */
 export default function WorkerContractPage() {
@@ -18,6 +26,7 @@ export default function WorkerContractPage() {
   const [job, setJob] = useState<ClientJob | null>(null);
   const [mine, setMine] = useState<JobAssignment | null>(null);
   const [who, setWho] = useState<string>("");
+  const [signed, setSigned] = useState<{ signedName: string; signaturePng: string; signedDate: string; schedule: string | null } | null>(null);
   const [state, setState] = useState<"loading" | "ok" | "error">("loading");
 
   useEffect(() => {
@@ -25,7 +34,7 @@ export default function WorkerContractPage() {
       .then((r) => r.json())
       .then((d) => {
         if (!d.ok) { setState("error"); return; }
-        setJob(d.job); setMine(d.assignment); setWho(d.workerName || "");
+        setJob(d.job); setMine(d.assignment); setWho(d.workerName || ""); setSigned(d.contract || null);
         setState("ok");
         // Mark it read so the portal can unlock signing.
         try { localStorage.setItem(`idp_contract_seen_${id}`, "1"); } catch { /* private mode */ }
@@ -51,6 +60,13 @@ export default function WorkerContractPage() {
     ? `${dateAu(mine?.start_date)} to ${dateAu(mine?.due_date)}`
     : mine?.allocated_time || job.allocated_time || "____________________";
 
+  const signedSchedule: Record<string, { start: string; end: string }> = (() => {
+    try { return signed?.schedule ? JSON.parse(signed.schedule) : {}; } catch { return {}; }
+  })();
+  const signedDays = Object.entries(signedSchedule)
+    .filter(([, v]) => v?.start || v?.end)
+    .sort(([a], [b]) => a.localeCompare(b));
+
   return (
     <div className="min-h-screen bg-slate-100 py-8 print:bg-white print:py-0">
       <div className="mx-auto mb-6 flex max-w-[820px] items-center justify-between px-6 print:hidden">
@@ -64,9 +80,14 @@ export default function WorkerContractPage() {
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/images/logo-dark.png" alt="Infinite Distribution" className="mb-8 h-14 w-auto" />
         <h1 className="font-display text-3xl font-extrabold tracking-tight text-ink">Independent Contractor Agreement</h1>
+        {signed && (
+          <p className="mt-3 inline-block rounded-lg bg-emerald-50 px-3 py-1.5 text-[13px] font-semibold text-emerald-700 ring-1 ring-emerald-200">
+            Signed by you on {dateAu(signed.signedDate)} — this is your copy
+          </p>
+        )}
 
         <div className="mt-6 space-y-1.5 text-[15px] text-ink/85">
-          <p><span className="font-semibold">Business Name:</span> Sarvesh Mohanrajh (operating under Infinite Distributions)</p>
+          <p><span className="font-semibold">Business Name:</span> Sarvesh Mohanrajh (operating under Infinite Distribution)</p>
           <p><span className="font-semibold">ABN:</span> 66 177 274 211</p>
           <p><span className="font-semibold">Contractor Name:</span> {who || "____________________"}</p>
           <p><span className="font-semibold">Job area:</span> {mine?.area_note || job.area || "____________________"}</p>
@@ -86,19 +107,51 @@ export default function WorkerContractPage() {
           ))}
         </ul>
 
+        {signedDays.length > 0 && (
+          <>
+            <h2 className="mt-8 font-display text-xl font-bold text-ink">Agreed schedule</h2>
+            <table className="mt-3 w-full border-collapse text-[14px]">
+              <tbody>
+                {signedDays.map(([day, v]) => (
+                  <tr key={day}>
+                    <td className="border border-slate-300 px-3 py-2 font-semibold">{scheduleDay(day)}</td>
+                    <td className="border border-slate-300 px-3 py-2">Start: {v.start || "—"}</td>
+                    <td className="border border-slate-300 px-3 py-2">End: {v.end || "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
+        )}
+
         <h2 className="mt-8 font-display text-xl font-bold text-ink">Signatures</h2>
         <div className="mt-3 grid gap-8 text-[15px] text-ink/85 sm:grid-cols-2">
           <div>
-            <p>Contractor Signature: ______________________</p>
-            <p className="mt-3">Date: ____________________</p>
+            {signed ? (
+              <>
+                <p className="text-[13px] font-bold uppercase tracking-wide text-ink/50">Contractor signature</p>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={signed.signaturePng} alt="Your signature"
+                  className="mt-2 h-24 w-full rounded border border-slate-300 bg-slate-900 object-contain p-2" />
+                <p className="mt-2 font-semibold text-ink">{signed.signedName}</p>
+                <p className="text-[14px] text-ink/70">Date: {dateAu(signed.signedDate)}</p>
+              </>
+            ) : (
+              <>
+                <p>Contractor Signature: ______________________</p>
+                <p className="mt-3">Date: ____________________</p>
+              </>
+            )}
           </div>
           <div>
-            <p>Infinite Distributions Representative: ______________________</p>
+            <p>Infinite Distribution Representative: ______________________</p>
             <p className="mt-3">Date: ____________________</p>
           </div>
         </div>
         <p className="mt-6 text-[13px] text-ink/50">
-          Sign this agreement electronically in your portal — your signature and the date are recorded there and a signed copy is sent to the office.
+          {signed
+            ? "Signed electronically through the Infinite Distribution team portal. This is your copy — you can open it from your portal at any time."
+            : "Sign this agreement electronically in your portal — your signature and the date are recorded there and a signed copy is sent to the office."}
         </p>
       </div>
 

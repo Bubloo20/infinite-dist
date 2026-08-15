@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { GlassCard } from "./PortalShell";
 import BoundaryMap, { type LatLng } from "./BoundaryMap";
 import JobContract from "./JobContract";
+import WorkLogForm from "./WorkLogForm";
 import type { ClientJob, JobAssignment } from "@/lib/portal/db";
 
 const money = (v: string | null) => (v ? `$${Number(v).toFixed(2)}` : "—");
@@ -16,6 +17,77 @@ const parseCenter = (s: string | null): [number, number, number] | null => {
   if (!s) return null;
   try { const v = JSON.parse(s); return Array.isArray(v) && v.length === 3 ? (v as [number, number, number]) : null; } catch { return null; }
 };
+
+type MyLog = {
+  id: number; jobId: number | null; jobNumber: string;
+  startedAt: string; endedAt: string; timeSpent: string | null;
+  leaflets: number | null; amount: string | null;
+  paidOn: string | null; paidAt: string | null;
+};
+
+const stamp = (l: MyLog) =>
+  l.paidAt
+    ? new Date(l.paidAt).toLocaleString("en-AU", { day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" })
+    : l.paidOn
+      ? new Date(`${l.paidOn}T00:00:00`).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })
+      : "";
+
+/** Orange until the office has paid for this job, green once they have. */
+function PayState({ logs, owed }: { logs: MyLog[]; owed: string | null }) {
+  const paid = logs.length > 0 && logs.every((l) => l.paidOn);
+  const when = paid ? stamp(logs.slice().sort((a, b) => (b.paidAt || b.paidOn || "").localeCompare(a.paidAt || a.paidOn || ""))[0]) : "";
+  return (
+    <div className={`mt-2 inline-flex flex-col items-end rounded-xl border px-3 py-1.5 text-right ${
+      paid ? "border-emerald-400/30 bg-emerald-500/10" : "border-amber-400/30 bg-amber-500/10"}`}>
+      <span className={`text-[12px] font-bold uppercase tracking-wide ${paid ? "text-emerald-300" : "text-amber-300"}`}>
+        {paid ? "Paid" : "Awaiting payment"}
+      </span>
+      <span className={`text-[12px] ${paid ? "text-emerald-100/70" : "text-amber-100/70"}`}>
+        {paid ? when : logs.length ? `${owed || ""} owing`.trim() : "log your shifts below"}
+      </span>
+    </div>
+  );
+}
+
+/** Ticking time-left to the due date — the deadline is the end of that day. */
+function Countdown({ due }: { due: string | null | undefined }) {
+  const [now, setNow] = useState<number | null>(null);
+  useEffect(() => {
+    setNow(Date.now());
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  if (!due || now === null) return null;
+  const deadline = new Date(`${due}T23:59:59`).getTime();
+  if (!Number.isFinite(deadline)) return null;
+
+  const ms = deadline - now;
+  const over = ms <= 0;
+  const abs = Math.abs(ms);
+  const d = Math.floor(abs / 86400000);
+  const h = Math.floor((abs % 86400000) / 3600000);
+  const m = Math.floor((abs % 3600000) / 60000);
+  const sec = Math.floor((abs % 60000) / 1000);
+  const pad = (n: number) => String(n).padStart(2, "0");
+
+  const tone = over
+    ? "border-rose-400/35 bg-rose-500/10 text-rose-200"
+    : ms < 86400000
+      ? "border-amber-400/35 bg-amber-500/10 text-amber-200"
+      : "border-emerald-400/25 bg-emerald-500/[0.08] text-emerald-200";
+
+  return (
+    <div className={`mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 ${tone}`}>
+      <span className="text-[11px] font-bold uppercase tracking-[0.14em] opacity-70">
+        {over ? "Overdue by" : "Time remaining"}
+      </span>
+      <span className="font-display text-lg font-extrabold tabular-nums tracking-tight">
+        {d > 0 && `${d}d `}{pad(h)}:{pad(m)}:{pad(sec)}
+      </span>
+    </div>
+  );
+}
 
 function Brief({ job, mine }: { job: ClientJob; mine?: JobAssignment | null }) {
   const shortDate = (d: string | null | undefined) =>
@@ -52,12 +124,22 @@ function Brief({ job, mine }: { job: ClientJob; mine?: JobAssignment | null }) {
   );
 }
 
+function BriefWithCountdown({ job, mine }: { job: ClientJob; mine?: JobAssignment | null }) {
+  return (
+    <>
+      <Brief job={job} mine={mine} />
+      <Countdown due={mine?.due_date} />
+    </>
+  );
+}
+
 export default function JobMarket({ workerName }: { workerName: string }) {
   const [open, setOpen] = useState<ClientJob[]>([]);
   const [mine, setMine] = useState<ClientJob[]>([]);
   const [interest, setInterest] = useState<number[]>([]);
   const [contracts, setContracts] = useState<{ jobId: number; signedDate: string }[]>([]);
   const [assignments, setAssignments] = useState<JobAssignment[]>([]);
+  const [logs, setLogs] = useState<MyLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<"available" | "mine">("available");
   const [busyId, setBusyId] = useState<number | null>(null);
@@ -70,7 +152,7 @@ export default function JobMarket({ workerName }: { workerName: string }) {
         if (!d.ok) return;
         setOpen(d.open || []); setMine(d.mine || []);
         setInterest(d.interest || []); setContracts(d.contracts || []);
-        setAssignments(d.assignments || []);
+        setAssignments(d.assignments || []); setLogs(d.logs || []);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -116,6 +198,7 @@ export default function JobMarket({ workerName }: { workerName: string }) {
 
   const signedFor = (id: number) => contracts.find((c) => c.jobId === id)?.signedDate ?? null;
   const mineFor = (id: number) => assignments.find((a) => a.job_id === id) ?? null;
+  const logsFor = (id: number) => logs.filter((l) => l.jobId === id);
 
   return (
     <div>
@@ -207,15 +290,40 @@ export default function JobMarket({ workerName }: { workerName: string }) {
                       <h3 className="font-display text-xl font-bold text-white">{j.title || `Job #${j.id}`}</h3>
                       <p className="mt-1 text-sm text-white/50">{j.area || "—"}</p>
                     </div>
-                    <p className="font-display text-2xl font-extrabold text-emerald-300">
-                      {money(mineFor(j.id)?.pay ?? j.worker_pay)}
-                    </p>
+                    <div className="text-right">
+                      <p className="font-display text-2xl font-extrabold text-emerald-300">
+                        {money(mineFor(j.id)?.pay ?? j.worker_pay)}
+                      </p>
+                      <PayState logs={logsFor(j.id)} owed={money(mineFor(j.id)?.pay ?? j.worker_pay)} />
+                    </div>
                   </div>
-                  <div className="mt-5"><Brief job={j} mine={mineFor(j.id)} /></div>
+                  <div className="mt-5"><BriefWithCountdown job={j} mine={mineFor(j.id)} /></div>
                   {pts.length >= 3 && (
                     <div className="mt-5">
                       <p className="mb-2 text-[13px] font-semibold uppercase tracking-[0.1em] text-white/50">Delivery area — zoom and pan</p>
                       <BoundaryMap boundary={pts} center={parseCenter(j.map_center)} height={400} />
+                    </div>
+                  )}
+                  {logsFor(j.id).length > 0 && (
+                    <div className="mt-5">
+                      <p className="mb-2 text-[13px] font-semibold uppercase tracking-[0.1em] text-white/50">
+                        Your shifts on this job ({logsFor(j.id).length})
+                      </p>
+                      <div className="space-y-2">
+                        {logsFor(j.id).map((l) => (
+                          <div key={l.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5">
+                            <span className="text-[13px] text-white/70">
+                              {new Date(l.startedAt).toLocaleDateString("en-AU", { day: "numeric", month: "short" })}
+                              {l.timeSpent ? ` · ${l.timeSpent}` : ""}
+                              {l.leaflets ? ` · ${l.leaflets.toLocaleString()} leaflets` : ""}
+                            </span>
+                            <span className={`rounded-lg px-2.5 py-1 text-[12px] font-bold ${
+                              l.paidOn ? "bg-emerald-500/15 text-emerald-300" : "bg-amber-500/15 text-amber-300"}`}>
+                              {l.paidOn ? `Paid ${stamp(l)}` : "Awaiting payment"}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
                   {mineFor(j.id)?.map_image && (
@@ -229,7 +337,10 @@ export default function JobMarket({ workerName }: { workerName: string }) {
                 </GlassCard>
 
                 {mineFor(j.id)?.status === "accepted" || signedFor(j.id) ? (
-                  <JobContract job={j} workerName={workerName} signedDate={signedFor(j.id)} mine={mineFor(j.id)} onSigned={load} />
+                  <>
+                    <JobContract job={j} workerName={workerName} signedDate={signedFor(j.id)} mine={mineFor(j.id)} onSigned={load} />
+                    {signedFor(j.id) && <WorkLogForm job={j} mine={mineFor(j.id)} onDone={load} />}
+                  </>
                 ) : (
                   <GlassCard className="p-6 sm:p-8">
                     <p className="text-xs font-bold uppercase tracking-[0.16em] text-orchid">Next step</p>

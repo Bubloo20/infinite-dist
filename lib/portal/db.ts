@@ -37,6 +37,7 @@ export type WorkLog = {
   area_worked: string | null;
   amount: string | null;
   paid_on: string | null;
+  paid_at: string | null;
   client_job_id: number | null;
   strava_urls: string | null;
   mapmy_urls: string | null;
@@ -119,6 +120,7 @@ export async function ensureSchema() {
   await sql`ALTER TABLE work_logs ADD COLUMN IF NOT EXISTS area_worked TEXT;`;
   await sql`ALTER TABLE work_logs ADD COLUMN IF NOT EXISTS amount NUMERIC(10,2);`;
   await sql`ALTER TABLE work_logs ADD COLUMN IF NOT EXISTS paid_on DATE;`;
+  await sql`ALTER TABLE work_logs ADD COLUMN IF NOT EXISTS paid_at TIMESTAMPTZ;`;
   await sql`ALTER TABLE work_logs ADD COLUMN IF NOT EXISTS strava_urls TEXT;`;
   await sql`ALTER TABLE work_logs ADD COLUMN IF NOT EXISTS mapmy_urls TEXT;`;
   // Ties a worker's earnings to the agency job they were paid for.
@@ -725,6 +727,7 @@ export type NewWorkLog = {
   timeSpent?: string | null;
   leafletCount?: number | null;
   areaWorked?: string | null;
+  clientJobId?: number | null;
   stravaUrls: string[];
   stravaStatus?: string | null;
   stravaVerified?: boolean;
@@ -738,12 +741,12 @@ export async function insertWorkLog(e: NewWorkLog): Promise<number | null> {
   const r = await sql<{ id: number }>`
     INSERT INTO work_logs
       (user_id, worker_name, job_number, started_at, ended_at, time_spent,
-       leaflet_count, area_worked, strava_url, strava_urls, strava_status,
+       leaflet_count, area_worked, client_job_id, strava_url, strava_urls, strava_status,
        strava_verified, mapmy_urls, notes)
     VALUES
       (${e.userId}, ${e.workerName}, ${e.jobNumber}, ${e.startedAt}, ${e.endedAt},
        ${e.timeSpent || null}, ${e.leafletCount ?? null}, ${e.areaWorked || null},
-       ${e.stravaUrls[0] || null}, ${packLinks(e.stravaUrls)}, ${e.stravaStatus || null},
+       ${e.clientJobId ?? null}, ${e.stravaUrls[0] || null}, ${packLinks(e.stravaUrls)}, ${e.stravaStatus || null},
        ${e.stravaVerified ?? false}, ${packLinks(e.mapmyUrls || [])}, ${e.notes || null})
     RETURNING id;
   `;
@@ -772,10 +775,18 @@ export async function setWorkLogAmount(id: number, amount: number | null) {
   await sql`UPDATE work_logs SET amount = ${amount} WHERE id = ${id};`;
 }
 
-/** Admin marks a job paid (or back to unpaid with null). */
+/** Admin marks a job paid (or back to unpaid with null). Stamps the moment it was paid. */
 export async function setWorkLogPaid(id: number, paidOn: string | null) {
   await ensureSchema();
-  await sql`UPDATE work_logs SET paid_on = ${paidOn} WHERE id = ${id};`;
+  if (paidOn) {
+    // Stamp the moment of payment only on the transition, so the recorded time doesn't drift.
+    await sql`
+      UPDATE work_logs
+         SET paid_on = ${paidOn}, paid_at = COALESCE(paid_at, NOW())
+       WHERE id = ${id};`;
+  } else {
+    await sql`UPDATE work_logs SET paid_on = NULL, paid_at = NULL WHERE id = ${id};`;
+  }
 }
 
 /* -------------------------------- payments -------------------------------- */

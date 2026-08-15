@@ -5,9 +5,12 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 
+const MERCH_URL = "https://infinitemelb.au/merch";
+
 const commonLinks = [
   { label: "Locations", href: "/locations" },
   { label: "Case Studies", href: "/case-studies" },
+  { label: "Merch", href: MERCH_URL, external: true },
   { label: "About Us", href: "/about" },
   { label: "Contact", href: "/contact" },
   { label: "Join The Team", href: "/join" },
@@ -143,17 +146,29 @@ export default function Nav() {
           </div>
 
           {/* Common links */}
-          {commonLinks.map((l) => (
-            <Link
-              key={l.href}
-              href={l.href}
-              className={`text-[15px] transition-colors ${
-                pathname === l.href ? "text-orchid" : "text-white/85 hover:text-white"
-              }`}
-            >
-              {l.label}
-            </Link>
-          ))}
+          {commonLinks.map((l) =>
+            l.external ? (
+              <a
+                key={l.href}
+                href={l.href}
+                target="_blank"
+                rel="noreferrer"
+                className="text-[15px] text-white/85 transition-colors hover:text-white"
+              >
+                {l.label}
+              </a>
+            ) : (
+              <Link
+                key={l.href}
+                href={l.href}
+                className={`text-[15px] transition-colors ${
+                  pathname === l.href ? "text-orchid" : "text-white/85 hover:text-white"
+                }`}
+              >
+                {l.label}
+              </Link>
+            ),
+          )}
         </nav>
 
         <Link
@@ -246,17 +261,29 @@ export default function Nav() {
               </div>
 
               {/* Common links */}
-              {commonLinks.map((l) => (
-                <Link
-                  key={l.href}
-                  href={l.href}
-                  className={`rounded-xl px-3 py-3 text-base ${
-                    pathname === l.href ? "bg-white/10 text-orchid" : "text-white/85"
-                  }`}
-                >
-                  {l.label}
-                </Link>
-              ))}
+              {commonLinks.map((l) =>
+                l.external ? (
+                  <a
+                    key={l.href}
+                    href={l.href}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="rounded-xl px-3 py-3 text-base text-white/85"
+                  >
+                    {l.label} ↗
+                  </a>
+                ) : (
+                  <Link
+                    key={l.href}
+                    href={l.href}
+                    className={`rounded-xl px-3 py-3 text-base ${
+                      pathname === l.href ? "bg-white/10 text-orchid" : "text-white/85"
+                    }`}
+                  >
+                    {l.label}
+                  </Link>
+                ),
+              )}
 
               <Link
                 href="/contact"

@@ -16,6 +16,14 @@ type Data = {
 const dateAu = (d: string | null) =>
   d ? new Date(d).toLocaleDateString("en-AU", { day: "2-digit", month: "long", year: "numeric" }) : "—";
 
+/** Schedule keys are ISO dates; show them as "Monday 11 August". */
+const scheduleDay = (k: string) => {
+  const d = new Date(`${k}T00:00:00`);
+  return Number.isNaN(d.getTime())
+    ? k
+    : d.toLocaleDateString("en-AU", { weekday: "long", day: "numeric", month: "long" });
+};
+
 export default function SignedContractPage() {
   const { id } = useParams<{ id: string }>();
   const [d, setD] = useState<Data | null>(null);
@@ -42,7 +50,7 @@ export default function SignedContractPage() {
   const schedule: Record<string, { start: string; end: string }> = (() => {
     try { return d.contract!.schedule ? JSON.parse(d.contract!.schedule) : {}; } catch { return {}; }
   })();
-  const days = Object.entries(schedule).filter(([, v]) => v?.start || v?.end);
+  const days = Object.entries(schedule).filter(([, v]) => v?.start || v?.end).sort(([a], [b]) => a.localeCompare(b));
 
   return (
     <div className="min-h-screen bg-slate-100 py-8 print:bg-white print:py-0">
@@ -57,7 +65,7 @@ export default function SignedContractPage() {
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/images/logo-dark.png" alt="Infinite Distribution" className="mb-8 h-14 w-auto" />
         <h1 className="font-display text-3xl font-extrabold tracking-tight text-ink">Independent Contractor Agreement</h1>
-        <p className="mt-2 text-[15px] text-ink/70">Sarvesh Mohanrajh, operating under Infinite Distributions · ABN 66 177 274 211</p>
+        <p className="mt-2 text-[15px] text-ink/70">Sarvesh Mohanrajh, operating under Infinite Distribution · ABN 66 177 274 211</p>
 
         <div className="mt-7 grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-5 sm:grid-cols-2">
           {[
@@ -92,7 +100,7 @@ export default function SignedContractPage() {
               <tbody>
                 {days.map(([day, v]) => (
                   <tr key={day}>
-                    <td className="border border-slate-300 px-3 py-2 font-semibold">{day}</td>
+                    <td className="border border-slate-300 px-3 py-2 font-semibold">{scheduleDay(day)}</td>
                     <td className="border border-slate-300 px-3 py-2">Start: {v.start || "—"}</td>
                     <td className="border border-slate-300 px-3 py-2">End: {v.end || "—"}</td>
                   </tr>
@@ -112,14 +120,14 @@ export default function SignedContractPage() {
             <p className="text-[14px] text-ink/70">Date: {dateAu(d.contract.signed_date)}</p>
           </div>
           <div>
-            <p className="text-[13px] font-bold uppercase tracking-wide text-ink/50">Infinite Distributions representative</p>
+            <p className="text-[13px] font-bold uppercase tracking-wide text-ink/50">Infinite Distribution representative</p>
             <div className="mt-2 h-24 rounded border border-dashed border-slate-300" />
             <p className="mt-2 text-[14px] text-ink/70">Date: ____________________</p>
           </div>
         </div>
 
         <p className="mt-8 border-t border-slate-200 pt-5 text-[12px] leading-relaxed text-ink/50">
-          Signed electronically through the Infinite Distributions team portal. By signing, the contractor confirmed they had read and
+          Signed electronically through the Infinite Distribution team portal. By signing, the contractor confirmed they had read and
           agreed to these terms and that they are engaged as an independent subcontractor, not an employee.
         </p>
       </div>

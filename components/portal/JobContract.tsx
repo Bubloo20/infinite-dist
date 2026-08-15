@@ -10,11 +10,11 @@ export const CONTRACT_TERMS = [
   "Contractor must provide a clear schedule of their time to be spent on the job and must inform when starting an activity, pausing or finishing.",
   "Failure to start on time (40 minute window) or start on scheduled days may result in a penalty such as a reduction in pay (5%) per day missed.",
   "Contractor must work the minimum hours stated above, and cover the job area/distance.",
-  "Payment will be made within 1 week after Infinite Distributions verifies the tracking data.",
-  "The contractor must use the tracking apps specified by Infinite Distributions: MAP MY WALK & STRAVA.",
+  "Payment will be made within 1 week after Infinite Distribution verifies the tracking data.",
+  "The contractor must use the tracking apps specified by Infinite Distribution: MAP MY WALK & STRAVA.",
   "Failure to use both correct apps, failure to track the walk, or suspicious activity such as letting the activity run while stationary or in a vehicle, results in no payment.",
   "If complaints of leaflets being placed in junk mail, or multiple leaflets in a single mailbox, are received: each complaint carries a 2% reduction penalty on pay unless otherwise exempted with permission. Over 5 complaints voids the contract.",
-  "If it rains on the assigned day, the contractor may postpone to the next suitable day but must notify Infinite Distributions.",
+  "If it rains on the assigned day, the contractor may postpone to the next suitable day but must notify Infinite Distribution.",
   "Contractor must take 10 photos of random letterboxes per 1000 leaflets.",
   "Leaflets must remain undamaged. Lost or damaged leaflets may incur a charge.",
   "The contractor is responsible for their own travel, phone battery, and safety.",
@@ -23,7 +23,42 @@ export const CONTRACT_TERMS = [
   "The contractor is an independent subcontractor, not an employee.",
 ];
 
-const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+/** Sunday of the week containing `d`. */
+function weekStartOf(d: Date) {
+  const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  x.setDate(x.getDate() - x.getDay());
+  return x;
+}
+
+/** Hours between two "HH:MM" values; handles a shift running past midnight. */
+function hoursBetween(start?: string, end?: string): number {
+  if (!start || !end) return 0;
+  const [sh, sm] = start.split(":").map(Number);
+  const [eh, em] = end.split(":").map(Number);
+  if ([sh, sm, eh, em].some((n) => Number.isNaN(n))) return 0;
+  let mins = eh * 60 + em - (sh * 60 + sm);
+  if (mins < 0) mins += 24 * 60;
+  return mins / 60;
+}
+
+/** 6.5 -> "6h 30m" */
+function fmtHours(h: number): string {
+  const mins = Math.round(h * 60);
+  const hh = Math.floor(mins / 60);
+  const mm = mins % 60;
+  if (!hh) return `${mm}m`;
+  return mm ? `${hh}h ${mm}m` : `${hh}h`;
+}
+
+/** "6", "6 hrs", "6.5 hours" -> 6 / 6.5 */
+function parseMinHours(v: string | null | undefined): number {
+  const m = String(v ?? "").match(/[\d.]+/);
+  return m ? Number(m[0]) || 0 : 0;
+}
 
 function SignaturePad({ onChange }: { onChange: (dataUrl: string | null) => void }) {
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -110,6 +145,31 @@ export default function JobContract({
   const [sig, setSig] = useState<string | null>(null);
   const [agreed, setAgreed] = useState(false);
   const [schedule, setSchedule] = useState<Record<string, { start: string; end: string }>>({});
+  const [weekStart, setWeekStart] = useState(() => weekStartOf(mine?.start_date ? new Date(mine.start_date) : new Date()));
+
+  const minHours = parseMinHours(mine?.min_hours || job.min_hours);
+  const totalHours = Object.values(schedule).reduce((t, v) => t + hoursBetween(v?.start, v?.end), 0);
+  const daysFilled = Object.values(schedule).filter((v) => v?.start && v?.end).length;
+  const shortBy = Math.max(0, minHours - totalHours);
+  const halfEntered = Object.values(schedule).some((v) => (v?.start && !v?.end) || (!v?.start && v?.end));
+  const scheduleOk = minHours === 0 ? true : totalHours + 1e-9 >= minHours && !halfEntered;
+
+  const shiftWeek = (delta: number) => {
+    const d = new Date(weekStart);
+    d.setDate(d.getDate() + delta * 7);
+    setWeekStart(d);
+  };
+  const weekDays = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(weekStart);
+    d.setDate(d.getDate() + i);
+    return d;
+  });
+  const weekKeys = new Set(weekDays.map(iso));
+  const otherWeeksHours = Object.entries(schedule)
+    .filter(([k]) => !weekKeys.has(k))
+    .reduce((t, [, v]) => t + hoursBetween(v?.start, v?.end), 0);
+  const fmtDay = (d: Date) => d.toLocaleDateString("en-AU", { day: "numeric", month: "short" });
+  const weekLabel = `${fmtDay(weekDays[0])} – ${fmtDay(weekDays[6])}`;
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   // The agreement must actually be opened before it can be signed.
@@ -125,6 +185,12 @@ export default function JobContract({
   }, [job.id]);
 
   const submit = async () => {
+    if (!scheduleOk) {
+      setErr(halfEntered
+        ? "One of your days has only a start or only an end time — fill in both, or clear it."
+        : `Your schedule adds up to ${totalHours.toFixed(1)} hours but this job requires at least ${minHours}. Add ${shortBy.toFixed(1)} more hours across any days.`);
+      return;
+    }
     setBusy(true); setErr("");
     try {
       const r = await fetch("/api/portal/jobs", {
@@ -145,9 +211,15 @@ export default function JobContract({
     return (
       <GlassCard className="border-emerald-400/25 bg-emerald-500/[0.06] p-6">
         <p className="font-display text-lg font-bold text-emerald-200">Agreement signed</p>
-        <p className="mt-1.5 text-sm text-emerald-100/70">
-          You signed this contract on {new Date(signedDate).toLocaleDateString("en-AU", { day: "2-digit", month: "long", year: "numeric" })}. A copy is with the office.
-        </p>
+        <div className="mt-1.5 flex flex-wrap items-end justify-between gap-4">
+          <p className="text-sm text-emerald-100/70">
+            You signed this contract on {new Date(signedDate).toLocaleDateString("en-AU", { day: "2-digit", month: "long", year: "numeric" })}. A copy is with the office.
+          </p>
+          <a href={`/portal/contract/${job.id}`} target="_blank" rel="noreferrer"
+            className="shrink-0 rounded-2xl border border-emerald-400/35 bg-emerald-500/10 px-5 py-2.5 font-display text-[14px] font-bold text-emerald-200 transition hover:bg-emerald-500/20 hover:text-white">
+            View signed agreement ↗
+          </a>
+        </div>
       </GlassCard>
     );
   }
@@ -156,7 +228,7 @@ export default function JobContract({
     <GlassCard className="p-6 sm:p-8">
       <p className="text-xs font-bold uppercase tracking-[0.16em] text-orchid">Independent contractor agreement</p>
       <h3 className="mt-3 font-display text-2xl font-extrabold tracking-tight text-white">Terms for this job</h3>
-      <p className="mt-2 text-sm text-white/50">Infinite Distributions · ABN 66 177 274 211</p>
+      <p className="mt-2 text-sm text-white/50">Infinite Distribution · ABN 66 177 274 211</p>
 
       <div className="mt-6 grid gap-3 rounded-2xl border border-white/10 bg-white/[0.04] p-5 sm:grid-cols-2">
         {[
@@ -202,19 +274,81 @@ export default function JobContract({
       </div>
 
       <div className={`mt-7 transition ${seen ? "" : "pointer-events-none select-none opacity-40"}`}>
-        <p className="text-[13px] font-semibold uppercase tracking-[0.1em] text-white/50">Your working schedule</p>
-        <div className="mt-3 grid gap-2 sm:grid-cols-2">
-          {DAYS.map((d) => (
-            <div key={d} className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2">
-              <span className="w-24 shrink-0 text-[13px] text-white/60">{d}</span>
-              <input type="time" value={schedule[d]?.start || ""} aria-label={`${d} start`}
-                onChange={(e) => setSchedule((s) => ({ ...s, [d]: { start: e.target.value, end: s[d]?.end || "" } }))}
-                className="w-full rounded-lg border border-white/12 bg-white/[0.05] px-2 py-1.5 text-[13px] text-white [color-scheme:dark]" />
-              <input type="time" value={schedule[d]?.end || ""} aria-label={`${d} end`}
-                onChange={(e) => setSchedule((s) => ({ ...s, [d]: { start: s[d]?.start || "", end: e.target.value } }))}
-                className="w-full rounded-lg border border-white/12 bg-white/[0.05] px-2 py-1.5 text-[13px] text-white [color-scheme:dark]" />
-            </div>
-          ))}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-[13px] font-semibold uppercase tracking-[0.1em] text-white/50">Your working schedule</p>
+          <div className="flex items-center gap-1.5">
+            <button type="button" onClick={() => shiftWeek(-1)} aria-label="Previous week"
+              className="rounded-lg border border-white/12 bg-white/[0.05] px-3 py-1.5 text-[13px] font-bold text-white/60 transition hover:bg-white/[0.1] hover:text-white">←</button>
+            <span className="min-w-[168px] text-center text-[13px] font-semibold text-white/75">{weekLabel}</span>
+            <button type="button" onClick={() => shiftWeek(1)} aria-label="Next week"
+              className="rounded-lg border border-white/12 bg-white/[0.05] px-3 py-1.5 text-[13px] font-bold text-white/60 transition hover:bg-white/[0.1] hover:text-white">→</button>
+          </div>
+        </div>
+        <p className="mt-2 text-[13px] text-white/40">
+          Every day is optional — page back and forward through the weeks and fill in whichever days or weekends suit you.
+        </p>
+
+        <div className="mt-3 space-y-2">
+          {weekDays.map((d) => {
+            const key = iso(d);
+            const v = schedule[key] || { start: "", end: "" };
+            const hrs = hoursBetween(v.start, v.end);
+            const half = (v.start && !v.end) || (!v.start && v.end);
+            return (
+              <div key={key}
+                className={`flex flex-wrap items-center gap-2 rounded-xl border px-3 py-2 ${
+                  half ? "border-amber-400/35 bg-amber-500/[0.07]"
+                  : hrs ? "border-emerald-400/25 bg-emerald-500/[0.06]"
+                  : "border-white/10 bg-white/[0.04]"}`}>
+                <span className="w-[104px] shrink-0">
+                  <span className="block text-[13px] font-semibold text-white/75">{DAY_NAMES[d.getDay()]}</span>
+                  <span className="block text-[11px] text-white/35">
+                    {d.toLocaleDateString("en-AU", { day: "numeric", month: "short" })}
+                  </span>
+                </span>
+                <label className="flex min-w-[132px] flex-1 items-center gap-2">
+                  <span className="text-[11px] font-bold uppercase tracking-wide text-white/40">Start</span>
+                  <input type="time" value={v.start} aria-label={`${DAY_NAMES[d.getDay()]} ${key} start`}
+                    onChange={(e) => setSchedule((sc) => ({ ...sc, [key]: { start: e.target.value, end: sc[key]?.end || "" } }))}
+                    className="w-full rounded-lg border border-white/12 bg-white/[0.05] px-2 py-1.5 text-[13px] text-white [color-scheme:dark]" />
+                </label>
+                <label className="flex min-w-[132px] flex-1 items-center gap-2">
+                  <span className="text-[11px] font-bold uppercase tracking-wide text-white/40">End</span>
+                  <input type="time" value={v.end} aria-label={`${DAY_NAMES[d.getDay()]} ${key} end`}
+                    onChange={(e) => setSchedule((sc) => ({ ...sc, [key]: { start: sc[key]?.start || "", end: e.target.value } }))}
+                    className="w-full rounded-lg border border-white/12 bg-white/[0.05] px-2 py-1.5 text-[13px] text-white [color-scheme:dark]" />
+                </label>
+                <span className="w-16 shrink-0 text-right text-[12px] font-semibold text-white/50">
+                  {hrs ? `${hrs.toFixed(2).replace(/\.?0+$/, "")}h` : "—"}
+                </span>
+                {(v.start || v.end) && (
+                  <button type="button" aria-label={`Clear ${key}`}
+                    onClick={() => setSchedule((sc) => { const n = { ...sc }; delete n[key]; return n; })}
+                    className="shrink-0 rounded-lg px-2 py-1 text-white/30 transition hover:bg-white/[0.08] hover:text-white">×</button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        <div className={`mt-3 rounded-xl border px-4 py-3 text-[13px] leading-relaxed ${
+          scheduleOk ? "border-emerald-400/25 bg-emerald-500/[0.08] text-emerald-200"
+                     : "border-amber-400/30 bg-amber-500/[0.08] text-amber-200"}`}>
+          <span className="font-bold">
+            {fmtHours(totalHours)} scheduled{daysFilled ? ` across ${daysFilled} day${daysFilled === 1 ? "" : "s"}` : ""}
+          </span>
+          {otherWeeksHours > 0 && (
+            <span className="text-white/45"> · {fmtHours(otherWeeksHours)} of that in other weeks</span>
+          )}
+          <span className="mt-1 block">
+            {halfEntered
+              ? "One day has only a start or only an end time — fill in both times, or clear the day."
+              : minHours === 0
+                ? "No minimum hours were set for this job, so any schedule is fine."
+                : scheduleOk
+                  ? `That meets the ${fmtHours(minHours)} minimum for this job.`
+                  : `This job requires at least ${fmtHours(minHours)}, so you're ${fmtHours(shortBy)} short. Add more time on any day — it doesn't have to be this week.`}
+          </span>
         </div>
       </div>
 

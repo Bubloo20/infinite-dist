@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { GlassCard } from "./PortalShell";
 import { parseStravaUrl, type StravaStatus } from "@/lib/portal/strava";
 import { submitForm } from "@/lib/forms";
+import type { ClientJob, JobAssignment } from "@/lib/portal/db";
 
 type Check = { status: StravaStatus | "checking" | "idle"; message: string };
 
@@ -33,13 +34,22 @@ function duration(start: string, end: string): string {
   return h ? `${h}h ${m}m` : `${m}m`;
 }
 
-export default function WorkLogForm({ onDone }: { onDone?: () => void }) {
-  const [jobNumber, setJobNumber] = useState("");
+/**
+ * Logging a shift. Passed a `job`, it becomes that job's own log form —
+ * the job number and area are already filled in and the entry is filed against it.
+ */
+export default function WorkLogForm({ onDone, job, mine }: {
+  onDone?: () => void;
+  job?: ClientJob | null;
+  mine?: JobAssignment | null;
+}) {
+  const jobRef = job ? job.job_number || `JOB-${job.id}` : "";
+  const [jobNumber, setJobNumber] = useState(jobRef);
   const [startedAt, setStartedAt] = useState("");
   const [endedAt, setEndedAt] = useState("");
   const [manualTime, setManualTime] = useState("");
   const [leafletCount, setLeafletCount] = useState("");
-  const [areaWorked, setAreaWorked] = useState("");
+  const [areaWorked, setAreaWorked] = useState(job ? mine?.area_note || job.area || "" : "");
   const [stravaUrls, setStravaUrls] = useState<string[]>([""]);
   const [mapmyUrls, setMapmyUrls] = useState<string[]>([""]);
   const [notes, setNotes] = useState("");
@@ -101,7 +111,7 @@ export default function WorkLogForm({ onDone }: { onDone?: () => void }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           jobNumber, startedAt, endedAt, timeSpent,
-          leafletCount, areaWorked,
+          leafletCount, areaWorked, clientJobId: job?.id ?? null,
           stravaUrls: cleanStrava, mapmyUrls: cleanMapmy, notes,
         }),
       });
@@ -126,7 +136,7 @@ export default function WorkLogForm({ onDone }: { onDone?: () => void }) {
           "Map My Activity": cleanMapmy.join("  |  ") || "—",
           Notes: notes || "—",
         },
-        { subject: `Work log — ${data.workerName} — job ${jobNumber}`, from_name: "Infinite Distributions Portal" },
+        { subject: `Work log — ${data.workerName} — job ${jobNumber}`, from_name: "Infinite Distribution Portal" },
       );
 
       setDone({ emailed, stored: Boolean(data.stored) });
@@ -139,10 +149,27 @@ export default function WorkLogForm({ onDone }: { onDone?: () => void }) {
   };
 
   const reset = () => {
-    setJobNumber(""); setStartedAt(""); setEndedAt(""); setManualTime("");
-    setLeafletCount(""); setAreaWorked(""); setStravaUrls([""]); setMapmyUrls([""]);
+    setJobNumber(jobRef); setStartedAt(""); setEndedAt(""); setManualTime("");
+    setLeafletCount(""); setAreaWorked(job ? mine?.area_note || job.area || "" : "");
+    setStravaUrls([""]); setMapmyUrls([""]);
     setNotes(""); setChecks({}); setDone(null);
   };
+
+  if (done && job) {
+    return (
+      <GlassCard className="border-emerald-400/25 bg-emerald-500/[0.06] p-6">
+        <p className="font-display text-lg font-bold text-emerald-200">Shift logged</p>
+        <p className="mt-1.5 text-sm text-emerald-100/70">
+          {done.stored ? "Saved against this job — it'll show in your earnings." : "Sent to the office, but not saved to the database."}
+          {done.emailed ? " The office has been emailed." : ""}
+        </p>
+        <button onClick={reset}
+          className="mt-4 rounded-2xl border border-emerald-400/35 bg-emerald-500/10 px-5 py-2.5 font-display text-[14px] font-bold text-emerald-200 transition hover:bg-emerald-500/20 hover:text-white">
+          Log another shift on this job
+        </button>
+      </GlassCard>
+    );
+  }
 
   if (done) {
     return (
@@ -171,10 +198,23 @@ export default function WorkLogForm({ onDone }: { onDone?: () => void }) {
 
   return (
     <form onSubmit={submit}>
-      <GlassCard className="p-7 sm:p-10">
+      <GlassCard className={job ? "p-6 sm:p-7" : "p-7 sm:p-10"}>
+        {job && (
+          <div className="mb-6">
+            <p className="text-xs font-bold uppercase tracking-[0.16em] text-orchid">Log your work</p>
+            <h3 className="mt-2 font-display text-xl font-extrabold tracking-tight text-white">
+              Hours and leaflets for this job
+            </h3>
+            <p className="mt-1.5 text-[14px] text-white/50">
+              Fill in the times you actually worked, how many leaflets went out and your tracking links.
+              Log as many shifts as you need — one for each time you go out.
+            </p>
+          </div>
+        )}
         <div className="grid gap-6 sm:grid-cols-2">
-          <Field label="Job number" required>
-            <input className={inputCls} value={jobNumber} onChange={(e) => setJobNumber(e.target.value)} placeholder="e.g. JOB-1042" required />
+          <Field label="Job number" required hint={job ? "Set by the office for this job." : undefined}>
+            <input className={`${inputCls} ${job ? "cursor-not-allowed opacity-60" : ""}`} value={jobNumber}
+              onChange={(e) => setJobNumber(e.target.value)} placeholder="e.g. JOB-1042" required readOnly={Boolean(job)} />
           </Field>
           <Field label="Area worked" hint="Suburb or streets covered.">
             <input className={inputCls} value={areaWorked} onChange={(e) => setAreaWorked(e.target.value)} placeholder="e.g. Northcote — High St" />
@@ -195,7 +235,8 @@ export default function WorkLogForm({ onDone }: { onDone?: () => void }) {
               )}
             </div>
           </Field>
-          <Field label="Leaflets delivered" hint="How many went out on this run.">
+          <Field label="Leaflets delivered"
+            hint={mine?.leaflet_share ? `How many went out on this run — you're allocated ${mine.leaflet_share.toLocaleString()} in total.` : "How many went out on this run."}>
             <input className={inputCls} value={leafletCount} onChange={(e) => setLeafletCount(e.target.value)} placeholder="e.g. 450" inputMode="numeric" />
           </Field>
 
