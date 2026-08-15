@@ -249,7 +249,7 @@ export default function AdminDashboard({ onSignOut }: { onSignOut: () => void })
       ) : tab === "agencies" ? (
         <ClientsTab agencies={agencies} agents={agents} jobs={clientJobs} agencyPayments={agencyPayments} post={postClient} del={delClient} />
       ) : tab === "shifts" ? (
-        <JobsTab logs={filtered} q={q} setQ={setQ} post={post} />
+        <JobsTab logs={filtered} q={q} setQ={setQ} post={post} assignments={assignments} jobs={clientJobs} users={users} del={delClient} />
       ) : tab === "workers" ? (
         <div className="space-y-4">
           <PublishToWorkers jobs={clientJobs} agencies={agencies} users={users} interest={interest} assignments={assignments} post={postClient} del={delClient} />
@@ -266,9 +266,11 @@ export default function AdminDashboard({ onSignOut }: { onSignOut: () => void })
 
 /* ---------------------------------- jobs ---------------------------------- */
 
-function JobsTab({ logs, q, setQ, post }: {
+function JobsTab({ logs, q, setQ, post, assignments, jobs, users, del }: {
   logs: WorkLog[]; q: string; setQ: (v: string) => void;
   post: (u: string, b: unknown) => Promise<boolean>;
+  assignments: JobAssignment[]; jobs: ClientJob[]; users: PortalUser[];
+  del: (entity: string, id: number) => Promise<void>;
 }) {
   const exportCsv = () => {
     const head = ["Worker", "Job", "Area", "Started", "Finished", "Time", "Leaflets", "Amount", "Paid on", "Strava", "MapMy", "Notes"];
@@ -290,10 +292,58 @@ function JobsTab({ logs, q, setQ, post }: {
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search worker, job, area or notes…" className={`${input} flex-1 min-w-[220px]`} />
         <button onClick={exportCsv} disabled={!logs.length} className={btn}>Export CSV</button>
       </div>
-      <div className="mt-5 space-y-3">
-        {!logs.length ? (
-          <GlassCard className="p-14 text-center"><p className="text-white/50">No work logs yet.</p></GlassCard>
-        ) : logs.map((l) => <JobRow key={l.id} log={l} post={post} />)}
+      {/* Work that's been handed out but not yet logged. */}
+      {assignments.length > 0 && (
+        <div className="mt-6">
+          <p className="text-[12px] font-bold uppercase tracking-[0.14em] text-white/40">Assigned work</p>
+          <div className="mt-3 space-y-2">
+            {assignments.map((a) => {
+              const job = jobs.find((j) => j.id === a.job_id);
+              const who = users.find((u) => u.id === a.user_id)?.full_name || `User ${a.user_id}`;
+              const logged = logs.some((l) => l.user_id === a.user_id && l.client_job_id === a.job_id);
+              return (
+                <GlassCard key={a.id} className="flex flex-wrap items-center justify-between gap-3 p-4">
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2.5">
+                      <p className="font-semibold text-white">{who}</p>
+                      <span className="rounded-lg bg-white/[0.08] px-2.5 py-1 text-[12px] text-white/70">
+                        {job?.title || `Job #${a.job_id}`}
+                      </span>
+                      <span className={`rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase ${
+                        logged ? "border-emerald-400/30 bg-emerald-500/12 text-emerald-300"
+                        : a.status === "accepted" ? "border-sky-400/30 bg-sky-500/12 text-sky-300"
+                        : "border-amber-400/30 bg-amber-500/12 text-amber-300"}`}>
+                        {logged ? "Shift logged" : a.status === "accepted" ? "Accepted" : "Awaiting acceptance"}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-[13px] text-white/45">
+                      {a.leaflet_share ? `${a.leaflet_share.toLocaleString()} leaflets` : "share not set"}
+                      {a.area_note ? ` · ${a.area_note}` : ""}
+                      {a.start_date ? ` · starts ${day(a.start_date)}` : ""}
+                      {a.due_date ? ` · due ${day(a.due_date)}` : ""}
+                      {a.min_hours ? ` · min ${a.min_hours} hrs` : ""}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <span className="font-display text-lg font-extrabold text-emerald-300">{money(num(a.pay))}</span>
+                    <button onClick={() => del("assignment", a.id)} className="text-[13px] text-white/30 transition hover:text-rose-300">Remove</button>
+                  </div>
+                </GlassCard>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      <div className="mt-6">
+        {assignments.length > 0 && (
+          <p className="mb-3 text-[12px] font-bold uppercase tracking-[0.14em] text-white/40">Logged shifts</p>
+        )}
+        <div className="space-y-3">
+          {!logs.length ? (
+            <GlassCard className="p-14 text-center"><p className="text-white/50">No shifts logged yet.</p></GlassCard>
+          ) : logs.map((l) => <JobRow key={l.id} log={l} post={post} />)}
+        </div>
       </div>
     </>
   );

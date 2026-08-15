@@ -29,7 +29,9 @@ function Brief({ job, mine }: { job: ClientJob; mine?: JobAssignment | null }) {
         ["Start", shortDate(mine.start_date)],
         ["Due", shortDate(mine.due_date)],
         ["Minimum hours", mine.min_hours || job.min_hours || "—"],
-        ["Allocated time", mine.allocated_time || job.allocated_time || "—"],
+        ["Allocated time", mine.start_date || mine.due_date
+          ? `${shortDate(mine.start_date)} – ${shortDate(mine.due_date)}`
+          : mine.allocated_time || job.allocated_time || "—"],
       ]
     : [
         ["Area", job.area || "—"],
@@ -146,7 +148,9 @@ export default function JobMarket({ workerName }: { workerName: string }) {
                         <h3 className="font-display text-xl font-bold text-white">{j.title || `Job #${j.id}`}</h3>
                         <p className="mt-1 text-sm text-white/50">{j.area || "Area to be confirmed"}</p>
                       </div>
-                      <p className="font-display text-2xl font-extrabold text-emerald-300">{money(j.worker_pay)}</p>
+                      <p className="font-display text-2xl font-extrabold text-emerald-300">
+                        {money(mineFor(j.id)?.pay ?? j.worker_pay)}
+                      </p>
                     </div>
 
                     <div className="mt-5"><Brief job={j} mine={mineFor(j.id)} /></div>
@@ -203,7 +207,9 @@ export default function JobMarket({ workerName }: { workerName: string }) {
                       <h3 className="font-display text-xl font-bold text-white">{j.title || `Job #${j.id}`}</h3>
                       <p className="mt-1 text-sm text-white/50">{j.area || "—"}</p>
                     </div>
-                    <p className="font-display text-2xl font-extrabold text-emerald-300">{money(j.worker_pay)}</p>
+                    <p className="font-display text-2xl font-extrabold text-emerald-300">
+                      {money(mineFor(j.id)?.pay ?? j.worker_pay)}
+                    </p>
                   </div>
                   <div className="mt-5"><Brief job={j} mine={mineFor(j.id)} /></div>
                   {pts.length >= 3 && (

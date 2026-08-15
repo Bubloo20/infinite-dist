@@ -4,7 +4,6 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { GlassCard } from "./PortalShell";
 import type { Agency, Agent, ClientJob, AgencyPayment, JobStatus, InvoiceStatus } from "@/lib/portal/db";
-import BoundaryMap, { type LatLng } from "./BoundaryMap";
 import { SubContracts } from "./PublishToWorkers";
 import type { PortalUser, JobAssignment } from "@/lib/portal/db";
 
@@ -398,12 +397,6 @@ function ClientJobRow({ job, agencyName, agentName, expenses, users, assignments
   post: Post; del: Del;
 }) {
   const [open, setOpen] = useState(false);
-  const [showMap, setShowMap] = useState(false);
-  const [pts, setPts] = useState<LatLng[]>(() => {
-    try { const v = JSON.parse(job.boundary || "[]"); return Array.isArray(v) ? v : []; } catch { return []; }
-  });
-  const [center, setCenter] = useState<[number, number, number] | null>(null);
-  const [brief, setBrief] = useState({ minHours: job.min_hours || "", allocatedTime: job.allocated_time || "" });
   const s = STATUS[job.status];
   const inv = effectiveInvoice(job);
   // Three buckets across the job's quantity: completed, out with a worker, and
@@ -542,37 +535,6 @@ function ClientJobRow({ job, agencyName, agentName, expenses, users, assignments
           {/* Assign the work: who does what, for how much, by when. */}
           <div className="mb-5">
             <SubContracts job={job} users={users} rows={assignments} post={post} del={del} />
-          </div>
-
-          <div className="mb-5 grid gap-3 sm:grid-cols-3">
-            <label className="block">
-              <span className="mb-1 block text-[12px] font-semibold text-white/40">Minimum hours required</span>
-              <input className={input} value={brief.minHours} placeholder="e.g. 6"
-                onChange={(e) => setBrief({ ...brief, minHours: e.target.value })} />
-            </label>
-            <label className="block">
-              <span className="mb-1 block text-[12px] font-semibold text-white/40">Allocated time</span>
-              <input className={input} value={brief.allocatedTime} placeholder="e.g. 3 days"
-                onChange={(e) => setBrief({ ...brief, allocatedTime: e.target.value })} />
-            </label>
-            <div className="flex items-end gap-2">
-              <button className={btnGhost} onClick={() => setShowMap((v) => !v)}>
-                {showMap ? "Hide map" : pts.length ? `Delivery area (${pts.length})` : "Draw delivery area"}
-              </button>
-              <button className={btn}
-                onClick={() => post({ entity: "job", id: job.id, ...jobPayload(job),
-                  minHours: brief.minHours, allocatedTime: brief.allocatedTime,
-                  boundary: pts.length >= 3 ? JSON.stringify(pts) : job.boundary,
-                  mapCenter: center ? JSON.stringify(center) : job.map_center })}>
-                Save
-              </button>
-            </div>
-            {showMap && (
-              <div className="sm:col-span-3">
-                <p className="mb-2 text-[13px] text-white/45">Click to trace the boundary workers will see.</p>
-                <BoundaryMap boundary={pts} editable height={380} onChange={(p, c) => { setPts(p); setCenter(c); }} />
-              </div>
-            )}
           </div>
 
           <p className="text-[12px] font-bold uppercase tracking-[0.12em] text-white/40">Worker costs on this job</p>

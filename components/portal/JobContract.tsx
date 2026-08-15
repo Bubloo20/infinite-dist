@@ -112,6 +112,17 @@ export default function JobContract({
   const [schedule, setSchedule] = useState<Record<string, { start: string; end: string }>>({});
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  // The agreement must actually be opened before it can be signed.
+  const [seen, setSeen] = useState(false);
+
+  useEffect(() => {
+    const check = () => {
+      try { setSeen(localStorage.getItem(`idp_contract_seen_${job.id}`) === "1"); } catch { /* private mode */ }
+    };
+    check();
+    window.addEventListener("focus", check);
+    return () => window.removeEventListener("focus", check);
+  }, [job.id]);
 
   const submit = async () => {
     setBusy(true); setErr("");
@@ -152,9 +163,9 @@ export default function JobContract({
           ["Contractor", workerName],
           ["Job area", mine?.area_note || job.area || "—"],
           ["Leaflet amount", (mine?.leaflet_share ?? job.quantity) ? (mine?.leaflet_share ?? job.quantity)!.toLocaleString() : "—"],
-          ["Allocated time", mine?.allocated_time ? mine.allocated_time : mine?.start_date || mine?.due_date
+          ["Allocated time", mine?.start_date || mine?.due_date
             ? `${mine?.start_date ? new Date(mine.start_date).toLocaleDateString("en-AU") : "—"} to ${mine?.due_date ? new Date(mine.due_date).toLocaleDateString("en-AU") : "—"}`
-            : job.allocated_time || "—"],
+            : mine?.allocated_time || job.allocated_time || "—"],
           ["Payment amount", (mine?.pay ?? job.worker_pay) ? `$${Number(mine?.pay ?? job.worker_pay).toFixed(2)}` : "—"],
           ["Minimum hours of work", mine?.min_hours || job.min_hours || "—"],
         ].map(([k, v]) => (
@@ -165,16 +176,32 @@ export default function JobContract({
         ))}
       </div>
 
-      <ol className="mt-6 space-y-2.5">
-        {CONTRACT_TERMS.map((t, i) => (
-          <li key={i} className="flex gap-3 text-[15px] leading-relaxed text-white/70">
-            <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-orchid" />
-            <span>{t}</span>
-          </li>
-        ))}
-      </ol>
+      <div className={`mt-6 rounded-2xl border p-5 ${
+        seen ? "border-emerald-400/30 bg-emerald-500/[0.07]" : "border-orchid/40 bg-orchid/[0.08]"}`}>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="font-display text-base font-bold text-white">
+              {seen ? "Agreement read ✓" : "Read the agreement first"}
+            </p>
+            <p className="mt-1 text-[13px] text-white/55">
+              {seen
+                ? "You can open it again any time before signing."
+                : "Open the full agreement — you need to read it before you can sign."}
+            </p>
+          </div>
+          <a
+            href={`/portal/contract/${job.id}`}
+            target="_blank"
+            rel="noreferrer"
+            onClick={() => { try { localStorage.setItem(`idp_contract_seen_${job.id}`, "1"); } catch {} setTimeout(() => setSeen(true), 400); }}
+            className="rounded-2xl bg-gradient-to-r from-electric to-orchid px-6 py-3 font-display text-[15px] font-bold text-white shadow-[0_14px_34px_-14px_rgba(182,109,199,0.9)] transition hover:-translate-y-0.5"
+          >
+            {seen ? "View agreement again ↗" : "View agreement (PDF) ↗"}
+          </a>
+        </div>
+      </div>
 
-      <div className="mt-7">
+      <div className={`mt-7 transition ${seen ? "" : "pointer-events-none select-none opacity-40"}`}>
         <p className="text-[13px] font-semibold uppercase tracking-[0.1em] text-white/50">Your working schedule</p>
         <div className="mt-3 grid gap-2 sm:grid-cols-2">
           {DAYS.map((d) => (
@@ -191,7 +218,7 @@ export default function JobContract({
         </div>
       </div>
 
-      <div className="mt-7 grid gap-4 sm:grid-cols-2">
+      <div className={`mt-7 grid gap-4 transition sm:grid-cols-2 ${seen ? "" : "pointer-events-none select-none opacity-40"}`}>
         <div>
           <label className="mb-2 block text-[13px] font-semibold uppercase tracking-[0.1em] text-white/50">Full name</label>
           <input value={name} onChange={(e) => setName(e.target.value)}
@@ -218,9 +245,9 @@ export default function JobContract({
 
       {err && <p className="mt-4 rounded-xl border border-rose-400/25 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">{err}</p>}
 
-      <button onClick={submit} disabled={busy || !agreed || !sig || !name.trim()}
+      <button onClick={submit} disabled={busy || !seen || !agreed || !sig || !name.trim()}
         className="mt-6 w-full rounded-2xl bg-gradient-to-r from-electric to-orchid px-6 py-4 font-display text-[15px] font-bold text-white shadow-[0_16px_40px_-14px_rgba(182,109,199,0.85)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0">
-        {busy ? "Submitting…" : "Sign and accept the agreement"}
+        {busy ? "Submitting…" : seen ? "Sign and accept the agreement" : "Read the agreement to continue"}
       </button>
     </GlassCard>
   );
