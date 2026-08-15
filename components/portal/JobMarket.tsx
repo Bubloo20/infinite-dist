@@ -5,7 +5,7 @@ import { motion } from "framer-motion";
 import { GlassCard } from "./PortalShell";
 import BoundaryMap, { type LatLng } from "./BoundaryMap";
 import JobContract from "./JobContract";
-import type { ClientJob } from "@/lib/portal/db";
+import type { ClientJob, JobAssignment } from "@/lib/portal/db";
 
 const money = (v: string | null) => (v ? `$${Number(v).toFixed(2)}` : "—");
 const parsePts = (s: string | null): LatLng[] => {
@@ -17,14 +17,26 @@ const parseCenter = (s: string | null): [number, number, number] | null => {
   try { const v = JSON.parse(s); return Array.isArray(v) && v.length === 3 ? (v as [number, number, number]) : null; } catch { return null; }
 };
 
-function Brief({ job }: { job: ClientJob }) {
-  const items: [string, string][] = [
-    ["Area", job.area || "—"],
-    ["Leaflets", job.quantity ? job.quantity.toLocaleString() : "—"],
-    ["Your pay", money(job.worker_pay)],
-    ["Allocated time", job.allocated_time || "—"],
-    ["Minimum hours", job.min_hours || "—"],
-  ];
+function Brief({ job, mine }: { job: ClientJob; mine?: JobAssignment | null }) {
+  const shortDate = (d: string | null | undefined) =>
+    d ? new Date(d).toLocaleDateString("en-AU", { day: "2-digit", month: "short" }) : "—";
+  // A sub-contract overrides the job-level figures for this worker.
+  const items: [string, string][] = mine
+    ? [
+        ["Your area", mine.area_note || job.area || "—"],
+        ["Your leaflets", mine.leaflet_share ? mine.leaflet_share.toLocaleString() : (job.quantity ? job.quantity.toLocaleString() : "—")],
+        ["Your pay", money(mine.pay ?? job.worker_pay)],
+        ["Start", shortDate(mine.start_date)],
+        ["Due", shortDate(mine.due_date)],
+        ["Minimum hours", job.min_hours || "—"],
+      ]
+    : [
+        ["Area", job.area || "—"],
+        ["Leaflets", job.quantity ? job.quantity.toLocaleString() : "—"],
+        ["Your pay", money(job.worker_pay)],
+        ["Allocated time", job.allocated_time || "—"],
+        ["Minimum hours", job.min_hours || "—"],
+      ];
   return (
     <div className="grid gap-3 sm:grid-cols-3">
       {items.map(([k, v]) => (
@@ -42,6 +54,7 @@ export default function JobMarket({ workerName }: { workerName: string }) {
   const [mine, setMine] = useState<ClientJob[]>([]);
   const [interest, setInterest] = useState<number[]>([]);
   const [contracts, setContracts] = useState<{ jobId: number; signedDate: string }[]>([]);
+  const [assignments, setAssignments] = useState<JobAssignment[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<"available" | "mine">("available");
   const [busyId, setBusyId] = useState<number | null>(null);
@@ -54,6 +67,7 @@ export default function JobMarket({ workerName }: { workerName: string }) {
         if (!d.ok) return;
         setOpen(d.open || []); setMine(d.mine || []);
         setInterest(d.interest || []); setContracts(d.contracts || []);
+        setAssignments(d.assignments || []);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -87,6 +101,7 @@ export default function JobMarket({ workerName }: { workerName: string }) {
   }
 
   const signedFor = (id: number) => contracts.find((c) => c.jobId === id)?.signedDate ?? null;
+  const mineFor = (id: number) => assignments.find((a) => a.job_id === id) ?? null;
 
   return (
     <div>
@@ -122,7 +137,7 @@ export default function JobMarket({ workerName }: { workerName: string }) {
                       <p className="font-display text-2xl font-extrabold text-emerald-300">{money(j.worker_pay)}</p>
                     </div>
 
-                    <div className="mt-5"><Brief job={j} /></div>
+                    <div className="mt-5"><Brief job={j} mine={mineFor(j.id)} /></div>
 
                     {pts.length >= 3 && (
                       <button onClick={() => setExpanded(expanded === j.id ? null : j.id)}
@@ -178,7 +193,7 @@ export default function JobMarket({ workerName }: { workerName: string }) {
                     </div>
                     <p className="font-display text-2xl font-extrabold text-emerald-300">{money(j.worker_pay)}</p>
                   </div>
-                  <div className="mt-5"><Brief job={j} /></div>
+                  <div className="mt-5"><Brief job={j} mine={mineFor(j.id)} /></div>
                   {pts.length >= 3 && (
                     <div className="mt-5">
                       <p className="mb-2 text-[13px] font-semibold uppercase tracking-[0.1em] text-white/50">Delivery area — zoom and pan</p>
@@ -187,7 +202,7 @@ export default function JobMarket({ workerName }: { workerName: string }) {
                   )}
                 </GlassCard>
 
-                <JobContract job={j} workerName={workerName} signedDate={signedFor(j.id)} onSigned={load} />
+                <JobContract job={j} workerName={workerName} signedDate={signedFor(j.id)} mine={mineFor(j.id)} onSigned={load} />
               </div>
             );
           })}

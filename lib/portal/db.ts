@@ -1,4 +1,16 @@
 import { sql } from "@vercel/postgres";
+import { types } from "@neondatabase/serverless";
+
+/**
+ * Return DATE columns as plain "YYYY-MM-DD" strings.
+ *
+ * By default the driver hands back a JS Date at local midnight; serialising
+ * that to JSON converts it to UTC, which rolls the day backwards in Melbourne
+ * (UTC+10). A job completed on the 14th came back as the 13th. Dates here are
+ * calendar days with no time component, so keeping them as text is both
+ * correct and stable regardless of server timezone.
+ */
+types.setTypeParser(1082, (v: string) => v);
 
 export type PortalUser = {
   id: number;
@@ -190,6 +202,27 @@ export async function ensureSchema() {
   await sql`ALTER TABLE client_jobs ADD COLUMN IF NOT EXISTS job_number TEXT;`;
   await sql`ALTER TABLE client_jobs ADD COLUMN IF NOT EXISTS delivered_count INTEGER;`;
 
+  /**
+   * A job split across several workers. Each sub-contract carries its own pay,
+   * leaflet share and dates, so one job can run with three people on different
+   * schedules. The older single-worker `assigned_user_id` still works.
+   */
+  await sql`
+    CREATE TABLE IF NOT EXISTS job_assignments (
+      id SERIAL PRIMARY KEY,
+      job_id INTEGER NOT NULL,
+      user_id INTEGER NOT NULL,
+      pay NUMERIC(10,2),
+      leaflet_share INTEGER,
+      area_note TEXT,
+      start_date DATE,
+      due_date DATE,
+      status TEXT NOT NULL DEFAULT 'assigned',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (job_id, user_id)
+    );
+  `;
+
   // Workers registering interest in a published job.
   await sql`
     CREATE TABLE IF NOT EXISTS job_interest (
@@ -280,6 +313,13 @@ export type ClientJob = {
   job_number: string | null;
   delivered_count: number | null;
 };
+export type JobAssignment = {
+  id: number; job_id: number; user_id: number;
+  pay: string | null; leaflet_share: number | null; area_note: string | null;
+  start_date: string | null; due_date: string | null;
+  status: string; created_at: string;
+};
+
 export type JobInterest = {
   id: number; job_id: number; user_id: number; note: string | null; created_at: string;
 };
@@ -410,6 +450,49 @@ export async function listJobsForWorker(userId: number): Promise<ClientJob[]> {
   return (await sql<ClientJob>`
     SELECT * FROM client_jobs WHERE assigned_user_id = ${userId}
     ORDER BY created_at DESC LIMIT 100;`).rows;
+}
+
+export async function listAssignments(): Promise<JobAssignment[]> {
+  await ensureSchema();
+  return (await sql<JobAssignment>`SELECT * FROM job_assignments ORDER BY job_id DESC, id ASC LIMIT 1000;`).rows;
+}
+
+export async function listAssignmentsForUser(userId: number): Promise<JobAssignment[]> {
+  await ensureSchema();
+  return (await sql<JobAssignment>`
+    SELECT * FROM job_assignments WHERE user_id = ${userId} ORDER BY id DESC LIMIT 200;`).rows;
+}
+
+export async function upsertAssignment(a: {
+  id?: number | null; jobId: number; userId: number; pay?: number | null;
+  leafletShare?: number | null; areaNote?: string | null;
+  startDate?: string | null; dueDate?: string | null; status?: string | null;
+}) {
+  await ensureSchema();
+  const r = await sql<{ id: number }>`
+    INSERT INTO job_assignments (job_id, user_id, pay, leaflet_share, area_note, start_date, due_date, status)
+    VALUES (${a.jobId}, ${a.userId}, ${a.pay ?? null}, ${a.leafletShare ?? null}, ${a.areaNote ?? null},
+            ${a.startDate || null}, ${a.dueDate || null}, ${a.status || 'assigned'})
+    ON CONFLICT (job_id, user_id) DO UPDATE SET
+      pay = EXCLUDED.pay, leaflet_share = EXCLUDED.leaflet_share, area_note = EXCLUDED.area_note,
+      start_date = EXCLUDED.start_date, due_date = EXCLUDED.due_date, status = EXCLUDED.status
+    RETURNING id;`;
+  return r.rows[0].id;
+}
+
+export async function deleteAssignment(id: number) {
+  await ensureSchema();
+  await sql`DELETE FROM job_assignments WHERE id = ${id};`;
+}
+
+/** Jobs a worker is on, whether via a sub-contract or the single-assignee field. */
+export async function listJobsForWorkerAll(userId: number): Promise<ClientJob[]> {
+  await ensureSchema();
+  return (await sql<ClientJob>`
+    SELECT DISTINCT j.* FROM client_jobs j
+    LEFT JOIN job_assignments a ON a.job_id = j.id
+    WHERE j.assigned_user_id = ${userId} OR a.user_id = ${userId}
+    ORDER BY j.created_at DESC LIMIT 100;`).rows;
 }
 
 export async function listInterest(): Promise<JobInterest[]> {

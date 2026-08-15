@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { currentSession } from "@/lib/portal/auth";
 import {
-  listOpenJobs, listJobsForWorker, listInterest, addInterest, removeInterest,
-  getContract, saveContract, findUserById, dbConfigured,
+  listOpenJobs, listJobsForWorkerAll, listInterest, addInterest, removeInterest,
+  getContract, saveContract, findUserById, dbConfigured, listAssignmentsForUser,
 } from "@/lib/portal/db";
 
 export const dynamic = "force-dynamic";
@@ -14,13 +14,13 @@ export async function GET() {
   if (!dbConfigured()) return NextResponse.json({ ok: true, open: [], mine: [], interest: [], contracts: [] });
 
   try {
-    const [open, mine, allInterest] = await Promise.all([
-      listOpenJobs(), listJobsForWorker(s.userId), listInterest(),
+    const [open, mine, allInterest, assignments] = await Promise.all([
+      listOpenJobs(), listJobsForWorkerAll(s.userId), listInterest(), listAssignmentsForUser(s.userId),
     ]);
     const interest = allInterest.filter((i) => i.user_id === s.userId).map((i) => i.job_id);
     const contracts = await Promise.all(mine.map((j) => getContract(j.id, s.userId!)));
     return NextResponse.json({
-      ok: true, open, mine, interest,
+      ok: true, open, mine, interest, assignments,
       contracts: contracts.filter(Boolean).map((c) => ({ jobId: c!.job_id, signedDate: c!.signed_date })),
     });
   } catch (e) {
@@ -61,8 +61,8 @@ export async function POST(req: Request) {
       }
       if (!b.agreed) return NextResponse.json({ ok: false, error: "You must tick the agreement box." }, { status: 400 });
 
-      // Only the assigned worker may sign.
-      const mine = await listJobsForWorker(s.userId);
+      // Only a worker on the job may sign.
+      const mine = await listJobsForWorkerAll(s.userId);
       if (!mine.some((j) => j.id === jobId)) {
         return NextResponse.json({ ok: false, error: "That job isn't assigned to you." }, { status: 403 });
       }

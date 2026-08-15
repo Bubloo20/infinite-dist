@@ -7,9 +7,9 @@ import Link from "next/link";
 export function PortalBackdrop() {
   return (
     <div aria-hidden className="pointer-events-none fixed inset-0 overflow-hidden bg-[#07060f]">
-      <div className="absolute -left-40 -top-40 h-[36rem] w-[36rem] rounded-full bg-[radial-gradient(circle,#4f46e5_0%,transparent_65%)] opacity-50 blur-[90px]" />
-      <div className="absolute -right-40 top-[6%] h-[32rem] w-[32rem] rounded-full bg-[radial-gradient(circle,#b66dc7_0%,transparent_65%)] opacity-40 blur-[90px]" />
-      <div className="absolute bottom-[-18%] left-[35%] h-[30rem] w-[30rem] rounded-full bg-[radial-gradient(circle,#0891b2_0%,transparent_65%)] opacity-30 blur-[90px]" />
+      <div className="absolute -left-40 -top-40 h-[36rem] w-[36rem] animate-aurora-a rounded-full bg-[radial-gradient(circle,#4f46e5_0%,transparent_65%)] opacity-50 blur-[90px]" />
+      <div className="absolute -right-40 top-[6%] h-[32rem] w-[32rem] animate-aurora-b rounded-full bg-[radial-gradient(circle,#b66dc7_0%,transparent_65%)] opacity-40 blur-[90px]" />
+      <div className="absolute bottom-[-18%] left-[35%] h-[30rem] w-[30rem] animate-aurora-c rounded-full bg-[radial-gradient(circle,#0891b2_0%,transparent_65%)] opacity-30 blur-[90px]" />
       <div
         className="absolute inset-0 opacity-[0.35]"
         style={{

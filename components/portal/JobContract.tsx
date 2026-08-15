@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { GlassCard } from "./PortalShell";
-import type { ClientJob } from "@/lib/portal/db";
+import type { ClientJob, JobAssignment } from "@/lib/portal/db";
 
 /** Terms transcribed from the Independent Contractor Agreement. */
 export const CONTRACT_TERMS = [
@@ -100,9 +100,10 @@ function SignaturePad({ onChange }: { onChange: (dataUrl: string | null) => void
 }
 
 export default function JobContract({
-  job, workerName, signedDate, onSigned,
+  job, workerName, signedDate, mine, onSigned,
 }: {
-  job: ClientJob; workerName: string; signedDate?: string | null; onSigned: () => void;
+  job: ClientJob; workerName: string; signedDate?: string | null;
+  mine?: JobAssignment | null; onSigned: () => void;
 }) {
   const [name, setName] = useState(workerName);
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
@@ -149,10 +150,12 @@ export default function JobContract({
       <div className="mt-6 grid gap-3 rounded-2xl border border-white/10 bg-white/[0.04] p-5 sm:grid-cols-2">
         {[
           ["Contractor", workerName],
-          ["Job area", job.area || "—"],
-          ["Leaflet amount", job.quantity ? job.quantity.toLocaleString() : "—"],
-          ["Allocated time", job.allocated_time || "—"],
-          ["Payment amount", job.worker_pay ? `$${Number(job.worker_pay).toFixed(2)}` : "—"],
+          ["Job area", mine?.area_note || job.area || "—"],
+          ["Leaflet amount", (mine?.leaflet_share ?? job.quantity) ? (mine?.leaflet_share ?? job.quantity)!.toLocaleString() : "—"],
+          ["Allocated time", mine?.start_date || mine?.due_date
+            ? `${mine?.start_date ? new Date(mine.start_date).toLocaleDateString("en-AU") : "—"} to ${mine?.due_date ? new Date(mine.due_date).toLocaleDateString("en-AU") : "—"}`
+            : job.allocated_time || "—"],
+          ["Payment amount", (mine?.pay ?? job.worker_pay) ? `$${Number(mine?.pay ?? job.worker_pay).toFixed(2)}` : "—"],
           ["Minimum hours of work", job.min_hours || "—"],
         ].map(([k, v]) => (
           <div key={k}>

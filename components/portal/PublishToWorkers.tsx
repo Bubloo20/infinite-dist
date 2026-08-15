@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { GlassCard } from "./PortalShell";
 import BoundaryMap, { type LatLng } from "./BoundaryMap";
-import type { Agency, ClientJob, PortalUser, JobInterest } from "@/lib/portal/db";
+import type { Agency, ClientJob, PortalUser, JobInterest, JobAssignment } from "@/lib/portal/db";
 
 const input =
   "w-full rounded-xl border border-white/12 bg-white/[0.05] px-4 py-2.5 text-sm text-white placeholder-white/25 outline-none transition focus:border-orchid/60 focus:bg-white/[0.08] [color-scheme:dark]";
@@ -22,9 +22,10 @@ const parsePts = (s: string | null): LatLng[] => {
  * boundary, and either a direct assignment or a marketplace listing.
  */
 export default function PublishToWorkers({
-  jobs, agencies, users, interest, post, del,
+  jobs, agencies, users, interest, assignments, post, del,
 }: {
-  jobs: ClientJob[]; agencies: Agency[]; users: PortalUser[]; interest: JobInterest[];
+  jobs: ClientJob[]; agencies: Agency[]; users: PortalUser[];
+  interest: JobInterest[]; assignments: JobAssignment[];
   post: (body: Record<string, unknown>) => Promise<boolean>;
   del: (entity: string, id: number) => Promise<void>;
 }) {
@@ -146,6 +147,12 @@ export default function PublishToWorkers({
                   The contractor agreement fills in from these details for the worker to read and sign.
                 </p>
               </div>
+
+              <div className="sm:col-span-3">
+                <SubContracts job={job} users={users}
+                  rows={assignments.filter((a) => a.job_id === job.id)}
+                  post={post} del={del} />
+              </div>
             </>
           )}
         </div>
@@ -214,6 +221,91 @@ export default function PublishToWorkers({
           </div>
         </GlassCard>
       )}
+    </div>
+  );
+}
+
+/**
+ * Splits one job between several workers. Each row is its own sub-contract with
+ * its own pay, leaflet share and dates, so three people can run the same job on
+ * different schedules.
+ */
+function SubContracts({ job, users, rows, post, del }: {
+  job: ClientJob; users: PortalUser[]; rows: JobAssignment[];
+  post: (body: Record<string, unknown>) => Promise<boolean>;
+  del: (entity: string, id: number) => Promise<void>;
+}) {
+  const blank = { userId: "", pay: "", leafletShare: "", areaNote: "", startDate: "", dueDate: "" };
+  const [f, setF] = useState(blank);
+
+  const nameOf = (id: number) => users.find((u) => u.id === id)?.full_name || `User ${id}`;
+  const shortDate = (d: string | null) =>
+    d ? new Date(d).toLocaleDateString("en-AU", { day: "2-digit", month: "short" }) : null;
+
+  const taken = rows.reduce((t, r) => t + (r.leaflet_share || 0), 0);
+  const payTotal = rows.reduce((t, r) => t + Number(r.pay || 0), 0);
+  const left = (job.quantity ?? 0) - taken;
+
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h4 className="font-display text-base font-bold text-white">Sub-contracts for this job</h4>
+        <p className="text-[13px] text-white/40">
+          {rows.length
+            ? `${rows.length} worker${rows.length === 1 ? "" : "s"} · $${payTotal.toFixed(2)} allocated${
+                job.quantity ? ` · ${taken.toLocaleString()} of ${job.quantity.toLocaleString()} leaflets shared out` : ""}`
+            : "Split this job between several workers, each on their own pay and dates."}
+        </p>
+      </div>
+
+      {rows.length > 0 && (
+        <div className="mt-4 space-y-2">
+          {rows.map((r) => (
+            <div key={r.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3">
+              <div>
+                <p className="font-semibold text-white">{nameOf(r.user_id)}</p>
+                <p className="text-[13px] text-white/45">
+                  {r.leaflet_share ? `${r.leaflet_share.toLocaleString()} leaflets` : "share not set"}
+                  {r.area_note ? ` · ${r.area_note}` : ""}
+                  {shortDate(r.start_date) ? ` · starts ${shortDate(r.start_date)}` : ""}
+                  {shortDate(r.due_date) ? ` · due ${shortDate(r.due_date)}` : ""}
+                </p>
+              </div>
+              <div className="flex items-center gap-4">
+                <span className="font-display text-lg font-extrabold text-emerald-300">${Number(r.pay || 0).toFixed(2)}</span>
+                <button onClick={() => del("assignment", r.id)} className="text-[13px] text-white/30 transition hover:text-rose-300">Remove</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="mt-4 grid gap-2 sm:grid-cols-6">
+        <select className={input} value={f.userId} onChange={(e) => setF({ ...f, userId: e.target.value })}>
+          <option value="">Worker…</option>
+          {users.filter((u) => !rows.some((r) => r.user_id === u.id)).map((u) => (
+            <option key={u.id} value={u.id}>{u.full_name}</option>
+          ))}
+        </select>
+        <input className={input} placeholder="Pay $" inputMode="decimal" value={f.pay} onChange={(e) => setF({ ...f, pay: e.target.value })} />
+        <input className={input} placeholder={left > 0 ? `Leaflets (${left.toLocaleString()} left)` : "Leaflets"} inputMode="numeric"
+          value={f.leafletShare} onChange={(e) => setF({ ...f, leafletShare: e.target.value })} />
+        <input className={input} placeholder="Their area" value={f.areaNote} onChange={(e) => setF({ ...f, areaNote: e.target.value })} />
+        <label className="block">
+          <span className="mb-1 block text-[11px] font-semibold text-white/35">Start</span>
+          <input className={input} type="date" value={f.startDate} onChange={(e) => setF({ ...f, startDate: e.target.value })} />
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-[11px] font-semibold text-white/35">Due</span>
+          <input className={input} type="date" value={f.dueDate} onChange={(e) => setF({ ...f, dueDate: e.target.value })} />
+        </label>
+        <div className="sm:col-span-6">
+          <button className={btn} disabled={!f.userId}
+            onClick={async () => { if (await post({ entity: "assignment", jobId: job.id, ...f })) setF(blank); }}>
+            Add sub-contract
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

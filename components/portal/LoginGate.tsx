@@ -63,6 +63,7 @@ export default function LoginGate({
   const [teamPassword, setTeamPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState(false);
 
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [showList, setShowList] = useState(false);
@@ -114,8 +115,12 @@ export default function LoginGate({
         ),
       });
       const data = await res.json();
-      if (data.ok) onSuccess(data.role);
-      else {
+      if (data.ok) {
+        // Let the confirmation play before the portal swaps in.
+        setSuccess(true);
+        setTimeout(() => onSuccess(data.role), 900);
+        return;
+      } else {
         setError(data.error || "Something went wrong.");
         setPassword("");
       }
@@ -129,10 +134,22 @@ export default function LoginGate({
   return (
     <div className="relative z-10 flex min-h-[100svh] items-center justify-center px-6 py-16">
       <div className="w-full max-w-md">
-        <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }} className="mb-9 flex justify-center">
-          <PortalMark />
+        <motion.div
+          initial={{ opacity: 0, y: -14, scale: 0.94 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+          className="mb-9 flex justify-center"
+        >
+          <div className="relative">
+            {/* orbiting ring + glow behind the mark */}
+            <div aria-hidden className="animate-orbit pointer-events-none absolute -inset-5 rounded-full border border-dashed border-white/10" />
+            <div aria-hidden className="pointer-events-none absolute -inset-8 rounded-full bg-[radial-gradient(circle,rgba(168,85,247,0.30),transparent_70%)] blur-xl" />
+            <PortalMark />
+          </div>
         </motion.div>
 
+        <div className="relative overflow-hidden rounded-[28px]">
+          <div aria-hidden className="animate-sheen pointer-events-none absolute inset-y-0 -left-1/3 z-10 w-1/3 bg-gradient-to-r from-transparent via-white/[0.07] to-transparent" />
         <GlassCard className="p-8 sm:p-10" delay={0.08}>
           {!isAdmin && (
             <div className="mb-7 grid grid-cols-2 gap-1 rounded-2xl border border-white/10 bg-white/[0.04] p-1">
@@ -217,7 +234,38 @@ export default function LoginGate({
               {busy ? "Please wait…" : isAdmin ? "Sign in" : tab === "signin" ? "Sign in" : "Create account"}
             </button>
           </form>
+
+          {/* Confirmation that plays before the portal loads. */}
+          <AnimatePresence>
+            {success && (
+              <motion.div
+                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                className="absolute inset-0 z-20 grid place-items-center rounded-[28px] bg-[#0b0918]/92 backdrop-blur-sm"
+              >
+                <div className="text-center">
+                  <motion.div
+                    initial={{ scale: 0.5, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+                    transition={{ type: "spring", stiffness: 260, damping: 18 }}
+                    className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-gradient-to-br from-emerald-400 to-teal-500 shadow-[0_16px_44px_-14px_rgba(16,185,129,0.9)]"
+                  >
+                    <motion.svg viewBox="0 0 24 24" className="h-8 w-8" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                      <motion.path d="M5 13l4 4L19 7"
+                        initial={{ pathLength: 0 }} animate={{ pathLength: 1 }}
+                        transition={{ duration: 0.4, delay: 0.12, ease: "easeOut" }} />
+                    </motion.svg>
+                  </motion.div>
+                  <motion.p
+                    initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}
+                    className="mt-4 font-display text-lg font-bold text-white"
+                  >
+                    Signed in
+                  </motion.p>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </GlassCard>
+        </div>
 
         {/* Switch between the two sign-ins, and a way back to the site. */}
         <div className="mt-7 flex flex-col items-center gap-3">

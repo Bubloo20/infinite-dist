@@ -6,6 +6,7 @@ import {
   listClientJobs, upsertClientJob, deleteClientJob,
   assignJob, setJobPublished, setJobBrief, setJobProgress,
   listAgencyPayments, addAgencyPayment, deleteAgencyPayment, listInterest,
+  listAssignments, upsertAssignment, deleteAssignment,
   dbConfigured,
 } from "@/lib/portal/db";
 
@@ -22,10 +23,10 @@ export async function GET() {
   if (!isAdmin()) return NextResponse.json({ ok: false, error: "Admin access required." }, { status: 401 });
   if (!dbConfigured()) return NextResponse.json({ ok: true, dbConfigured: false, agencies: [], agents: [], jobs: [], agencyPayments: [] });
   try {
-    const [agencies, agents, jobs, agencyPayments, interest] = await Promise.all([
-      listAgencies(), listAgents(), listClientJobs(), listAgencyPayments(), listInterest(),
+    const [agencies, agents, jobs, agencyPayments, interest, assignments] = await Promise.all([
+      listAgencies(), listAgents(), listClientJobs(), listAgencyPayments(), listInterest(), listAssignments(),
     ]);
-    return NextResponse.json({ ok: true, dbConfigured: true, agencies, agents, jobs, agencyPayments, interest });
+    return NextResponse.json({ ok: true, dbConfigured: true, agencies, agents, jobs, agencyPayments, interest, assignments });
   } catch (e) {
     return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "Query failed." }, { status: 500 });
   }
@@ -98,6 +99,18 @@ export async function POST(req: Request) {
         }
         return NextResponse.json({ ok: true, id });
       }
+      case "assignment": {
+        const jobId = n(b.jobId);
+        const userId = n(b.userId);
+        if (!jobId || !userId) return NextResponse.json({ ok: false, error: "Job and worker are required." }, { status: 400 });
+        const id = await upsertAssignment({
+          jobId, userId, pay: n(b.pay), leafletShare: n(b.leafletShare),
+          areaNote: (b.areaNote as string) || null,
+          startDate: (b.startDate as string) || null, dueDate: (b.dueDate as string) || null,
+          status: (b.status as string) || "assigned",
+        });
+        return NextResponse.json({ ok: true, id });
+      }
       case "agencyPayment": {
         const agencyId = n(b.agencyId);
         const amount = n(b.amount);
@@ -130,6 +143,7 @@ export async function DELETE(req: Request) {
     else if (entity === "agent") await deleteAgent(id);
     else if (entity === "job") await deleteClientJob(id);
     else if (entity === "agencyPayment") await deleteAgencyPayment(id);
+    else if (entity === "assignment") await deleteAssignment(id);
     else return NextResponse.json({ ok: false, error: "Unknown entity." }, { status: 400 });
     return NextResponse.json({ ok: true });
   } catch (e) {

@@ -9,7 +9,7 @@ import { unpackLinks, type WorkLog, type Payment, type PortalUser, type FinanceE
 import ClientsTab, { ClientJobsTab } from "./ClientsTab";
 import TrendChart, { type TrendPoint } from "./TrendChart";
 import PublishToWorkers from "./PublishToWorkers";
-import type { JobInterest } from "@/lib/portal/db";
+import type { JobInterest, JobAssignment } from "@/lib/portal/db";
 
 const money = (v: number) => `$${v.toFixed(2)}`;
 const num = (v: string | null) => (v === null ? 0 : Number(v) || 0);
@@ -46,6 +46,7 @@ export default function AdminDashboard({ onSignOut }: { onSignOut: () => void })
   const [clientJobs, setClientJobs] = useState<ClientJob[]>([]);
   const [agencyPayments, setAgencyPayments] = useState<AgencyPayment[]>([]);
   const [interest, setInterest] = useState<JobInterest[]>([]);
+  const [assignments, setAssignments] = useState<JobAssignment[]>([]);
   const [dbOn, setDbOn] = useState(true);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<"clientjobs" | "agencies" | "workers" | "shifts" | "payments" | "finance">("clientjobs");
@@ -64,7 +65,7 @@ export default function AdminDashboard({ onSignOut }: { onSignOut: () => void })
         setLogs(d.logs || []); setUsers(d.users || []); setPayments(d.payments || []);
         setDbOn(Boolean(d.dbConfigured)); setFinance(f.entries || []);
         setAgencies(c.agencies || []); setAgents(c.agents || []);
-        setClientJobs(c.jobs || []); setAgencyPayments(c.agencyPayments || []); setInterest(c.interest || []);
+        setClientJobs(c.jobs || []); setAgencyPayments(c.agencyPayments || []); setInterest(c.interest || []); setAssignments(c.assignments || []);
       })
       .catch(() => setMsg("Couldn't load data."))
       .finally(() => setLoading(false));
@@ -245,7 +246,7 @@ export default function AdminDashboard({ onSignOut }: { onSignOut: () => void })
         <JobsTab logs={filtered} q={q} setQ={setQ} post={post} />
       ) : tab === "workers" ? (
         <div className="space-y-4">
-          <PublishToWorkers jobs={clientJobs} agencies={agencies} users={users} interest={interest} post={postClient} del={delClient} />
+          <PublishToWorkers jobs={clientJobs} agencies={agencies} users={users} interest={interest} assignments={assignments} post={postClient} del={delClient} />
           <WorkersTab users={users} totals={userTotals} post={post} reload={load} setMsg={setMsg} />
         </div>
       ) : tab === "payments" ? (
