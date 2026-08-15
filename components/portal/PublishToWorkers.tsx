@@ -235,8 +235,23 @@ export function SubContracts({ job, users, rows, post, del }: {
   post: (body: Record<string, unknown>) => Promise<boolean>;
   del: (entity: string, id: number) => Promise<void>;
 }) {
-  const blank = { userId: "", pay: "", leafletShare: "", areaNote: "", startDate: "", dueDate: "" };
+  const blank = {
+    userId: "", pay: "", leafletShare: "", areaNote: "",
+    startDate: "", dueDate: "", minHours: "", allocatedTime: "", mapImage: "",
+  };
   const [f, setF] = useState(blank);
+  const [imgErr, setImgErr] = useState("");
+
+  /** Area diagrams are stored inline, so keep them small. */
+  const readImage = (file: File | undefined) => {
+    setImgErr("");
+    if (!file) return;
+    if (!file.type.startsWith("image/")) { setImgErr("That file isn't an image."); return; }
+    if (file.size > 1_500_000) { setImgErr("Image is over 1.5MB — please shrink it first."); return; }
+    const fr = new FileReader();
+    fr.onload = () => setF((p) => ({ ...p, mapImage: String(fr.result || "") }));
+    fr.readAsDataURL(file);
+  };
 
   const nameOf = (id: number) => users.find((u) => u.id === id)?.full_name || `User ${id}`;
   const shortDate = (d: string | null) =>
@@ -270,6 +285,11 @@ export function SubContracts({ job, users, rows, post, del }: {
                   {shortDate(r.start_date) ? ` · starts ${shortDate(r.start_date)}` : ""}
                   {shortDate(r.due_date) ? ` · due ${shortDate(r.due_date)}` : ""}
                 </p>
+                <p className="text-[13px] text-white/35">
+                  {r.min_hours ? `min ${r.min_hours} hrs` : "no minimum set"}
+                  {r.allocated_time ? ` · ${r.allocated_time}` : ""}
+                  {r.map_image ? " · area diagram attached" : ""}
+                </p>
               </div>
               <div className="flex items-center gap-4">
                 <span className="font-display text-lg font-extrabold text-emerald-300">${Number(r.pay || 0).toFixed(2)}</span>
@@ -299,6 +319,29 @@ export function SubContracts({ job, users, rows, post, del }: {
           <span className="mb-1 block text-[11px] font-semibold text-white/35">Due</span>
           <input className={input} type="date" value={f.dueDate} onChange={(e) => setF({ ...f, dueDate: e.target.value })} />
         </label>
+
+        <label className="block">
+          <span className="mb-1 block text-[11px] font-semibold text-white/35">Min hours</span>
+          <input className={input} placeholder="e.g. 6" value={f.minHours} onChange={(e) => setF({ ...f, minHours: e.target.value })} />
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-[11px] font-semibold text-white/35">Allocated time</span>
+          <input className={input} placeholder="e.g. 3 days" value={f.allocatedTime} onChange={(e) => setF({ ...f, allocatedTime: e.target.value })} />
+        </label>
+        <label className="block sm:col-span-2">
+          <span className="mb-1 block text-[11px] font-semibold text-white/35">Area diagram (image, optional)</span>
+          <input type="file" accept="image/*" onChange={(e) => readImage(e.target.files?.[0])}
+            className="w-full rounded-xl border border-white/12 bg-white/[0.05] px-3 py-2 text-[13px] text-white/70 file:mr-3 file:rounded-lg file:border-0 file:bg-white/10 file:px-3 file:py-1.5 file:text-[12px] file:font-bold file:text-white" />
+        </label>
+        {f.mapImage && (
+          <div className="sm:col-span-6 flex items-center gap-3">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={f.mapImage} alt="Area diagram preview" className="h-24 rounded-lg border border-white/12 object-contain" />
+            <button type="button" onClick={() => setF({ ...f, mapImage: "" })} className="text-[13px] text-white/40 hover:text-rose-300">Remove image</button>
+          </div>
+        )}
+        {imgErr && <p className="sm:col-span-6 text-[13px] text-rose-300">{imgErr}</p>}
+
         <div className="sm:col-span-6">
           <button className={btn} disabled={!f.userId}
             onClick={async () => { if (await post({ entity: "assignment", jobId: job.id, ...f })) setF(blank); }}>

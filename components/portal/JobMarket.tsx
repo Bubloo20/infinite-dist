@@ -28,7 +28,8 @@ function Brief({ job, mine }: { job: ClientJob; mine?: JobAssignment | null }) {
         ["Your pay", money(mine.pay ?? job.worker_pay)],
         ["Start", shortDate(mine.start_date)],
         ["Due", shortDate(mine.due_date)],
-        ["Minimum hours", job.min_hours || "—"],
+        ["Minimum hours", mine.min_hours || job.min_hours || "—"],
+        ["Allocated time", mine.allocated_time || job.allocated_time || "—"],
       ]
     : [
         ["Area", job.area || "—"],
@@ -209,6 +210,14 @@ export default function JobMarket({ workerName }: { workerName: string }) {
                     <div className="mt-5">
                       <p className="mb-2 text-[13px] font-semibold uppercase tracking-[0.1em] text-white/50">Delivery area — zoom and pan</p>
                       <BoundaryMap boundary={pts} center={parseCenter(j.map_center)} height={400} />
+                    </div>
+                  )}
+                  {mineFor(j.id)?.map_image && (
+                    <div className="mt-5">
+                      <p className="mb-2 text-[13px] font-semibold uppercase tracking-[0.1em] text-white/50">Your area diagram</p>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={mineFor(j.id)!.map_image!} alt="Area diagram for your section"
+                        className="w-full rounded-2xl border border-white/12" />
                     </div>
                   )}
                 </GlassCard>

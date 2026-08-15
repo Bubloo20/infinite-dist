@@ -66,6 +66,8 @@ export async function POST(req: Request) {
         areaNote: existing?.area_note ?? null,
         startDate: existing?.start_date ?? null,
         dueDate: existing?.due_date ?? null,
+        minHours: existing?.min_hours ?? null,
+        allocatedTime: existing?.allocated_time ?? null,
       });
       return NextResponse.json({ ok: true });
     }

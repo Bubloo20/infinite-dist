@@ -108,6 +108,9 @@ export async function POST(req: Request) {
           areaNote: (b.areaNote as string) || null,
           startDate: (b.startDate as string) || null, dueDate: (b.dueDate as string) || null,
           status: (b.status as string) || "assigned",
+          minHours: (b.minHours as string) || null,
+          allocatedTime: (b.allocatedTime as string) || null,
+          mapImage: (b.mapImage as string) || null,
         });
         return NextResponse.json({ ok: true, id });
       }

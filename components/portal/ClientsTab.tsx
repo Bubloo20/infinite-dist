@@ -528,13 +528,16 @@ function ClientJobRow({ job, agencyName, agentName, expenses, users, assignments
               <input className={input} inputMode="numeric" defaultValue={job.delivered_count ?? ""} placeholder={job.status === "completed" ? `all ${job.quantity ?? 0}` : "e.g. 300"}
                 onBlur={(e) => { if (String(e.target.value) !== String(job.delivered_count ?? "")) post({ entity: "job", id: job.id, ...jobPayload(job), jobNumber: job.job_number, deliveredCount: e.target.value }); }} />
             </label>
-            <div className="flex items-end">
-              <p className="text-[13px] text-white/40">
-                {job.quantity
-                  ? remaining > 0 ? `${remaining.toLocaleString()} still to go` : "All delivered"
-                  : "Set a quantity to track progress"}
-              </p>
-            </div>
+            <label className="block">
+              <span className="mb-1 block text-[12px] font-semibold text-rose-300">Yet to be dispatched</span>
+              <input
+                readOnly
+                value={qty ? remaining.toLocaleString() : ""}
+                placeholder={qty ? "" : "set a quantity"}
+                aria-label="Yet to be dispatched"
+                className={`${input} cursor-default border-rose-400/30 bg-rose-500/10 text-rose-200`}
+              />
+            </label>
           </div>
           {/* Assign the work: who does what, for how much, by when. */}
           <div className="mb-5">

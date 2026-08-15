@@ -224,6 +224,11 @@ export async function ensureSchema() {
     );
   `;
 
+  // Per-sub-contract hours, timeframe and an optional area diagram.
+  await sql`ALTER TABLE job_assignments ADD COLUMN IF NOT EXISTS min_hours TEXT;`;
+  await sql`ALTER TABLE job_assignments ADD COLUMN IF NOT EXISTS allocated_time TEXT;`;
+  await sql`ALTER TABLE job_assignments ADD COLUMN IF NOT EXISTS map_image TEXT;`;
+
   // Workers registering interest in a published job.
   await sql`
     CREATE TABLE IF NOT EXISTS job_interest (
@@ -319,6 +324,7 @@ export type JobAssignment = {
   id: number; job_id: number; user_id: number;
   pay: string | null; leaflet_share: number | null; area_note: string | null;
   start_date: string | null; due_date: string | null;
+  min_hours: string | null; allocated_time: string | null; map_image: string | null;
   status: string; created_at: string;
 };
 
@@ -469,15 +475,22 @@ export async function upsertAssignment(a: {
   id?: number | null; jobId: number; userId: number; pay?: number | null;
   leafletShare?: number | null; areaNote?: string | null;
   startDate?: string | null; dueDate?: string | null; status?: string | null;
+  minHours?: string | null; allocatedTime?: string | null; mapImage?: string | null;
 }) {
   await ensureSchema();
   const r = await sql<{ id: number }>`
-    INSERT INTO job_assignments (job_id, user_id, pay, leaflet_share, area_note, start_date, due_date, status)
-    VALUES (${a.jobId}, ${a.userId}, ${a.pay ?? null}, ${a.leafletShare ?? null}, ${a.areaNote ?? null},
-            ${a.startDate || null}, ${a.dueDate || null}, ${a.status || 'assigned'})
+    INSERT INTO job_assignments
+      (job_id, user_id, pay, leaflet_share, area_note, start_date, due_date, status,
+       min_hours, allocated_time, map_image)
+    VALUES
+      (${a.jobId}, ${a.userId}, ${a.pay ?? null}, ${a.leafletShare ?? null}, ${a.areaNote ?? null},
+       ${a.startDate || null}, ${a.dueDate || null}, ${a.status || 'assigned'},
+       ${a.minHours ?? null}, ${a.allocatedTime ?? null}, ${a.mapImage ?? null})
     ON CONFLICT (job_id, user_id) DO UPDATE SET
       pay = EXCLUDED.pay, leaflet_share = EXCLUDED.leaflet_share, area_note = EXCLUDED.area_note,
-      start_date = EXCLUDED.start_date, due_date = EXCLUDED.due_date, status = EXCLUDED.status
+      start_date = EXCLUDED.start_date, due_date = EXCLUDED.due_date, status = EXCLUDED.status,
+      min_hours = EXCLUDED.min_hours, allocated_time = EXCLUDED.allocated_time,
+      map_image = COALESCE(EXCLUDED.map_image, job_assignments.map_image)
     RETURNING id;`;
   return r.rows[0].id;
 }

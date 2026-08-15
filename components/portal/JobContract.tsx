@@ -152,11 +152,11 @@ export default function JobContract({
           ["Contractor", workerName],
           ["Job area", mine?.area_note || job.area || "—"],
           ["Leaflet amount", (mine?.leaflet_share ?? job.quantity) ? (mine?.leaflet_share ?? job.quantity)!.toLocaleString() : "—"],
-          ["Allocated time", mine?.start_date || mine?.due_date
+          ["Allocated time", mine?.allocated_time ? mine.allocated_time : mine?.start_date || mine?.due_date
             ? `${mine?.start_date ? new Date(mine.start_date).toLocaleDateString("en-AU") : "—"} to ${mine?.due_date ? new Date(mine.due_date).toLocaleDateString("en-AU") : "—"}`
             : job.allocated_time || "—"],
           ["Payment amount", (mine?.pay ?? job.worker_pay) ? `$${Number(mine?.pay ?? job.worker_pay).toFixed(2)}` : "—"],
-          ["Minimum hours of work", job.min_hours || "—"],
+          ["Minimum hours of work", mine?.min_hours || job.min_hours || "—"],
         ].map(([k, v]) => (
           <div key={k}>
             <p className="text-[11px] font-bold uppercase tracking-wide text-white/35">{k}</p>
