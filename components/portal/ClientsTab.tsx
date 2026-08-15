@@ -285,7 +285,12 @@ export function ClientJobsTab({ agencies, agents, jobs, workLogs, users, post, d
             <option value="">Agency…</option>
             {agencies.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
           </select>
-          <select className={input} value={f.agentId} onChange={(e) => setF({ ...f, agentId: e.target.value })}>
+          <select className={input} value={f.agentId} onChange={(e) => {
+              const ag = agents.find((x) => String(x.id) === e.target.value);
+              const agencyId = ag ? String(ag.agency_id) : f.agencyId;
+              const rate = agencies.find((x) => String(x.id) === agencyId)?.price_per_leaflet;
+              setF({ ...f, agentId: e.target.value, agencyId, ratePerLeaflet: rate ? String(rate) : f.ratePerLeaflet });
+            }}>
             <option value="">Agent (optional)…</option>
             {agents.filter((g) => String(g.agency_id) === f.agencyId).map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
           </select>
@@ -383,6 +388,9 @@ function ClientJobRow({ job, agencyName, agentName, expenses, users, post, del }
   const [open, setOpen] = useState(false);
   const s = STATUS[job.status];
   const inv = effectiveInvoice(job);
+  // A completed job is fully delivered unless a partial count was entered.
+  const delivered = job.delivered_count ?? (job.status === "completed" ? (job.quantity ?? 0) : 0);
+  const remaining = Math.max(0, (job.quantity ?? 0) - delivered);
   const revenue = num(job.amount);
   const labour = expenses.reduce((t, w) => t + num(w.amount), 0);
   const profit = revenue - labour;
@@ -419,15 +427,19 @@ function ClientJobRow({ job, agencyName, agentName, expenses, users, post, del }
             <div className="mt-3 max-w-sm">
               <div className="flex items-center justify-between text-[12px]">
                 <span className="text-white/55">
-                  <span className="font-semibold text-emerald-300">{(job.delivered_count ?? 0).toLocaleString()}</span> delivered
-                  {" · "}
-                  <span className="font-semibold text-amber-300">{Math.max(0, job.quantity - (job.delivered_count ?? 0)).toLocaleString()}</span> remaining
+                  <span className="font-semibold text-emerald-300">{delivered.toLocaleString()}</span> delivered
+                  {remaining > 0 && (
+                    <>
+                      {" · "}
+                      <span className="font-semibold text-amber-300">{remaining.toLocaleString()}</span> remaining
+                    </>
+                  )}
                 </span>
                 <span className="text-white/35">of {job.quantity.toLocaleString()}</span>
               </div>
               <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-white/10">
                 <div className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-emerald-300"
-                  style={{ width: `${Math.min(100, ((job.delivered_count ?? 0) / job.quantity) * 100)}%` }} />
+                  style={{ width: `${Math.min(100, (delivered / job.quantity) * 100)}%` }} />
               </div>
             </div>
           ) : null}
@@ -486,12 +498,14 @@ function ClientJobRow({ job, agencyName, agentName, expenses, users, post, del }
             </label>
             <label className="block">
               <span className="mb-1 block text-[12px] font-semibold text-white/40">Leaflets delivered so far</span>
-              <input className={input} inputMode="numeric" defaultValue={job.delivered_count ?? ""} placeholder="e.g. 300"
+              <input className={input} inputMode="numeric" defaultValue={job.delivered_count ?? ""} placeholder={job.status === "completed" ? `all ${job.quantity ?? 0}` : "e.g. 300"}
                 onBlur={(e) => { if (String(e.target.value) !== String(job.delivered_count ?? "")) post({ entity: "job", id: job.id, ...jobPayload(job), jobNumber: job.job_number, deliveredCount: e.target.value }); }} />
             </label>
             <div className="flex items-end">
               <p className="text-[13px] text-white/40">
-                {job.quantity ? `${Math.max(0, job.quantity - (job.delivered_count ?? 0)).toLocaleString()} still to go` : "Set a quantity to track progress"}
+                {job.quantity
+                  ? remaining > 0 ? `${remaining.toLocaleString()} still to go` : "All delivered"
+                  : "Set a quantity to track progress"}
               </p>
             </div>
           </div>

@@ -15,6 +15,17 @@ export default function PortalPage() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<"jobs" | "log" | "earnings">("jobs");
   const [refreshKey, setRefreshKey] = useState(0);
+  const [impersonating, setImpersonating] = useState(false);
+
+  // Set by the admin "View as" action so we can offer a way back.
+  useEffect(() => {
+    setImpersonating(document.cookie.split("; ").some((c) => c.startsWith("idp_impersonating=1")));
+  }, []);
+
+  const returnToAdmin = async () => {
+    await fetch("/api/portal/admin/impersonate", { method: "DELETE" });
+    window.location.href = "/portal/admin";
+  };
 
   const loadSession = useCallback(() => {
     fetch("/api/portal/session")
@@ -44,6 +55,18 @@ export default function PortalPage() {
         <LoginGate mode="worker" onSuccess={() => { setLoading(true); loadSession(); }} />
       ) : (
         <div className="relative z-10 mx-auto w-full max-w-3xl px-6 py-14 sm:py-20">
+          {impersonating && (
+            <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-400/30 bg-amber-500/10 px-5 py-3.5">
+              <p className="text-sm text-amber-100">
+                <span className="font-bold">Viewing as {fullName || "a worker"}</span> — changes you make here are saved to their account.
+              </p>
+              <button onClick={returnToAdmin}
+                className="rounded-xl bg-amber-400/90 px-4 py-2 text-[13px] font-bold text-[#2b1a02] transition hover:bg-amber-300">
+                ← Return to admin dashboard
+              </button>
+            </div>
+          )}
+
           <div className="mb-10 flex flex-wrap items-center justify-between gap-4">
             <PortalMark small />
             <div className="flex items-center gap-3">

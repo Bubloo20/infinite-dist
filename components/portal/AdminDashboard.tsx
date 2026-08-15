@@ -211,9 +211,9 @@ export default function AdminDashboard({ onSignOut }: { onSignOut: () => void })
       <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <Stat label="Agencies owe me" value={money(totals.agenciesOwe)} tone="accent" />
         <Stat label="Owed to team" value={money(totals.owed)} tone="owed" />
-        <Stat label="Paid to team" value={money(totals.paid)} tone="paid" />
+        <Stat label="Paid to team" value={money(totals.paid)} />
         <Stat label="Revenue" value={money(totals.revenue)} />
-        <Stat label="Profit" value={money(totals.profit)} />
+        <Stat label="Profit" value={money(totals.profit)} tone="paid" />
       </div>
 
       {!dbOn && (
