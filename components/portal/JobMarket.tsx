@@ -183,6 +183,7 @@ export default function JobMarket({ workerName, only }: {
   }, []);
   const [viewing, setViewing] = useState<number | null>(null);
   const [shut, setShut] = useState<number[]>([]);
+  const [collapsedOnce, setCollapsedOnce] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const isShut = (id: number) => shut.includes(id);
   const toggleShut = (id: number) =>
@@ -310,6 +311,22 @@ export default function JobMarket({ workerName, only }: {
     const rank = (e: { a: JobAssignment | null }) => (e.a?.status === "accepted" ? 1 : 0);
     return out.sort((x, y) => rank(x) - rank(y) || (y.a?.id ?? 0) - (x.a?.id ?? 0));
   })();
+
+  /**
+   * Work already taken on opens folded — it's been read once and the details
+   * are known. Anything new stays open so it can't be missed.
+   */
+  useEffect(() => {
+    if (loading || collapsedOnce || !assignments.length) return;
+    const seen = (id: number) => {
+      try { return localStorage.getItem(`idp_contract_seen_${id}`) === "1"; } catch { return false; }
+    };
+    const fold = assignments
+      .filter((a) => a.status === "accepted" || contracts.some((c) => c.assignmentId === a.id) || seen(a.id))
+      .map((a) => a.id);
+    if (fold.length) setShut(fold);
+    setCollapsedOnce(true);
+  }, [loading, collapsedOnce, assignments, contracts]);
 
   const logsFor = (jobId: number, assignmentId?: number | null) =>
     logs.filter((l) => (assignmentId ? l.assignmentId === assignmentId : l.jobId === jobId && !l.assignmentId));

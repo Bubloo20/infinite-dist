@@ -153,6 +153,25 @@ async function migrateSchema(): Promise<void> {
   // the piece of work. Where the worker holds exactly one on that job it's
   // unambiguous, so attach it — otherwise a fresh sub-contract would inherit a
   // signature that wasn't given for it.
+  // Shifts submitted before marking-done booked the pay have no amount, so they
+  // read as "still to be priced" and never reach what the worker is owed. Fill
+  // them from their sub-contract; anything already priced is left alone.
+  await sql`
+    UPDATE work_logs w
+       SET amount = a.pay
+      FROM job_assignments a
+     WHERE w.amount IS NULL
+       AND w.paid_on IS NULL
+       AND a.pay IS NOT NULL
+       AND (
+         w.assignment_id = a.id
+         OR (w.assignment_id IS NULL
+             AND w.client_job_id = a.job_id
+             AND w.user_id = a.user_id
+             AND (SELECT COUNT(*) FROM job_assignments x
+                   WHERE x.job_id = a.job_id AND x.user_id = a.user_id) = 1)
+       );`;
+
   // It belongs to the sub-contract that existed when it was signed — the
   // earliest one — so later additions still need signing of their own.
   await sql`

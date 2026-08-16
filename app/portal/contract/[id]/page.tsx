@@ -30,6 +30,8 @@ export default function WorkerContractPage() {
   const [who, setWho] = useState<string>("");
   const [signed, setSigned] = useState<{ signedName: string; signaturePng: string; signedDate: string; schedule: string | null } | null>(null);
   const [state, setState] = useState<"loading" | "ok" | "error">("loading");
+  // No signature file in place yet — fall back to a signing line.
+  const [repMissing, setRepMissing] = useState(false);
 
   useEffect(() => {
     fetch(`/api/portal/me/contract?jobId=${id}${assignmentId ? `&assignmentId=${assignmentId}` : ""}`)
@@ -158,10 +160,18 @@ export default function WorkerContractPage() {
             <p className="text-[13px] font-bold uppercase tracking-wide text-ink/50">
               Infinite Distribution representative
             </p>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/images/signature.png" alt="Sarvesh Mohanrajh"
-              className="mt-2 h-24 w-full object-contain object-left"
-              onError={(ev) => { (ev.currentTarget as HTMLImageElement).style.display = "none"; }} />
+            {repMissing ? (
+              <div className="mt-2 flex h-24 items-end">
+                <span className="w-full border-b border-slate-400 pb-1 text-[13px] text-ink/40 print:text-ink/60">
+                  Signature
+                </span>
+              </div>
+            ) : (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img src="/images/signature.png" alt="Sarvesh Mohanrajh"
+                className="mt-2 h-24 w-full object-contain object-left"
+                onError={() => setRepMissing(true)} />
+            )}
             <p className="mt-1 font-semibold text-ink">Sarvesh Mohanrajh</p>
             <p className="text-[14px] text-ink/70">Date: {dateAu(drawnUp)}</p>
           </div>

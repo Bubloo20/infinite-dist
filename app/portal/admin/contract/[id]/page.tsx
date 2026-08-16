@@ -13,6 +13,33 @@ type Data = {
   worker?: string | null;
 };
 
+/**
+ * The countersignature. The image lives at public/images/signature.png — with
+ * no file there it falls back to a signing line rather than a blank gap, so a
+ * missing file is obvious instead of silently printing an unsigned contract.
+ */
+function RepSignature({ date }: { date: string }) {
+  const [missing, setMissing] = useState(false);
+  return (
+    <>
+      {missing ? (
+        <div className="mt-2 flex h-24 items-end">
+          <span className="w-full border-b border-slate-400 pb-1 text-[13px] text-ink/40 print:text-ink/60">
+            Signature
+          </span>
+        </div>
+      ) : (
+        /* eslint-disable-next-line @next/next/no-img-element */
+        <img src="/images/signature.png" alt="Sarvesh Mohanrajh"
+          className="mt-2 h-24 w-full object-contain object-left"
+          onError={() => setMissing(true)} />
+      )}
+      <p className="mt-1 font-semibold text-ink">Sarvesh Mohanrajh</p>
+      <p className="text-[14px] text-ink/70">Date: {date}</p>
+    </>
+  );
+}
+
 const dateAu = (d: string | null) =>
   d ? new Date(d).toLocaleDateString("en-AU", { day: "2-digit", month: "long", year: "numeric" }) : "—";
 
@@ -121,8 +148,7 @@ export default function SignedContractPage() {
           </div>
           <div>
             <p className="text-[13px] font-bold uppercase tracking-wide text-ink/50">Infinite Distribution representative</p>
-            <div className="mt-2 h-24 rounded border border-dashed border-slate-300" />
-            <p className="mt-2 text-[14px] text-ink/70">Date: ____________________</p>
+            <RepSignature date={dateAu(d.contract.signed_date)} />
           </div>
         </div>
 

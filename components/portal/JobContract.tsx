@@ -151,6 +151,7 @@ export default function JobContract({
   const [schedule, setSchedule] = useState<Record<string, { start: string; end: string }>>({});
   const [openDay, setOpenDay] = useState<string | null>(null);
   const [saved, setSaved] = useState("");
+  const [toast, setToast] = useState(false);
   const [weekStart, setWeekStart] = useState(() => weekStartOf(mine?.start_date ? new Date(mine.start_date) : new Date()));
 
   const minHours = parseMinHours(mine?.min_hours || job.min_hours);
@@ -172,6 +173,15 @@ export default function JobContract({
       }
     } catch { /* nothing saved */ }
   }, [job.id]);
+
+  // Let them know the signing date is fixed, once, rather than leaving them
+  // hunting for a field that isn't editable.
+  useEffect(() => {
+    if (signedDate) return;
+    setToast(true);
+    const t = setTimeout(() => setToast(false), 5000);
+    return () => clearTimeout(t);
+  }, [signedDate]);
 
   useEffect(() => {
     if (!autoOpen || signedDate) return;
@@ -305,28 +315,18 @@ export default function JobContract({
   }
 
   return (
-    <GlassCard className="p-6 sm:p-8">
+    <GlassCard className="relative p-6 sm:p-8">
+      {toast && (
+        <div className="pointer-events-none absolute right-4 top-4 z-20 flex items-center gap-2 rounded-xl border border-orchid/40 bg-[#1b1430] px-4 py-2.5 text-[13px] font-semibold text-white/85 shadow-[0_18px_40px_-16px_rgba(0,0,0,0.9)]">
+          <span className="text-orchid">●</span>
+          Date set to today for signing
+        </div>
+      )}
       <p className="text-xs font-bold uppercase tracking-[0.16em] text-orchid">Independent contractor agreement</p>
       <h3 className="mt-3 font-display text-2xl font-extrabold tracking-tight text-white">Terms for this job</h3>
-      <p className="mt-2 text-sm text-white/50">Infinite Distribution · ABN 66 177 274 211</p>
-
-      <div className="mt-6 grid gap-3 rounded-2xl border border-white/10 bg-white/[0.04] p-5 sm:grid-cols-2">
-        {[
-          ["Contractor", workerName],
-          ["Job area", mine?.area_note || job.area || "—"],
-          ["Leaflet amount", (mine?.leaflet_share ?? job.quantity) ? (mine?.leaflet_share ?? job.quantity)!.toLocaleString() : "—"],
-          ["Allocated time", mine?.start_date || mine?.due_date
-            ? `${mine?.start_date ? new Date(mine.start_date).toLocaleDateString("en-AU") : "—"} to ${mine?.due_date ? new Date(mine.due_date).toLocaleDateString("en-AU") : "—"}`
-            : mine?.allocated_time || job.allocated_time || "—"],
-          ["Payment amount", (mine?.pay ?? job.worker_pay) ? `$${Number(mine?.pay ?? job.worker_pay).toFixed(2)}` : "—"],
-          ["Minimum hours of work", mine?.min_hours || job.min_hours || "—"],
-        ].map(([k, v]) => (
-          <div key={k}>
-            <p className="text-[11px] font-bold uppercase tracking-wide text-white/35">{k}</p>
-            <p className="mt-0.5 font-semibold text-white">{v}</p>
-          </div>
-        ))}
-      </div>
+      <p className="mt-2 text-sm text-white/50">
+        Infinite Distribution · ABN 66 177 274 211 · for {workerName || "you"}
+      </p>
 
       <div className={`mt-6 rounded-2xl border p-5 ${
         seen ? "border-emerald-400/30 bg-emerald-500/[0.07]" : "border-orchid/40 bg-orchid/[0.08]"}`}>
@@ -463,8 +463,11 @@ export default function JobContract({
         </div>
         <div>
           <label className="mb-2 block text-[13px] font-semibold uppercase tracking-[0.1em] text-white/50">Date</label>
-          <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
-            className="w-full rounded-2xl border border-white/12 bg-white/[0.05] px-5 py-3 text-white outline-none focus:border-orchid/60 [color-scheme:dark]" />
+          {/* The date a contract is signed is the day it's signed — not a choice. */}
+          <p className="w-full cursor-default rounded-2xl border border-white/12 bg-white/[0.03] px-5 py-3 text-white/70">
+            {new Date(`${date}T00:00:00`).toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" })}
+          </p>
+          <p className="mt-1.5 text-[12px] text-white/35">Set to today automatically.</p>
         </div>
         <div className="sm:col-span-2">
           <label className="mb-2 block text-[13px] font-semibold uppercase tracking-[0.1em] text-white/50">Contractor signature</label>
