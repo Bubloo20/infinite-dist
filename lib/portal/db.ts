@@ -698,6 +698,13 @@ export async function getContract(jobId: number, userId: number): Promise<JobCon
     SELECT * FROM job_contracts WHERE job_id=${jobId} AND user_id=${userId} LIMIT 1;`).rows[0] || null;
 }
 
+/** The agreement for one sub-contract, if it's been signed. */
+export async function getContractForAssignment(assignmentId: number): Promise<JobContract | null> {
+  await ensureSchema();
+  return (await sql<JobContract>`
+    SELECT * FROM job_contracts WHERE assignment_id = ${assignmentId} LIMIT 1;`).rows[0] || null;
+}
+
 export async function saveContract(c: {
   jobId: number; userId: number; assignmentId?: number | null; signedName: string;
   signaturePng: string; signedDate: string; schedule?: string | null;

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { CONTRACT_TERMS } from "@/components/portal/JobContract";
 import type { ClientJob, JobAssignment } from "@/lib/portal/db";
@@ -23,6 +23,8 @@ const scheduleDay = (k: string) => {
  */
 export default function WorkerContractPage() {
   const { id } = useParams<{ id: string }>();
+  // Which sub-contract this copy is for — a worker can hold several on one job.
+  const assignmentId = useSearchParams().get("a");
   const [job, setJob] = useState<ClientJob | null>(null);
   const [mine, setMine] = useState<JobAssignment | null>(null);
   const [who, setWho] = useState<string>("");
@@ -30,7 +32,7 @@ export default function WorkerContractPage() {
   const [state, setState] = useState<"loading" | "ok" | "error">("loading");
 
   useEffect(() => {
-    fetch(`/api/portal/me/contract?jobId=${id}`)
+    fetch(`/api/portal/me/contract?jobId=${id}${assignmentId ? `&assignmentId=${assignmentId}` : ""}`)
       .then((r) => r.json())
       .then((d) => {
         if (!d.ok) { setState("error"); return; }
@@ -40,7 +42,7 @@ export default function WorkerContractPage() {
         try { localStorage.setItem(`idp_contract_seen_${id}`, "1"); } catch { /* private mode */ }
       })
       .catch(() => setState("error"));
-  }, [id]);
+  }, [id, assignmentId]);
 
   if (state === "loading") return <div className="grid min-h-screen place-items-center bg-white text-ink">Loading…</div>;
   if (state === "error" || !job) {
@@ -73,7 +75,7 @@ export default function WorkerContractPage() {
   return (
     <div className="min-h-screen bg-slate-100 py-8 print:bg-white print:py-0">
       <div className="mx-auto mb-6 flex max-w-[820px] items-center justify-between px-6 print:hidden">
-        <Link href={`/portal?job=${id}`} className="text-sm font-semibold text-slate-600 hover:text-ink">← Back to sign this job</Link>
+        <Link href={`/portal/job/${assignmentId ?? id}`} className="text-sm font-semibold text-slate-600 hover:text-ink">← Back to sign this job</Link>
         <button onClick={() => window.print()} className="rounded-xl bg-ink px-6 py-3 text-sm font-bold text-white transition hover:-translate-y-0.5">
           Save as PDF / Print
         </button>
@@ -146,7 +148,7 @@ export default function WorkerContractPage() {
                   Go back to your portal to sign this electronically — your signature and the date are
                   recorded there and a signed copy comes straight to the office.
                 </p>
-                <Link href={`/portal?job=${id}`} className="mt-2 inline-block text-[14px] font-bold text-[#5b21b6] underline">
+                <Link href={`/portal/job/${assignmentId ?? id}`} className="mt-2 inline-block text-[14px] font-bold text-[#5b21b6] underline">
                   Go back and sign this job
                 </Link>
               </div>

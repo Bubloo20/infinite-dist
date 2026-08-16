@@ -183,16 +183,14 @@ export default function JobMarket({ workerName, only }: {
   }, []);
   const [viewing, setViewing] = useState<number | null>(null);
   const [shut, setShut] = useState<number[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
   const isShut = (id: number) => shut.includes(id);
   const toggleShut = (id: number) =>
     setShut((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]));
 
-  /** Reveal the contract for this job, then slide down to it. */
-  const viewJob = (jobId: number) => {
-    setViewing(jobId);
-    setTimeout(() => {
-      document.getElementById(`contract-${jobId}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 80);
+  /** The whole read-sign-submit run happens on the job's own page. */
+  const viewJob = (assignmentId: number | null, jobId: number) => {
+    window.location.href = assignmentId ? `/portal/job/${assignmentId}` : `/portal?job=${jobId}`;
   };
 
   const load = useCallback(() => {
@@ -312,6 +310,14 @@ export default function JobMarket({ workerName, only }: {
     const rank = (e: { a: JobAssignment | null }) => (e.a?.status === "accepted" ? 1 : 0);
     return out.sort((x, y) => rank(x) - rank(y) || (y.a?.id ?? 0) - (x.a?.id ?? 0));
   })();
+
+  /** Paid, or on a job the office has closed off — done with, but still readable. */
+  const isFinished = (j: ClientJob, a: JobAssignment | null) => {
+    const shifts = logsFor(j.id, a?.id);
+    return (shifts.length > 0 && shifts.every((l) => l.paidOn)) || j.status === "completed";
+  };
+  const live = entries.filter((e) => !isFinished(e.job, e.a));
+  const history = entries.filter((e) => isFinished(e.job, e.a));
   const logsFor = (jobId: number, assignmentId?: number | null) =>
     logs.filter((l) => (assignmentId ? l.assignmentId === assignmentId : l.jobId === jobId && !l.assignmentId));
 
@@ -395,7 +401,7 @@ export default function JobMarket({ workerName, only }: {
         </GlassCard>
       ) : (
         <div className="space-y-4">
-          {entries.map(({ key, job: j, a, part }) => {
+          {live.map(({ key, job: j, a, part }) => {
             const own = parseSpec(a?.boundary ?? null);
             const spec = specHasDrawing(own) ? own : parseSpec(j.boundary);
             const signed = signedFor(j.id, a?.id);
@@ -418,9 +424,9 @@ export default function JobMarket({ workerName, only }: {
                       Have a look at the agreement — the pay, hours and dates are already filled in. You can
                       accept it once you&apos;ve read it through and signed.
                     </p>
-                    <button onClick={() => viewJob(cardId)}
+                    <button onClick={() => viewJob(a?.id ?? null, j.id)}
                       className="mt-5 w-full rounded-2xl bg-white px-8 py-4 font-display text-[16px] font-extrabold text-ink shadow-[0_18px_44px_-14px_rgba(255,255,255,0.5)] transition hover:-translate-y-0.5 sm:w-auto">
-                      {viewing === cardId ? "Agreement below ↓" : "View job →"}
+                      View job →
                     </button>
                   </div>
                 )}
@@ -577,6 +583,56 @@ export default function JobMarket({ workerName, only }: {
               </div>
             );
           })}
+
+          {history.length > 0 && (
+            <div className="pt-2">
+              <button onClick={() => setShowHistory((v) => !v)}
+                className="flex w-full items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-5 py-3.5 text-left transition hover:bg-white/[0.06]">
+                <span>
+                  <span className="block font-display text-[14px] font-bold text-white/75">
+                    Job history ({history.length})
+                  </span>
+                  <span className="mt-0.5 block text-[12px] text-white/40">Paid and completed work</span>
+                </span>
+                <span className={`shrink-0 text-white/35 transition-transform ${showHistory ? "rotate-180" : ""}`}>▾</span>
+              </button>
+
+              {showHistory && (
+                <div className="mt-2 space-y-2">
+                  {history.map(({ key, job: j, a }) => {
+                    const shifts = logsFor(j.id, a?.id);
+                    const done = shifts.find((l) => l.paidOn);
+                    return (
+                      <div key={key}
+                        className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3">
+                        <span className="min-w-0">
+                          <span className="block text-[14px] font-semibold text-white/80">
+                            {j.title || `Job #${j.id}`}
+                            {a?.area_note ? <span className="text-white/45"> — {a.area_note}</span> : null}
+                          </span>
+                          <span className="mt-0.5 block text-[12px] text-white/40">
+                            {a?.leaflet_share ? `${a.leaflet_share.toLocaleString()} leaflets · ` : ""}
+                            {done ? `paid ${stamp(done)}` : "completed"}
+                          </span>
+                        </span>
+                        <span className="flex shrink-0 items-center gap-3">
+                          <span className="font-display text-[15px] font-extrabold text-emerald-300">
+                            {money(a?.pay ?? j.worker_pay)}
+                          </span>
+                          {a && (
+                            <a href={`/portal/job/${a.id}`}
+                              className="text-[12px] font-bold text-white/40 transition hover:text-white">
+                              Open ↗
+                            </a>
+                          )}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>

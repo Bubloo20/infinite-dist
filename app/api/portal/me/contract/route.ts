@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { currentSession } from "@/lib/portal/auth";
-import { listJobsForWorkerAll, listAssignmentsForUser, findUserById, getContract, dbConfigured } from "@/lib/portal/db";
+import { listJobsForWorkerAll, listAssignmentsForUser, findUserById, getContract, getContractForAssignment, dbConfigured } from "@/lib/portal/db";
 
 export const dynamic = "force-dynamic";
 
@@ -10,7 +10,10 @@ export async function GET(req: Request) {
   if (!s || !s.userId) return NextResponse.json({ ok: false, error: "Not signed in." }, { status: 401 });
   if (!dbConfigured()) return NextResponse.json({ ok: false, error: "Database not connected." }, { status: 503 });
 
-  const jobId = Number(new URL(req.url).searchParams.get("jobId"));
+  const params = new URL(req.url).searchParams;
+  const jobId = Number(params.get("jobId"));
+  // Which piece of work — a worker can hold several on one job.
+  const assignmentId = Number(params.get("assignmentId")) || null;
   if (!jobId) return NextResponse.json({ ok: false, error: "Missing job." }, { status: 400 });
 
   try {
@@ -19,11 +22,22 @@ export async function GET(req: Request) {
     ]);
     const job = jobs.find((j) => j.id === jobId);
     if (!job) return NextResponse.json({ ok: false, error: "That job isn't assigned to you." }, { status: 403 });
-    // Once signed, the worker's own copy shows their signature back to them.
-    const contract = await getContract(jobId, s.userId);
+    const held = assignments.filter((a) => a.job_id === jobId);
+    const mine = assignmentId
+      ? held.find((a) => a.id === assignmentId) ?? null
+      : held.length === 1 ? held[0] : null;
+    if (assignmentId && !mine) {
+      return NextResponse.json({ ok: false, error: "That work isn't yours." }, { status: 403 });
+    }
+
+    // Signed for this sub-contract, never borrowed from another on the same job.
+    const contract = mine
+      ? await getContractForAssignment(mine.id)
+      : await getContract(jobId, s.userId);
+
     return NextResponse.json({
       ok: true, job,
-      assignment: assignments.find((a) => a.job_id === jobId) ?? null,
+      assignment: mine ?? held[0] ?? null,
       workerName: user?.full_name ?? null,
       contract: contract
         ? { signedName: contract.signed_name, signaturePng: contract.signature_png,

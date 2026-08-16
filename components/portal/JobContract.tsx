@@ -175,8 +175,8 @@ export default function JobContract({
 
   useEffect(() => {
     if (!autoOpen || signedDate) return;
-    try { localStorage.setItem(`idp_contract_seen_${job.id}`, "1"); } catch {}
-    const w = window.open(`/portal/contract/${job.id}`, "_blank", "noreferrer");
+    try { localStorage.setItem(seenKey, "1"); } catch {}
+    const w = window.open(contractHref, "_blank", "noreferrer");
     if (w) setSeen(true);
   }, [autoOpen, signedDate, job.id]);
 
@@ -212,6 +212,11 @@ export default function JobContract({
   // The agreement must actually be opened before it can be signed.
   const [seen, setSeen] = useState(false);
 
+  // Everything about reading and signing hangs off the sub-contract, so two
+  // pieces of work on one job never share a signature or a "already read" flag.
+  const seenKey = `idp_contract_seen_${mine?.id ?? `job${job.id}`}`;
+  const contractHref = `/portal/contract/${job.id}${mine?.id ? `?a=${mine.id}` : ""}`;
+
   const blocker = !seen ? "Read the agreement first"
     : !name.trim() ? "Add your full name"
     : !sig ? "Sign above to continue"
@@ -222,7 +227,7 @@ export default function JobContract({
 
   useEffect(() => {
     const check = () => {
-      try { setSeen(localStorage.getItem(`idp_contract_seen_${job.id}`) === "1"); } catch { /* private mode */ }
+      try { setSeen(localStorage.getItem(seenKey) === "1"); } catch { /* private mode */ }
     };
     check();
     window.addEventListener("focus", check);
@@ -290,7 +295,7 @@ export default function JobContract({
           <p className="text-sm text-emerald-100/70">
             You signed this contract on {new Date(signedDate).toLocaleDateString("en-AU", { day: "2-digit", month: "long", year: "numeric" })}. A signed copy has been saved.
           </p>
-          <a href={`/portal/contract/${job.id}`} target="_blank" rel="noreferrer"
+          <a href={contractHref} target="_blank" rel="noreferrer"
             className="shrink-0 rounded-2xl border border-emerald-400/35 bg-emerald-500/10 px-5 py-2.5 font-display text-[14px] font-bold text-emerald-200 transition hover:bg-emerald-500/20 hover:text-white">
             View signed agreement ↗
           </a>
@@ -337,10 +342,10 @@ export default function JobContract({
             </p>
           </div>
           <a
-            href={`/portal/contract/${job.id}`}
+            href={contractHref}
             target="_blank"
             rel="noreferrer"
-            onClick={() => { try { localStorage.setItem(`idp_contract_seen_${job.id}`, "1"); } catch {} setTimeout(() => setSeen(true), 400); }}
+            onClick={() => { try { localStorage.setItem(seenKey, "1"); } catch {} setTimeout(() => setSeen(true), 400); }}
             className="rounded-2xl bg-gradient-to-r from-electric to-orchid px-6 py-3 font-display text-[15px] font-bold text-white shadow-[0_14px_34px_-14px_rgba(182,109,199,0.9)] transition hover:-translate-y-0.5"
           >
             {seen ? "View agreement again ↗" : "View agreement (PDF) ↗"}
