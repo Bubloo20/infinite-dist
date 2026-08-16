@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { currentSession } from "@/lib/portal/auth";
 import { verifyStravaActivity, isMapMyActivityUrl } from "@/lib/portal/strava";
-import { insertWorkLog, dbConfigured, findUserById } from "@/lib/portal/db";
+import { insertWorkLog, dbConfigured, findUserById, syncJobOutCount } from "@/lib/portal/db";
 
 export const dynamic = "force-dynamic";
 
@@ -109,6 +109,9 @@ export async function POST(req: Request) {
       mapmyUrls,
       notes: (b.notes || "").trim() || null,
     });
+    // Move the job's counters on now that leaflets have been logged against it.
+    const linked = Number(b.clientJobId) || null;
+    if (linked) await syncJobOutCount(linked);
   } catch (e) {
     dbError = e instanceof Error ? e.message : "Database write failed.";
   }

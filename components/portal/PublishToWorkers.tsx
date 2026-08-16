@@ -261,6 +261,7 @@ export function SubContracts({ job, users, rows, post, del }: {
   const [editSpec, setEditSpec] = useState<AreaSpec>(EMPTY_SPEC);
   const [editCenter, setEditCenter] = useState<[number, number, number] | null>(null);
   const [saving, setSaving] = useState(false);
+  const [adding, setAdding] = useState(false);
   const traceSpec = parseSpec(f.boundary || null);
 
   const nameOf = (id: number) => users.find((u) => u.id === id)?.full_name || `User ${id}`;
@@ -371,7 +372,20 @@ export function SubContracts({ job, users, rows, post, del }: {
         </div>
       )}
 
-      <div className="mt-4 grid gap-2 sm:grid-cols-6">
+      <button onClick={() => setAdding((v) => !v)}
+        className="mt-4 flex w-full items-center justify-between gap-3 rounded-xl border border-white/12 bg-white/[0.05] px-4 py-3 text-left transition hover:bg-white/[0.08]">
+        <span>
+          <span className="block text-[14px] font-bold text-white">
+            {rows.length ? "Add another sub-contract" : "Add a sub-contract"}
+          </span>
+          <span className="mt-0.5 block text-[12px] text-white/45">
+            {left > 0 ? `${left.toLocaleString()} leaflets still to share out` : "All leaflets are shared out"}
+          </span>
+        </span>
+        <span className={`shrink-0 text-white/40 transition-transform ${adding ? "rotate-180" : ""}`}>▾</span>
+      </button>
+
+      <div className={`mt-3 grid gap-2 sm:grid-cols-6 ${adding ? "" : "hidden"}`}>
         <select className={input} value={f.userId} onChange={(e) => setF({ ...f, userId: e.target.value })}>
           <option value="">Worker…</option>
           {users.filter((u) => !rows.some((r) => r.user_id === u.id)).map((u) => (
@@ -436,7 +450,7 @@ export function SubContracts({ job, users, rows, post, del }: {
 
         <div className="sm:col-span-6">
           <button className={btn} disabled={!f.userId}
-            onClick={async () => { if (await post({ entity: "assignment", jobId: job.id, ...f, allocatedTime: spanOf(f.startDate, f.dueDate) })) setF(blank); }}>
+            onClick={async () => { if (await post({ entity: "assignment", jobId: job.id, ...f, allocatedTime: spanOf(f.startDate, f.dueDate) })) { setF(blank); setAdding(false); setTracing(false); } }}>
             Add sub-contract
           </button>
         </div>

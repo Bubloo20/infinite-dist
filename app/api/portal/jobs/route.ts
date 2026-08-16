@@ -3,7 +3,7 @@ import { currentSession } from "@/lib/portal/auth";
 import {
   listOpenJobs, listJobsForWorkerAll, listInterest, addInterest, removeInterest,
   getContract, saveContract, findUserById, dbConfigured, listAssignmentsForUser,
-  upsertAssignment, listWorkLogsForUser,
+  upsertAssignment, listWorkLogsForUser, syncJobOutCount,
 } from "@/lib/portal/db";
 
 export const dynamic = "force-dynamic";
@@ -76,6 +76,7 @@ export async function POST(req: Request) {
         minHours: existing?.min_hours ?? null,
         allocatedTime: existing?.allocated_time ?? null,
       });
+      await syncJobOutCount(jobId);
       return NextResponse.json({ ok: true });
     }
 

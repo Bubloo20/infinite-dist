@@ -27,9 +27,11 @@ export async function GET(req: Request) {
     url.searchParams.set("q", /\b(vic|victoria|australia)\b/i.test(q) ? q : `${q}, Victoria, Australia`);
     url.searchParams.set("format", "jsonv2");
     url.searchParams.set("countrycodes", "au");
-    url.searchParams.set("limit", "6");
+    url.searchParams.set("limit", "8");
     url.searchParams.set("viewbox", VIEWBOX);
     url.searchParams.set("bounded", "0");
+    // Structured address parts — the only way to tell four Porter Roads apart.
+    url.searchParams.set("addressdetails", "1");
 
     const res = await fetch(url, {
       headers: { "User-Agent": UA, "Accept-Language": "en-AU" },
@@ -40,6 +42,7 @@ export async function GET(req: Request) {
     const rows = (await res.json()) as Array<{
       lat: string; lon: string; display_name?: string; name?: string;
       addresstype?: string; boundingbox?: [string, string, string, string];
+      address?: Record<string, string>;
     }>;
 
     const results = rows
@@ -47,11 +50,22 @@ export async function GET(req: Request) {
         const lat = Number(r.lat);
         const lng = Number(r.lon);
         if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+
+        const a = r.address || {};
+        // "12 Porter Road" for an address, "Porter Road" for the street itself.
+        const street = a.road || r.name || "";
+        const short = [a.house_number, street].filter(Boolean).join(" ") ||
+          (r.display_name || "").split(",")[0].trim();
+        // Which Porter Road — the suburb is what tells them apart.
+        const where = a.suburb || a.village || a.town || a.city_district || a.city || a.municipality || "";
+        const context = [where, a.postcode].filter(Boolean).join(" ");
+
         const bb = r.boundingbox?.map(Number);
         return {
-          label: r.display_name || r.name || q,
-          short: r.name || (r.display_name || "").split(",").slice(0, 2).join(",").trim(),
-          kind: r.addresstype || "",
+          label: r.display_name || short || q,
+          short,
+          context,
+          kind: a.house_number ? "address" : r.addresstype || "",
           lat,
           lng,
           // [south, north, west, east] -> a box the map can fit to.

@@ -560,12 +560,19 @@ export async function setJobPublished(jobId: number, published: boolean) {
  */
 export async function syncJobOutCount(jobId: number) {
   await ensureSchema();
+  // Delivered is what workers have logged; out for delivery is what's been
+  // handed to them and not yet logged. Both stay editable by hand afterwards —
+  // this only runs when a worker does something.
   await sql`
     UPDATE client_jobs j
-       SET out_count = GREATEST(
+       SET delivered_count = GREATEST(
+             COALESCE((SELECT SUM(w.leaflet_count) FROM work_logs w WHERE w.client_job_id = j.id), 0),
+             0
+           ),
+           out_count = GREATEST(
              0,
              COALESCE((SELECT SUM(a.leaflet_share) FROM job_assignments a WHERE a.job_id = j.id), 0)
-               - COALESCE(j.delivered_count, 0)
+               - COALESCE((SELECT SUM(w.leaflet_count) FROM work_logs w WHERE w.client_job_id = j.id), 0)
            )
      WHERE j.id = ${jobId};`;
 }

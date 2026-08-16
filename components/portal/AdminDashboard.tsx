@@ -255,7 +255,7 @@ export default function AdminDashboard({ onSignOut }: { onSignOut: () => void })
       ) : tab === "workers" ? (
         <div className="space-y-4">
           <PublishToWorkers jobs={clientJobs} agencies={agencies} users={users} interest={interest} assignments={assignments} post={postClient} del={delClient} />
-          <WorkersTab users={users} totals={userTotals} contracts={contracts} jobs={clientJobs} post={post} reload={load} setMsg={setMsg} />
+          <WorkersTab users={users} totals={userTotals} contracts={contracts} jobs={clientJobs} assignments={assignments} post={post} reload={load} setMsg={setMsg} />
         </div>
       ) : tab === "payments" ? (
         <PaymentsTab users={users} payments={payments} logs={logs} post={post} reload={load} setMsg={setMsg} />
@@ -408,11 +408,12 @@ function JobRow({ log, post }: { log: WorkLog; post: (u: string, b: unknown) => 
 
 /* --------------------------------- workers -------------------------------- */
 
-function WorkersTab({ users, totals, contracts, jobs, post, reload, setMsg }: {
+function WorkersTab({ users, totals, contracts, jobs, assignments, post, reload, setMsg }: {
   users: PortalUser[];
   totals: (id: number) => { owed: number; paid: number; jobs: number };
   contracts: { id: number; job_id: number; user_id: number; signed_date: string }[];
   jobs: ClientJob[];
+  assignments: JobAssignment[];
   post: (u: string, b: unknown) => Promise<boolean>;
   reload: () => void;
   setMsg: (m: string) => void;
@@ -447,20 +448,43 @@ function WorkersTab({ users, totals, contracts, jobs, post, reload, setMsg }: {
       ) : users.map((u) => (
         <WorkerRow key={u.id} user={u} t={totals(u.id)} post={post}
           contracts={contracts.filter((c) => c.user_id === u.id)} jobs={jobs}
+          mine={assignments.filter((a) => a.user_id === u.id)}
           onDelete={() => removeWorker(u.id, u.full_name)} />
       ))}
     </div>
   );
 }
 
-function WorkerRow({ user, t, post, contracts, jobs, onDelete }: {
+function WorkerRow({ user, t, post, contracts, jobs, mine, onDelete }: {
   user: PortalUser; t: { owed: number; paid: number; jobs: number };
   post: (u: string, b: unknown) => Promise<boolean>;
   contracts: { id: number; job_id: number; signed_date: string }[];
   jobs: ClientJob[];
+  mine: JobAssignment[];
   onDelete: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [showJobs, setShowJobs] = useState(false);
+
+  // Where each of their jobs actually stands.
+  const theirJobs = mine.map((a) => {
+    const job = jobs.find((j) => j.id === a.job_id) || null;
+    const signed = contracts.find((c) => c.job_id === a.job_id) || null;
+    const state = job?.status === "completed" ? "done"
+      : signed ? "signed"
+      : a.status === "accepted" ? "accepted"
+      : "waiting";
+    return { a, job, signed, state };
+  });
+  const waiting = theirJobs.filter((x) => x.state === "waiting").length;
+  const live = theirJobs.filter((x) => x.state === "signed" || x.state === "accepted").length;
+
+  const STATE: Record<string, { label: string; cls: string }> = {
+    waiting: { label: "Awaiting acceptance", cls: "border-amber-400/35 bg-amber-500/10 text-amber-300" },
+    accepted: { label: "Accepted \u2014 not signed", cls: "border-sky-400/35 bg-sky-500/10 text-sky-300" },
+    signed: { label: "Signed \u2014 on the job", cls: "border-emerald-400/35 bg-emerald-500/10 text-emerald-300" },
+    done: { label: "Completed", cls: "border-white/15 bg-white/[0.06] text-white/55" },
+  };
   const [f, setF] = useState({
     bankName: user.bank_name || "", bankBsb: user.bank_bsb || "",
     bankAccount: user.bank_account || "", payid: user.payid || "",
@@ -480,7 +504,18 @@ function WorkerRow({ user, t, post, contracts, jobs, onDelete }: {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h3 className="font-display text-lg font-bold text-white">{user.full_name}</h3>
-          <p className="mt-1 text-sm text-white/45">{t.jobs} job{t.jobs === 1 ? "" : "s"} · joined {day(user.created_at)}</p>
+          <p className="mt-1 text-sm text-white/45">
+            {t.jobs} shift{t.jobs === 1 ? "" : "s"} logged · joined {day(user.created_at)}
+          </p>
+          {theirJobs.length > 0 && (
+            <button onClick={() => setShowJobs((v) => !v)}
+              className="mt-1.5 flex items-center gap-2 text-[13px] font-semibold text-orchid transition hover:text-white">
+              {theirJobs.length} job{theirJobs.length === 1 ? "" : "s"}
+              {live ? <span className="text-emerald-300/80">· {live} on the go</span> : null}
+              {waiting ? <span className="text-amber-300/80">· {waiting} awaiting acceptance</span> : null}
+              <span className={`transition-transform ${showJobs ? "rotate-180" : ""}`}>▾</span>
+            </button>
+          )}
           {user.area && <p className="mt-1 text-[13px] text-white/45">Covers: {user.area}</p>}
           {(user.payid || user.bank_account) && (
             <p className="mt-1 text-[13px] text-white/40">
@@ -503,6 +538,42 @@ function WorkerRow({ user, t, post, contracts, jobs, onDelete }: {
           <button onClick={() => setOpen((v) => !v)} className={btnGhost}>{open ? "Close" : "Edit"}</button>
         </div>
       </div>
+
+      {showJobs && theirJobs.length > 0 && (
+        <div className="mt-4 space-y-2 border-t border-white/10 pt-4">
+          {theirJobs.map(({ a, job, signed, state }) => (
+            <div key={a.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5">
+              <div>
+                <p className="text-[14px] font-semibold text-white">
+                  {job?.title || `Job #${a.job_id}`}
+                  <span className={`ml-2 rounded-md border px-2 py-0.5 text-[11px] font-bold uppercase ${STATE[state].cls}`}>
+                    {STATE[state].label}
+                  </span>
+                </p>
+                <p className="mt-0.5 text-[13px] text-white/45">
+                  {a.leaflet_share ? `${a.leaflet_share.toLocaleString()} leaflets` : "share not set"}
+                  {a.area_note ? ` · ${a.area_note}` : ""}
+                  {a.due_date ? ` · due ${day(a.due_date)}` : ""}
+                  {signed ? ` · signed ${day(signed.signed_date)}` : ""}
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="font-display text-[15px] font-extrabold text-emerald-300">
+                  {a.pay ? `$${Number(a.pay).toFixed(2)}` : "—"}
+                </span>
+                {signed && (
+                  <a href={`/portal/admin/contract/${a.job_id}`} className="text-[13px] font-semibold text-white/45 transition hover:text-white">
+                    Contract ↗
+                  </a>
+                )}
+                <a href={`/portal/admin/timesheet/${a.job_id}`} className="text-[13px] font-semibold text-white/45 transition hover:text-white">
+                  Timesheet ↗
+                </a>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {open && (
         <div className="mt-5 grid gap-3 border-t border-white/10 pt-5 sm:grid-cols-2">

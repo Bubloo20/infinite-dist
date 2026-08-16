@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { GlassCard } from "./PortalShell";
 import type { Agency, Agent, ClientJob, AgencyPayment, JobStatus, InvoiceStatus } from "@/lib/portal/db";
@@ -352,6 +352,7 @@ export function ClientJobsTab({ agencies, agents, jobs, workLogs, users, assignm
       ) : shown.map((j) => (
         <ClientJobRow key={j.id} job={j}
           agencyName={agencyName(j.agency_id)} agentName={agentName(j.agent_id)}
+          agencies={agencies} agents={agents}
           expenses={workLogs.filter((w) => w.client_job_id === j.id)}
           users={users} assignments={assignments.filter((a) => a.job_id === j.id)}
           post={post} del={del} />
@@ -382,12 +383,26 @@ const INVOICE_VIEW: Record<string, { label: string; cls: string }> = {
   received: { label: "Paid", cls: "border-emerald-400/40 bg-emerald-500/12 text-emerald-300" },
 };
 
-function ClientJobRow({ job, agencyName, agentName, expenses, users, assignments, post, del }: {
+const seed = (j: ClientJob) => ({
+  agencyId: j.agency_id ? String(j.agency_id) : "",
+  agentId: j.agent_id ? String(j.agent_id) : "",
+  title: j.title || "", area: j.area || "",
+  quantity: j.quantity != null ? String(j.quantity) : "",
+  ratePerLeaflet: j.rate_per_leaflet != null ? String(j.rate_per_leaflet) : "",
+  pickedOn: j.picked_on || "", completedOn: j.completed_on || "", notes: j.notes || "",
+});
+
+function ClientJobRow({ job, agencyName, agentName, agencies, agents, expenses, users, assignments, post, del }: {
   job: ClientJob; agencyName: string; agentName: string | null;
+  agencies: Agency[]; agents: Agent[];
   expenses: WorkLogLite[]; users: PortalUser[]; assignments: JobAssignment[];
   post: Post; del: Del;
 }) {
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [e, setE] = useState(() => seed(job));
+  // Re-seed when the job changes underneath us (another save, a refresh).
+  useEffect(() => { if (!editing) setE(seed(job)); }, [job, editing]);
   const s = STATUS[job.status];
   const inv = effectiveInvoice(job);
   // Three buckets across the job's quantity: completed, out with a worker, and
@@ -496,6 +511,94 @@ function ClientJobRow({ job, agencyName, agentName, expenses, users, assignments
 
       {open && (
         <div className="mt-5 border-t border-white/10 pt-4">
+          <button onClick={() => setEditing((v) => !v)}
+            className="mb-4 flex w-full items-center justify-between gap-3 rounded-xl border border-white/12 bg-white/[0.05] px-4 py-3 text-left transition hover:bg-white/[0.08]">
+            <span>
+              <span className="block text-[14px] font-bold text-white">Edit job details</span>
+              <span className="mt-0.5 block text-[12px] text-white/45">
+                Leaflets, rate, area, agency and dates \u2014 changeable at any time.
+              </span>
+            </span>
+            <span className={`shrink-0 text-white/40 transition-transform ${editing ? "rotate-180" : ""}`}>\u25be</span>
+          </button>
+
+          {editing && (
+            <div className="mb-5 rounded-2xl border border-white/12 bg-white/[0.03] p-4">
+              <div className="grid gap-3 sm:grid-cols-3">
+                <label className="block">
+                  <span className="mb-1 block text-[12px] font-semibold text-white/40">Agency</span>
+                  <select className={input} value={e.agencyId} onChange={(ev) => setE({ ...e, agencyId: ev.target.value })}>
+                    <option value="">Unassigned</option>
+                    {agencies.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-[12px] font-semibold text-white/40">Agent</span>
+                  <select className={input} value={e.agentId} onChange={(ev) => setE({ ...e, agentId: ev.target.value })}>
+                    <option value="">None</option>
+                    {agents.filter((g) => !e.agencyId || String(g.agency_id) === e.agencyId)
+                      .map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-[12px] font-semibold text-white/40">Title</span>
+                  <input className={input} value={e.title} onChange={(ev) => setE({ ...e, title: ev.target.value })} />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-[12px] font-semibold text-white/40">Area</span>
+                  <input className={input} value={e.area} onChange={(ev) => setE({ ...e, area: ev.target.value })} />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-[12px] font-semibold text-white/40">Leaflet amount</span>
+                  <input className={input} inputMode="numeric" value={e.quantity} onChange={(ev) => setE({ ...e, quantity: ev.target.value })} />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-[12px] font-semibold text-orchid">Leaflet rate \u2014 what the agency pays you</span>
+                  <input className={input} inputMode="decimal" value={e.ratePerLeaflet} onChange={(ev) => setE({ ...e, ratePerLeaflet: ev.target.value })} />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-[12px] font-semibold text-white/40">Pick-up date</span>
+                  <input type="date" className={input} value={e.pickedOn} onChange={(ev) => setE({ ...e, pickedOn: ev.target.value })} />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-[12px] font-semibold text-white/40">Completion date</span>
+                  <input type="date" className={input} value={e.completedOn} onChange={(ev) => setE({ ...e, completedOn: ev.target.value })} />
+                </label>
+                <label className="block sm:col-span-3">
+                  <span className="mb-1 block text-[12px] font-semibold text-white/40">Notes</span>
+                  <input className={input} value={e.notes} onChange={(ev) => setE({ ...e, notes: ev.target.value })} />
+                </label>
+              </div>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <button className={btn}
+                  onClick={async () => {
+                    const ok = await post({
+                      entity: "job", id: job.id, ...jobPayload(job),
+                      agencyId: e.agencyId || null, agentId: e.agentId || null,
+                      title: e.title, area: e.area,
+                      quantity: e.quantity === "" ? null : e.quantity,
+                      ratePerLeaflet: e.ratePerLeaflet === "" ? null : e.ratePerLeaflet,
+                      amount: e.quantity && e.ratePerLeaflet
+                        ? (Number(e.quantity) * Number(e.ratePerLeaflet)).toFixed(2)
+                        : job.amount,
+                      pickedOn: e.pickedOn || null, completedOn: e.completedOn || null,
+                      notes: e.notes || null,
+                    });
+                    if (ok) setEditing(false);
+                  }}>
+                  Save job
+                </button>
+                <button onClick={() => { setE(seed(job)); setEditing(false); }}
+                  className="text-[13px] font-semibold text-white/40 transition hover:text-white">Cancel</button>
+                {e.quantity && e.ratePerLeaflet && (
+                  <span className="text-[13px] text-white/45">
+                    Revenue becomes ${(Number(e.quantity) * Number(e.ratePerLeaflet)).toFixed(2)}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
           <div className="mb-5 grid gap-3 sm:grid-cols-3">
             <label className="block">
               <span className="mb-1 block text-[12px] font-semibold text-white/40">Job number</span>

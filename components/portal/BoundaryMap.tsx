@@ -79,7 +79,8 @@ function nearestDistance(pt: LatLng, shapes: Shape[]): number | null {
 }
 
 type Hit = {
-  label: string; short: string; kind: string; lat: number; lng: number;
+  label: string; short: string; context: string; kind: string;
+  lat: number; lng: number;
   box: [[number, number], [number, number]] | null;
 };
 
@@ -337,7 +338,7 @@ export default function BoundaryMap({
               value={q}
               onChange={(e) => setQ(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); search(); } }}
-              placeholder="Find a street or suburb — e.g. Separation St, Northcote"
+              placeholder="Find an address, street or suburb — e.g. 12 Porter Rd, Heidelberg"
               className="w-full rounded-xl border border-white/12 bg-white/[0.05] px-4 py-2.5 text-sm text-white placeholder-white/25 outline-none transition focus:border-orchid/60 focus:bg-white/[0.08]"
             />
             <button type="button" onClick={search} disabled={searching}
@@ -359,11 +360,12 @@ export default function BoundaryMap({
 
       {editable && hits.length > 1 && (
         <div className="mb-2 flex flex-wrap gap-1.5">
-          {hits.slice(0, 5).map((h, i) => (
-            <button key={i} type="button" onClick={() => go(h)}
-              className="rounded-lg border border-white/12 bg-white/[0.04] px-2.5 py-1 text-[12px] text-white/60 transition hover:bg-white/[0.09] hover:text-white">
+          {hits.slice(0, 6).map((h, i) => (
+            <button key={i} type="button" onClick={() => go(h)} title={h.label}
+              className="rounded-lg border border-white/12 bg-white/[0.04] px-2.5 py-1 text-left text-[12px] text-white/70 transition hover:bg-white/[0.09] hover:text-white">
               {h.short || h.label.split(",")[0]}
-              {h.kind ? <span className="text-white/30"> · {h.kind}</span> : null}
+              {/* Four streets can share a name — the suburb is what separates them. */}
+              {h.context ? <span className="text-white/40"> · {h.context}</span> : null}
             </button>
           ))}
         </div>
