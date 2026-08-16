@@ -428,7 +428,29 @@ function ClientJobRow({ job, agencyName, agentName, agencies, agents, expenses, 
   const out = Math.max(0, Math.min(job.out_count ?? (job.status === "out_for_delivery" && !job.delivered_count ? qty : 0), qty - delivered));
   const remaining = Math.max(0, qty - delivered - out);
   const revenue = num(job.amount);
-  const labour = expenses.reduce((t, w) => t + num(w.amount), 0);
+
+  /**
+   * What this job costs in labour is what was agreed in the sub-contracts —
+   * known the moment the work is handed out, not once it's done or paid. Shifts
+   * logged by someone with no sub-contract (older ledger entries) are added on.
+   */
+  const committed = assignments.map((a) => ({
+    key: `a${a.id}`,
+    userId: a.user_id,
+    name: users.find((u) => u.id === a.user_id)?.full_name || `Worker ${a.user_id}`,
+    amount: num(a.pay),
+    note: a.area_note || "",
+    paid: expenses.some((w) => w.user_id === a.user_id && w.paid_on),
+    done: expenses.some((w) => w.user_id === a.user_id),
+  }));
+  const loose = expenses
+    .filter((w) => !assignments.some((a) => a.user_id === w.user_id))
+    .map((w) => ({
+      key: `w${w.id}`, userId: w.user_id, name: nameOf(w),
+      amount: num(w.amount), note: "", paid: Boolean(w.paid_on), done: true,
+    }));
+  const costs = [...committed, ...loose];
+  const labour = costs.reduce((t, c) => t + c.amount, 0);
   const profit = revenue - labour;
   const nameOf = (w: WorkLogLite) => users.find((u) => u.id === w.user_id)?.full_name || w.worker_name;
 
@@ -664,16 +686,23 @@ function ClientJobRow({ job, agencyName, agentName, agencies, agents, expenses, 
           </div>
 
           <p className="text-[12px] font-bold uppercase tracking-[0.12em] text-white/40">Worker costs on this job</p>
-          {!expenses.length ? (
-            <p className="mt-2 text-sm text-white/40">No worker payments recorded against this job yet.</p>
+          {!costs.length ? (
+            <p className="mt-2 text-sm text-white/40">
+              Nobody is on this job yet — add a sub-contract above and its cost lands here.
+            </p>
           ) : (
             <div className="mt-3 space-y-1.5">
-              {expenses.map((w) => (
-                <div key={w.id} className="flex items-center justify-between rounded-lg bg-white/[0.04] px-3.5 py-2 text-sm">
-                  <span className="text-white/75">{nameOf(w)}</span>
-                  <span className="flex items-center gap-3">
-                    <span className={w.paid_on ? "text-emerald-300" : "text-amber-300"}>{w.paid_on ? "paid" : "unpaid"}</span>
-                    <span className="font-semibold text-white">{money(num(w.amount))}</span>
+              {costs.map((c) => (
+                <div key={c.key} className="flex items-center justify-between gap-3 rounded-lg bg-white/[0.04] px-3.5 py-2 text-sm">
+                  <span className="min-w-0">
+                    <span className="text-white/75">{c.name}</span>
+                    {c.note && <span className="text-white/35"> · {c.note}</span>}
+                  </span>
+                  <span className="flex shrink-0 items-center gap-3">
+                    <span className={c.paid ? "text-emerald-300" : c.done ? "text-amber-300" : "text-white/40"}>
+                      {c.paid ? "paid" : c.done ? "unpaid" : "not started"}
+                    </span>
+                    <span className="font-semibold text-white">{money(c.amount)}</span>
                   </span>
                 </div>
               ))}

@@ -242,13 +242,14 @@ export default function JobContract({
       if (mine?.status !== "accepted") {
         await fetch("/api/portal/jobs", {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "accept", jobId: job.id }),
+          body: JSON.stringify({ action: "accept", jobId: job.id, assignmentId: mine?.id ?? null }),
         });
       }
       const r = await fetch("/api/portal/jobs", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          action: "sign", jobId: job.id, signedName: name, signedDate: date,
+          action: "sign", jobId: job.id, assignmentId: mine?.id ?? null,
+          signedName: name, signedDate: date,
           signaturePng: sig, agreed, schedule: JSON.stringify(schedule),
         }),
       });

@@ -16,7 +16,7 @@ const parseCenter = (s: string | null): [number, number, number] | null => {
 };
 
 type MyLog = {
-  id: number; jobId: number | null; jobNumber: string;
+  id: number; jobId: number | null; assignmentId: number | null; jobNumber: string;
   startedAt: string; endedAt: string; timeSpent: string | null;
   leaflets: number | null; amount: string | null;
   paidOn: string | null; paidAt: string | null;
@@ -153,7 +153,7 @@ export default function JobMarket({ workerName, only }: {
   const [open, setOpen] = useState<ClientJob[]>([]);
   const [mine, setMine] = useState<ClientJob[]>([]);
   const [interest, setInterest] = useState<number[]>([]);
-  const [contracts, setContracts] = useState<{ jobId: number; signedDate: string }[]>([]);
+  const [contracts, setContracts] = useState<{ jobId: number; assignmentId: number | null; signedDate: string }[]>([]);
   const [assignments, setAssignments] = useState<JobAssignment[]>([]);
   const [logs, setLogs] = useState<MyLog[]>([]);
   const [loading, setLoading] = useState(true);
@@ -222,12 +222,12 @@ export default function JobMarket({ workerName, only }: {
     }, 120);
   }, [loading]);
 
-  const accept = async (jobId: number) => {
+  const accept = async (jobId: number, assignmentId?: number | null) => {
     setBusyId(jobId);
     try {
       const r = await fetch("/api/portal/jobs", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "accept", jobId }),
+        body: JSON.stringify({ action: "accept", jobId, assignmentId }),
       });
       const d = await r.json().catch(() => ({ ok: false }));
       if (d.ok) {
@@ -278,39 +278,31 @@ export default function JobMarket({ workerName, only }: {
     return <Loading label="Your jobs" />;
   }
 
-  const signedFor = (id: number) => contracts.find((c) => c.jobId === id)?.signedDate ?? null;
+  const signedFor = (jobId: number, assignmentId?: number | null) =>
+    contracts.find((c) => (assignmentId ? c.assignmentId === assignmentId : c.jobId === jobId && !c.assignmentId))
+      ?.signedDate
+    // Agreements signed before sub-contracts were separated carry no id.
+    ?? (assignmentId ? contracts.find((c) => c.jobId === jobId && !c.assignmentId)?.signedDate ?? null : null);
+  const mineFor = (id: number) => assignments.find((a) => a.job_id === id) ?? null;
+
   /**
-   * A worker can hold several sub-contracts on one job. Their card shows the
-   * job once, with the parts added together: pay and leaflets summed, the
-   * earliest start, the latest due date, and the longest minimum.
+   * One card per sub-contract, not per job. A second sub-contract on a job the
+   * worker is already on is a separate piece of work: its own agreement to
+   * sign, its own tracking to submit. Unaccepted ones sort to the top so new
+   * work is the first thing they see.
    */
-  const mineFor = (id: number): JobAssignment | null => {
-    const parts = assignments.filter((a) => a.job_id === id);
-    if (!parts.length) return null;
-    if (parts.length === 1) return parts[0];
-
-    const sum = (pick: (a: JobAssignment) => number | null) =>
-      parts.reduce((t, a) => t + (pick(a) ?? 0), 0);
-    const earliest = parts.map((a) => a.start_date).filter(Boolean).sort()[0] ?? null;
-    const latest = parts.map((a) => a.due_date).filter(Boolean).sort().slice(-1)[0] ?? null;
-    const areas = [...new Set(parts.map((a) => a.area_note).filter(Boolean))].join(" · ");
-
-    return {
-      ...parts[0],
-      pay: String(sum((a) => (a.pay != null ? Number(a.pay) : 0))),
-      leaflet_share: sum((a) => a.leaflet_share) || null,
-      area_note: areas || parts[0].area_note,
-      start_date: earliest,
-      due_date: latest,
-      min_hours: parts.map((a) => a.min_hours).filter(Boolean).sort((x, y) => Number(y) - Number(x))[0] ?? null,
-      // Whichever part they've drawn an area for.
-      boundary: parts.find((a) => a.boundary)?.boundary ?? null,
-      map_center: parts.find((a) => a.map_center)?.map_center ?? null,
-      map_image: parts.find((a) => a.map_image)?.map_image ?? null,
-      status: parts.every((a) => a.status === "accepted") ? "accepted" : parts[0].status,
-    };
-  };
-  const logsFor = (id: number) => logs.filter((l) => l.jobId === id);
+  const entries = (() => {
+    const out: { key: string; job: ClientJob; a: JobAssignment | null }[] = [];
+    for (const j of mine) {
+      const parts = assignments.filter((x) => x.job_id === j.id);
+      if (parts.length) parts.forEach((a) => out.push({ key: `a${a.id}`, job: j, a }));
+      else out.push({ key: `j${j.id}`, job: j, a: null });
+    }
+    const rank = (e: { a: JobAssignment | null }) => (e.a?.status === "accepted" ? 1 : 0);
+    return out.sort((x, y) => rank(x) - rank(y) || (y.a?.id ?? 0) - (x.a?.id ?? 0));
+  })();
+  const logsFor = (jobId: number, assignmentId?: number | null) =>
+    logs.filter((l) => (assignmentId ? l.assignmentId === assignmentId : l.jobId === jobId && !l.assignmentId));
 
   return (
     <div>
@@ -392,14 +384,15 @@ export default function JobMarket({ workerName, only }: {
         </GlassCard>
       ) : (
         <div className="space-y-4">
-          {mine.map((j) => {
-            const a = mineFor(j.id);
+          {entries.map(({ key, job: j, a }) => {
             const own = parseSpec(a?.boundary ?? null);
             const spec = specHasDrawing(own) ? own : parseSpec(j.boundary);
-            const signed = signedFor(j.id);
+            const signed = signedFor(j.id, a?.id);
             const accepted = a?.status === "accepted" || Boolean(signed);
+            const shifts = logsFor(j.id, a?.id);
+            const cardId = a?.id ?? j.id;
             return (
-              <div key={j.id} className="rounded-[22px] border border-white/10 bg-white/[0.02] p-1.5 sm:rounded-[26px] sm:p-3">
+              <div key={key} className="rounded-[22px] border border-white/10 bg-white/[0.02] p-1.5 sm:rounded-[26px] sm:p-3">
                 {!accepted && (
                   <div className="mb-2 overflow-hidden rounded-[20px] border border-orchid/40 bg-gradient-to-br from-electric/25 to-orchid/20 p-6 sm:p-7">
                     <p className="text-xs font-bold uppercase tracking-[0.16em] text-orchid">New job for you</p>
@@ -410,9 +403,9 @@ export default function JobMarket({ workerName, only }: {
                       Have a look at the agreement — the pay, hours and dates are already filled in. You can
                       accept it once you&apos;ve read it through and signed.
                     </p>
-                    <button onClick={() => viewJob(j.id)}
+                    <button onClick={() => viewJob(cardId)}
                       className="mt-5 w-full rounded-2xl bg-white px-8 py-4 font-display text-[16px] font-extrabold text-ink shadow-[0_18px_44px_-14px_rgba(255,255,255,0.5)] transition hover:-translate-y-0.5 sm:w-auto">
-                      {viewing === j.id ? "Agreement below ↓" : "View job →"}
+                      {viewing === cardId ? "Agreement below ↓" : "View job →"}
                     </button>
                   </div>
                 )}
@@ -426,41 +419,41 @@ export default function JobMarket({ workerName, only }: {
                       <p className="font-display text-2xl font-extrabold text-emerald-300">
                         {money(mineFor(j.id)?.pay ?? j.worker_pay)}
                       </p>
-                      <PayState logs={logsFor(j.id)} accepted={accepted} />
-                      <button onClick={() => toggleShut(j.id)}
+                      <PayState logs={shifts} accepted={accepted} />
+                      <button onClick={() => toggleShut(cardId)}
                         className="mt-2 flex items-center gap-1.5 rounded-lg border border-white/12 bg-white/[0.05] px-3 py-1.5 text-[12px] font-bold text-white/60 transition hover:bg-white/[0.1] hover:text-white">
-                        {isShut(j.id) ? "Expand" : "Collapse"}
-                        <span className={`transition-transform ${isShut(j.id) ? "" : "rotate-180"}`}>▾</span>
+                        {isShut(cardId) ? "Expand" : "Collapse"}
+                        <span className={`transition-transform ${isShut(cardId) ? "" : "rotate-180"}`}>▾</span>
                       </button>
                     </div>
                   </div>
-                  {!isShut(j.id) && (
-                  <div className="mt-5"><BriefWithCountdown job={j} mine={mineFor(j.id)} /></div>
+                  {!isShut(cardId) && (
+                  <div className="mt-5"><BriefWithCountdown job={j} mine={a} /></div>
                   )}
-                  {!isShut(j.id) && specHasDrawing(spec) && (
+                  {!isShut(cardId) && specHasDrawing(spec) && (
                     <div className="mt-5">
-                      <button onClick={() => setMapOpen(mapOpen === j.id ? null : j.id)}
+                      <button onClick={() => setMapOpen(mapOpen === cardId ? null : cardId)}
                         className="flex w-full items-center justify-between gap-3 rounded-xl border border-white/12 bg-white/[0.05] px-4 py-3 text-left transition hover:bg-white/[0.08]">
                         <span>
                           <span className="block text-[14px] font-bold text-white">Your delivery area</span>
                           <span className="mt-0.5 block text-[12px] text-white/45">Zoom, pan and see where you are</span>
                         </span>
-                        <span className={`shrink-0 text-white/40 transition-transform ${mapOpen === j.id ? "rotate-180" : ""}`}>▾</span>
+                        <span className={`shrink-0 text-white/40 transition-transform ${mapOpen === cardId ? "rotate-180" : ""}`}>▾</span>
                       </button>
-                      {mapOpen === j.id && (
+                      {mapOpen === cardId && (
                       <div className="mt-2">
                       <BoundaryMap spec={spec} center={parseCenter(a?.map_center ?? j.map_center)} height={phone ? 260 : 400} locate />
                       </div>
                       )}
                     </div>
                   )}
-                  {!isShut(j.id) && logsFor(j.id).length > 0 && (
+                  {!isShut(cardId) && shifts.length > 0 && (
                     <div className="mt-5">
                       <p className="mb-2 text-[13px] font-semibold uppercase tracking-[0.1em] text-white/50">
-                        Your shifts on this job ({logsFor(j.id).length})
+                        Your shifts on this job ({shifts.length})
                       </p>
                       <div className="space-y-2">
-                        {logsFor(j.id).map((l) => (
+                        {shifts.map((l) => (
                           <div key={l.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5">
                             <span className="text-[13px] text-white/70">
                               {new Date(l.startedAt).toLocaleDateString("en-AU", { day: "numeric", month: "short" })}
@@ -484,7 +477,7 @@ export default function JobMarket({ workerName, only }: {
                       </div>
                     </div>
                   )}
-                  {!isShut(j.id) && mineFor(j.id)?.map_image && (
+                  {!isShut(cardId) && a?.map_image && (
                     <div className="mt-5">
                       <p className="mb-2 text-[13px] font-semibold uppercase tracking-[0.1em] text-white/50">Your area diagram</p>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -494,19 +487,19 @@ export default function JobMarket({ workerName, only }: {
                   )}
                 </GlassCard>
 
-                {!isShut(j.id) && (accepted || viewing === j.id) && (
-                  <div id={`contract-${j.id}`} className="mt-2 space-y-2 border-l-2 border-orchid/35 pl-3 sm:pl-4">
+                {!isShut(cardId) && (accepted || viewing === cardId) && (
+                  <div id={`contract-${cardId}`} className="mt-2 space-y-2 border-l-2 border-orchid/35 pl-3 sm:pl-4">
                     <p className="pt-1 text-[11px] font-bold uppercase tracking-[0.14em] text-white/30">
                       For {j.title || `Job #${j.id}`}
                     </p>
                     <JobContract job={j} workerName={workerName} signedDate={signed} mine={a}
-                      autoOpen={viewing === j.id && !signed}
+                      autoOpen={viewing === cardId && !signed}
                       onClose={accepted ? undefined : () => setViewing(null)}
                       onSigned={() => { setViewing(null); load(); }} />
                     {signed && (
                       <div>
-                        {logsFor(j.id).length === 0 ? (
-                          <button onClick={() => setLogging(logging === j.id ? null : j.id)}
+                        {shifts.length === 0 ? (
+                          <button onClick={() => setLogging(logging === cardId ? null : cardId)}
                             className="flex w-full items-center justify-between gap-3 rounded-2xl border border-orchid/40 bg-gradient-to-r from-electric/20 to-orchid/15 px-5 py-4 text-left transition hover:from-electric/30 hover:to-orchid/25">
                             <span>
                               <span className="block font-display text-[15px] font-bold text-white">Mark work as done</span>
@@ -514,23 +507,23 @@ export default function JobMarket({ workerName, only }: {
                                 Upload your hours, leaflets and tracking links
                               </span>
                             </span>
-                            <span className={`shrink-0 text-white/40 transition-transform ${logging === j.id ? "rotate-180" : ""}`}>▾</span>
+                            <span className={`shrink-0 text-white/40 transition-transform ${logging === cardId ? "rotate-180" : ""}`}>▾</span>
                           </button>
                         ) : (
                           <div className="rounded-2xl border border-emerald-400/25 bg-emerald-500/[0.06] px-5 py-4">
                             <p className="font-display text-[15px] font-bold text-emerald-200">Marked as done</p>
                             <p className="mt-1 text-[13px] text-emerald-100/65">
-                              {logsFor(j.id).some((l) => l.paidOn)
+                              {shifts.some((l) => l.paidOn)
                                 ? "This has been paid, so it's settled."
                                 : "Waiting on your tracking being checked. You can still change it."}
                             </p>
-                            {!logsFor(j.id).some((l) => l.paidOn) && (
+                            {!shifts.some((l) => l.paidOn) && (
                               <div className="mt-3 flex flex-wrap gap-2">
-                                <button onClick={() => { setLogging(null); setEditingLog(logsFor(j.id)[0] as EditableLog); }}
+                                <button onClick={() => { setLogging(null); setEditingLog(shifts[0] as EditableLog); }}
                                   className="rounded-xl border border-white/15 bg-white/[0.06] px-4 py-2 text-[13px] font-bold text-white/80 transition hover:bg-white/[0.12]">
                                   Edit or add links
                                 </button>
-                                <button onClick={() => unmark(logsFor(j.id)[0].id)}
+                                <button onClick={() => unmark(shifts[0].id)}
                                   className="rounded-xl border border-rose-400/30 px-4 py-2 text-[13px] font-bold text-rose-300 transition hover:bg-rose-500/10">
                                   Un-mark as done
                                 </button>
@@ -538,14 +531,14 @@ export default function JobMarket({ workerName, only }: {
                             )}
                           </div>
                         )}
-                        {logging === j.id && (
+                        {logging === cardId && (
                           <div className="mt-2">
                             <WorkLogForm job={j} mine={a} signedDate={signed}
                               onDone={() => { setLogging(null); load(); }}
                               onCancel={() => setLogging(null)} />
                           </div>
                         )}
-                        {editingLog && logsFor(j.id).some((l) => l.id === editingLog.id) && (
+                        {editingLog && shifts.some((l) => l.id === editingLog.id) && (
                           <div className="mt-2">
                             <WorkLogForm job={j} mine={a} editing={editingLog}
                               onDone={() => { setEditingLog(null); load(); }}

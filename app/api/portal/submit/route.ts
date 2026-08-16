@@ -13,6 +13,7 @@ type Payload = {
   leafletCount?: string | number;
   areaWorked?: string;
   clientJobId?: number | string | null;
+  assignmentId?: number | string | null;
   stravaUrls?: string[];
   mapmyUrls?: string[];
   notes?: string;
@@ -104,6 +105,7 @@ export async function POST(req: Request) {
       leafletCount,
       areaWorked: areaWorked || null,
       clientJobId: Number(b.clientJobId) || null,
+      assignmentId: Number(b.assignmentId) || null,
       stravaUrls: normalised,
       stravaStatus: strava.status,
       stravaVerified: strava.verified,
@@ -114,8 +116,12 @@ export async function POST(req: Request) {
     // figure comes from their sub-contract, never from the browser.
     const linked = Number(b.clientJobId) || null;
     if (linked && logId && session.userId) {
-      const mine = (await listAssignmentsForUser(session.userId)).filter((a) => a.job_id === linked);
-      const due = mine.reduce((t, a) => t + (a.pay != null ? Number(a.pay) : 0), 0);
+      // Only the sub-contract this was done under is owed, not every one they hold.
+      const held = (await listAssignmentsForUser(session.userId)).filter((a) => a.job_id === linked);
+      const forThis = Number(b.assignmentId)
+        ? held.find((a) => a.id === Number(b.assignmentId))
+        : held.length === 1 ? held[0] : null;
+      const due = forThis?.pay != null ? Number(forThis.pay) : 0;
       if (due > 0) await setWorkLogAmount(logId, due);
       await syncJobOutCount(linked);
     }

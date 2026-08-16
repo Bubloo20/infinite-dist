@@ -38,6 +38,8 @@ export type WorkLog = {
   amount: string | null;
   paid_on: string | null;
   paid_at: string | null;
+  verified_at: string | null;
+  assignment_id: number | null;
   client_job_id: number | null;
   strava_urls: string | null;
   mapmy_urls: string | null;
@@ -137,6 +139,16 @@ async function migrateSchema(): Promise<void> {
   await sql`ALTER TABLE work_logs ADD COLUMN IF NOT EXISTS amount NUMERIC(10,2);`;
   await sql`ALTER TABLE work_logs ADD COLUMN IF NOT EXISTS paid_on DATE;`;
   await sql`ALTER TABLE work_logs ADD COLUMN IF NOT EXISTS paid_at TIMESTAMPTZ;`;
+  // Marked done by the worker, then checked off by the office before it's owed.
+  await sql`ALTER TABLE work_logs ADD COLUMN IF NOT EXISTS verified_at TIMESTAMPTZ;`;
+  // Each sub-contract is its own piece of work: signed on its own, marked done
+  // on its own, even when one worker holds several on the same job.
+  await sql`ALTER TABLE work_logs ADD COLUMN IF NOT EXISTS assignment_id INTEGER;`;
+  await sql`ALTER TABLE job_contracts ADD COLUMN IF NOT EXISTS assignment_id INTEGER;`;
+  await sql`ALTER TABLE job_contracts DROP CONSTRAINT IF EXISTS job_contracts_job_id_user_id_key;`;
+  await sql`
+    CREATE UNIQUE INDEX IF NOT EXISTS job_contracts_assignment_key
+      ON job_contracts (assignment_id) WHERE assignment_id IS NOT NULL;`;
   await sql`ALTER TABLE work_logs ADD COLUMN IF NOT EXISTS strava_urls TEXT;`;
   await sql`ALTER TABLE work_logs ADD COLUMN IF NOT EXISTS mapmy_urls TEXT;`;
   // Ties a worker's earnings to the agency job they were paid for.
@@ -368,7 +380,7 @@ export type JobInterest = {
   id: number; job_id: number; user_id: number; note: string | null; created_at: string;
 };
 export type JobContract = {
-  id: number; job_id: number; user_id: number; signed_name: string;
+  id: number; job_id: number; user_id: number; assignment_id: number | null; signed_name: string;
   signature_png: string; signed_date: string; schedule: string | null;
   agreed: boolean; created_at: string;
 };
@@ -556,12 +568,12 @@ export async function upsertAssignment(a: {
   return r.rows[0].id;
 }
 
-/** Mark all of a worker's sub-contracts on a job as accepted. */
-export async function acceptAssignments(jobId: number, userId: number) {
+/** Accept one sub-contract. Each is taken on its own. */
+export async function acceptAssignment(id: number, userId: number) {
   await ensureSchema();
   await sql`
     UPDATE job_assignments SET status = 'accepted'
-     WHERE job_id = ${jobId} AND user_id = ${userId};`;
+     WHERE id = ${id} AND user_id = ${userId};`;
 }
 
 export async function deleteAssignment(id: number) {
@@ -668,16 +680,43 @@ export async function getContract(jobId: number, userId: number): Promise<JobCon
 }
 
 export async function saveContract(c: {
-  jobId: number; userId: number; signedName: string;
+  jobId: number; userId: number; assignmentId?: number | null; signedName: string;
   signaturePng: string; signedDate: string; schedule?: string | null;
 }) {
   await ensureSchema();
+  // Keyed on the sub-contract, so a worker holding two on one job signs twice.
+  if (c.assignmentId) {
+    await sql`
+      INSERT INTO job_contracts
+        (job_id, user_id, assignment_id, signed_name, signature_png, signed_date, schedule, agreed)
+      VALUES (${c.jobId}, ${c.userId}, ${c.assignmentId}, ${c.signedName}, ${c.signaturePng},
+              ${c.signedDate}, ${c.schedule || null}, TRUE)
+      ON CONFLICT (assignment_id) WHERE assignment_id IS NOT NULL DO UPDATE SET
+        signed_name = EXCLUDED.signed_name, signature_png = EXCLUDED.signature_png,
+        signed_date = EXCLUDED.signed_date, schedule = EXCLUDED.schedule, created_at = NOW();`;
+    return;
+  }
+  // Older jobs with no sub-contract row keep one agreement for the job.
+  const existing = await sql<{ id: number }>`
+    SELECT id FROM job_contracts
+     WHERE job_id = ${c.jobId} AND user_id = ${c.userId} AND assignment_id IS NULL LIMIT 1;`;
+  if (existing.rows[0]) {
+    await sql`
+      UPDATE job_contracts SET signed_name = ${c.signedName}, signature_png = ${c.signaturePng},
+        signed_date = ${c.signedDate}, schedule = ${c.schedule || null}, created_at = NOW()
+       WHERE id = ${existing.rows[0].id};`;
+    return;
+  }
   await sql`
     INSERT INTO job_contracts (job_id, user_id, signed_name, signature_png, signed_date, schedule, agreed)
-    VALUES (${c.jobId}, ${c.userId}, ${c.signedName}, ${c.signaturePng}, ${c.signedDate}, ${c.schedule || null}, TRUE)
-    ON CONFLICT (job_id, user_id) DO UPDATE SET
-      signed_name = EXCLUDED.signed_name, signature_png = EXCLUDED.signature_png,
-      signed_date = EXCLUDED.signed_date, schedule = EXCLUDED.schedule, created_at = NOW();`;
+    VALUES (${c.jobId}, ${c.userId}, ${c.signedName}, ${c.signaturePng}, ${c.signedDate}, ${c.schedule || null}, TRUE);`;
+}
+
+/** Every agreement this worker has signed, newest first. */
+export async function listContractsForUser(userId: number): Promise<JobContract[]> {
+  await ensureSchema();
+  return (await sql<JobContract>`
+    SELECT * FROM job_contracts WHERE user_id = ${userId} ORDER BY created_at DESC LIMIT 200;`).rows;
 }
 
 export async function listAgencyPayments(): Promise<AgencyPayment[]> {
@@ -834,6 +873,7 @@ export type NewWorkLog = {
   leafletCount?: number | null;
   areaWorked?: string | null;
   clientJobId?: number | null;
+  assignmentId?: number | null;
   stravaUrls: string[];
   stravaStatus?: string | null;
   stravaVerified?: boolean;
@@ -847,12 +887,12 @@ export async function insertWorkLog(e: NewWorkLog): Promise<number | null> {
   const r = await sql<{ id: number }>`
     INSERT INTO work_logs
       (user_id, worker_name, job_number, started_at, ended_at, time_spent,
-       leaflet_count, area_worked, client_job_id, strava_url, strava_urls, strava_status,
+       leaflet_count, area_worked, client_job_id, assignment_id, strava_url, strava_urls, strava_status,
        strava_verified, mapmy_urls, notes)
     VALUES
       (${e.userId}, ${e.workerName}, ${e.jobNumber}, ${e.startedAt}, ${e.endedAt},
        ${e.timeSpent || null}, ${e.leafletCount ?? null}, ${e.areaWorked || null},
-       ${e.clientJobId ?? null}, ${e.stravaUrls[0] || null}, ${packLinks(e.stravaUrls)}, ${e.stravaStatus || null},
+       ${e.clientJobId ?? null}, ${e.assignmentId ?? null}, ${e.stravaUrls[0] || null}, ${packLinks(e.stravaUrls)}, ${e.stravaStatus || null},
        ${e.stravaVerified ?? false}, ${packLinks(e.mapmyUrls || [])}, ${e.notes || null})
     RETURNING id;
   `;
@@ -879,6 +919,16 @@ export async function listWorkLogsForUser(userId: number): Promise<WorkLog[]> {
 export async function setWorkLogAmount(id: number, amount: number | null) {
   await ensureSchema();
   await sql`UPDATE work_logs SET amount = ${amount} WHERE id = ${id};`;
+}
+
+/** Office signs off on the tracking; only then is the shift owed. */
+export async function setWorkLogVerified(id: number, verified: boolean) {
+  await ensureSchema();
+  if (verified) {
+    await sql`UPDATE work_logs SET verified_at = COALESCE(verified_at, NOW()) WHERE id = ${id};`;
+  } else {
+    await sql`UPDATE work_logs SET verified_at = NULL WHERE id = ${id};`;
+  }
 }
 
 /** Admin marks a job paid (or back to unpaid with null). Stamps the moment it was paid. */

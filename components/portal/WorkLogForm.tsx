@@ -180,6 +180,7 @@ export default function WorkLogForm({ onDone, job, mine, editing, onCancel, sign
           ...(editing ? { id: editing.id } : {}),
           jobNumber, startedAt, endedAt, timeSpent,
           leafletCount, areaWorked, clientJobId: job?.id ?? null,
+          assignmentId: mine?.id ?? null,
           stravaUrls: cleanStrava, mapmyUrls: cleanMapmy, notes,
         }),
       });

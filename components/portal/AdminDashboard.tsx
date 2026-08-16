@@ -114,7 +114,9 @@ export default function AdminDashboard({ onSignOut }: { onSignOut: () => void })
       .filter((j) => !isTestJob(j))
       .filter((j) => inPeriod(j.completed_on || j.picked_on || j.created_at));
     const fe = finance.filter((f) => inPeriod(f.entry_date));
-    const owed = lg.filter((l) => !l.paid_on).reduce((t, l) => t + num(l.amount), 0);
+    // Owed means signed off and unpaid; work still being checked isn't a debt yet.
+    const owed = lg.filter((l) => !l.paid_on && l.verified_at).reduce((t, l) => t + num(l.amount), 0);
+    const unverified = lg.filter((l) => !l.paid_on && !l.verified_at).reduce((t, l) => t + num(l.amount), 0);
     const paid = lg.filter((l) => l.paid_on).reduce((t, l) => t + num(l.amount), 0);
     // Revenue is only recognised once an invoice has been raised — until then a
     // job sits in "agencies owe me" and contributes nothing to profit.
@@ -125,7 +127,7 @@ export default function AdminDashboard({ onSignOut }: { onSignOut: () => void })
     // unbilled is money to chase up, not a debt they're carrying.
     const agenciesOwe = cj.filter((j) => j.invoice_status === "sent").reduce((t, j) => t + num(j.amount), 0);
     const uninvoiced = cj.filter((j) => j.invoice_status === "not_sent").reduce((t, j) => t + num(j.amount), 0);
-    return { owed, paid, revenue, expenses, agenciesOwe, uninvoiced, profit: revenue - expenses - (owed + paid) };
+    return { owed, unverified, paid, revenue, expenses, agenciesOwe, uninvoiced, profit: revenue - expenses - (owed + paid + unverified) };
   }, [logs, finance, clientJobs, inPeriod, isTestJob]);
 
   // Revenue and profit grouped by month for the finance chart.
@@ -236,6 +238,30 @@ export default function AdminDashboard({ onSignOut }: { onSignOut: () => void })
         <Stat label="Revenue" value={money(totals.revenue)} />
         <Stat label="Profit" value={money(totals.profit)} tone="paid" />
       </div>
+
+      {(() => {
+        const waiting = logs.filter((l) => !l.verified_at && !l.paid_on);
+        if (!waiting.length) return null;
+        return (
+          <GlassCard className="mt-6 border-amber-400/30 bg-amber-500/[0.08] p-5 sm:p-6">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <p className="font-display text-lg font-bold text-amber-200">
+                  {waiting.length} shift{waiting.length === 1 ? "" : "s"} marked done, waiting on you
+                </p>
+                <p className="mt-1 text-sm text-amber-100/70">
+                  {waiting.slice(0, 3).map((l) => l.worker_name).join(", ")}
+                  {waiting.length > 3 ? ` and ${waiting.length - 3} more` : ""} — check the tracking, then they&apos;re ready to pay.
+                </p>
+              </div>
+              <button onClick={() => setTab("shifts")}
+                className="rounded-xl bg-amber-400/90 px-5 py-2.5 text-[13px] font-bold text-[#2b1a02] transition hover:bg-amber-300">
+                Review shifts →
+              </button>
+            </div>
+          </GlassCard>
+        );
+      })()}
 
       {!dbOn && (
         <GlassCard className="mt-6 border-amber-400/25 bg-amber-500/[0.07] p-6">
@@ -408,8 +434,17 @@ function JobRow({ log, post }: { log: WorkLog; post: (u: string, b: unknown) => 
             <input value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="$ amount" inputMode="decimal" className={input} />
             <button onClick={() => post("/api/portal/admin/job", { id: log.id, amount: amount === "" ? null : amount })} className={btnGhost}>Save</button>
           </div>
+          {/* Marked done by the worker; the office checks the tracking, then pays. */}
+          <button onClick={() => post("/api/portal/admin/job", { id: log.id, verified: !log.verified_at })}
+            className={log.verified_at
+              ? "rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-semibold text-emerald-300 transition hover:bg-emerald-500/20"
+              : "rounded-xl border border-amber-400/40 bg-amber-500/15 px-4 py-2.5 text-sm font-bold text-amber-200 transition hover:bg-amber-500/25"}>
+            {log.verified_at ? "Verified ✓ — undo" : "Verify tracking"}
+          </button>
           <button onClick={() => post("/api/portal/admin/job", { id: log.id, markPaid: !paid })}
-            className={paid ? btnGhost : btn}>
+            disabled={!paid && !log.verified_at}
+            className={`${paid ? btnGhost : btn} disabled:cursor-not-allowed disabled:opacity-40`}
+            title={!paid && !log.verified_at ? "Verify the tracking first" : undefined}>
             {paid ? "Mark unpaid" : "Mark as paid"}
           </button>
         </div>

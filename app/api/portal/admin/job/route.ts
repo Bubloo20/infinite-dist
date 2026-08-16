@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { isAdmin } from "@/lib/portal/auth";
-import { setWorkLogAmount, setWorkLogPaid } from "@/lib/portal/db";
+import { setWorkLogAmount, setWorkLogPaid, setWorkLogVerified } from "@/lib/portal/db";
 
 export const dynamic = "force-dynamic";
 
@@ -9,7 +9,7 @@ export async function POST(req: Request) {
   if (!isAdmin()) {
     return NextResponse.json({ ok: false, error: "Admin access required." }, { status: 401 });
   }
-  let b: { id?: number; amount?: string | number | null; paidOn?: string | null; markPaid?: boolean };
+  let b: { id?: number; amount?: string | number | null; paidOn?: string | null; markPaid?: boolean; verified?: boolean };
   try {
     b = await req.json();
   } catch {
@@ -24,6 +24,9 @@ export async function POST(req: Request) {
         return NextResponse.json({ ok: false, error: "Amount must be a positive number." }, { status: 400 });
       }
       await setWorkLogAmount(b.id, raw);
+    }
+    if (b.verified !== undefined) {
+      await setWorkLogVerified(b.id, Boolean(b.verified));
     }
     if (b.markPaid !== undefined) {
       await setWorkLogPaid(b.id, b.markPaid ? b.paidOn || new Date().toISOString().slice(0, 10) : null);

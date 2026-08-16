@@ -3,7 +3,7 @@ import { currentSession } from "@/lib/portal/auth";
 import {
   listOpenJobs, listJobsForWorkerAll, listInterest, addInterest, removeInterest,
   getContract, saveContract, findUserById, dbConfigured, listAssignmentsForUser,
-  upsertAssignment, listWorkLogsForUser, syncJobOutCount, acceptAssignments,
+  upsertAssignment, listWorkLogsForUser, syncJobOutCount, acceptAssignment, listContractsForUser,
 } from "@/lib/portal/db";
 
 export const dynamic = "force-dynamic";
@@ -20,18 +20,22 @@ export async function GET() {
       listWorkLogsForUser(s.userId),
     ]);
     const interest = allInterest.filter((i) => i.user_id === s.userId).map((i) => i.job_id);
-    const contracts = await Promise.all(mine.map((j) => getContract(j.id, s.userId!)));
+    const signed = await listContractsForUser(s.userId);
     // Only what the job card needs to show progress and payment state.
     const logs = myLogs.map((l) => ({
       id: l.id, jobId: l.client_job_id, jobNumber: l.job_number,
       startedAt: l.started_at, endedAt: l.ended_at, timeSpent: l.time_spent,
+      assignmentId: l.assignment_id,
       leaflets: l.leaflet_count, amount: l.amount, paidOn: l.paid_on, paidAt: l.paid_at,
+      verifiedAt: l.verified_at,
       areaWorked: l.area_worked, notes: l.notes,
       stravaUrls: l.strava_urls, mapmyUrls: l.mapmy_urls,
     }));
     return NextResponse.json({
       ok: true, open, mine, interest, assignments, logs,
-      contracts: contracts.filter(Boolean).map((c) => ({ jobId: c!.job_id, signedDate: c!.signed_date })),
+      contracts: signed.map((c) => ({
+        jobId: c.job_id, assignmentId: c.assignment_id, signedDate: c.signed_date,
+      })),
     });
   } catch (e) {
     return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "Query failed." }, { status: 500 });
@@ -66,11 +70,12 @@ export async function POST(req: Request) {
       const mine = await listJobsForWorkerAll(s.userId);
       const job = mine.find((j) => j.id === jobId);
       if (!job) return NextResponse.json({ ok: false, error: "That job isn't assigned to you." }, { status: 403 });
-      // A worker can hold several sub-contracts on one job; accepting takes
-      // them all, and never invents a new one.
+      // Each sub-contract is accepted on its own — two on the same job are two
+      // separate pieces of work.
       const held = (await listAssignmentsForUser(s.userId)).filter((a) => a.job_id === jobId);
-      if (held.length) {
-        await acceptAssignments(jobId, s.userId);
+      const target = b.assignmentId ? held.find((a) => a.id === Number(b.assignmentId)) : held[0];
+      if (target) {
+        await acceptAssignment(target.id, s.userId);
       } else {
         await upsertAssignment({
           jobId, userId: s.userId, status: "accepted",
@@ -99,8 +104,14 @@ export async function POST(req: Request) {
         return NextResponse.json({ ok: false, error: "That job isn't assigned to you." }, { status: 403 });
       }
       const user = await findUserById(s.userId);
+      // Signing is against one sub-contract, so each is agreed separately.
+      const heldNow = (await listAssignmentsForUser(s.userId)).filter((a) => a.job_id === jobId);
+      const signFor = b.assignmentId
+        ? heldNow.find((a) => a.id === Number(b.assignmentId))
+        : heldNow.length === 1 ? heldNow[0] : null;
       await saveContract({
-        jobId, userId: s.userId, signedName: signedName || user?.full_name || "",
+        jobId, userId: s.userId, assignmentId: signFor?.id ?? null,
+        signedName: signedName || user?.full_name || "",
         signaturePng, signedDate, schedule: (b.schedule as string) || null,
       });
       return NextResponse.json({ ok: true });
