@@ -146,6 +146,7 @@ export default function JobContract({
   const [sig, setSig] = useState<string | null>(null);
   const [agreed, setAgreed] = useState(false);
   const [schedule, setSchedule] = useState<Record<string, { start: string; end: string }>>({});
+  const [openDay, setOpenDay] = useState<string | null>(null);
   const [weekStart, setWeekStart] = useState(() => weekStartOf(mine?.start_date ? new Date(mine.start_date) : new Date()));
 
   const minHours = parseMinHours(mine?.min_hours || job.min_hours);
@@ -159,6 +160,7 @@ export default function JobContract({
     const d = new Date(weekStart);
     d.setDate(d.getDate() + delta * 7);
     setWeekStart(d);
+    setOpenDay(null);
   };
   const weekDays = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(weekStart);
@@ -310,43 +312,66 @@ export default function JobContract({
           Every day is optional — page back and forward through the weeks and fill in whichever days or weekends suit you.
         </p>
 
-        <div className="mt-3 space-y-2">
+        <div className="mt-3 space-y-1.5">
           {weekDays.map((d) => {
             const key = iso(d);
             const v = schedule[key] || { start: "", end: "" };
             const hrs = hoursBetween(v.start, v.end);
             const half = (v.start && !v.end) || (!v.start && v.end);
+            const isOpen = openDay === key;
             return (
               <div key={key}
-                className={`flex flex-wrap items-center gap-2 rounded-xl border px-3 py-2 ${
+                className={`overflow-hidden rounded-xl border transition ${
                   half ? "border-amber-400/35 bg-amber-500/[0.07]"
                   : hrs ? "border-emerald-400/25 bg-emerald-500/[0.06]"
-                  : "border-white/10 bg-white/[0.04]"}`}>
-                <span className="w-[104px] shrink-0">
-                  <span className="block text-[13px] font-semibold text-white/75">{DAY_NAMES[d.getDay()]}</span>
-                  <span className="block text-[11px] text-white/35">
-                    {d.toLocaleDateString("en-AU", { day: "numeric", month: "short" })}
+                  : isOpen ? "border-white/20 bg-white/[0.06]"
+                  : "border-white/10 bg-white/[0.03]"}`}>
+                {/* Closed by default — open a day only when there's time to add. */}
+                <button type="button" onClick={() => setOpenDay(isOpen ? null : key)}
+                  className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition hover:bg-white/[0.04]">
+                  <span className="w-[104px] shrink-0">
+                    <span className="block text-[13px] font-semibold text-white/80">{DAY_NAMES[d.getDay()]}</span>
+                    <span className="block text-[11px] text-white/35">
+                      {d.toLocaleDateString("en-AU", { day: "numeric", month: "short" })}
+                    </span>
                   </span>
-                </span>
-                <label className="flex min-w-[132px] flex-1 items-center gap-2">
-                  <span className="text-[11px] font-bold uppercase tracking-wide text-white/40">Start</span>
-                  <input type="time" value={v.start} aria-label={`${DAY_NAMES[d.getDay()]} ${key} start`}
-                    onChange={(e) => setSchedule((sc) => ({ ...sc, [key]: { start: e.target.value, end: sc[key]?.end || "" } }))}
-                    className="w-full rounded-lg border border-white/12 bg-white/[0.05] px-2 py-1.5 text-[13px] text-white [color-scheme:dark]" />
-                </label>
-                <label className="flex min-w-[132px] flex-1 items-center gap-2">
-                  <span className="text-[11px] font-bold uppercase tracking-wide text-white/40">End</span>
-                  <input type="time" value={v.end} aria-label={`${DAY_NAMES[d.getDay()]} ${key} end`}
-                    onChange={(e) => setSchedule((sc) => ({ ...sc, [key]: { start: sc[key]?.start || "", end: e.target.value } }))}
-                    className="w-full rounded-lg border border-white/12 bg-white/[0.05] px-2 py-1.5 text-[13px] text-white [color-scheme:dark]" />
-                </label>
-                <span className="w-16 shrink-0 text-right text-[12px] font-semibold text-white/50">
-                  {hrs ? `${hrs.toFixed(2).replace(/\.?0+$/, "")}h` : "—"}
-                </span>
-                {(v.start || v.end) && (
-                  <button type="button" aria-label={`Clear ${key}`}
-                    onClick={() => setSchedule((sc) => { const n = { ...sc }; delete n[key]; return n; })}
-                    className="shrink-0 rounded-lg px-2 py-1 text-white/30 transition hover:bg-white/[0.08] hover:text-white">×</button>
+                  <span className="flex-1 text-[13px]">
+                    {half ? (
+                      <span className="text-amber-300">Needs both a start and an end</span>
+                    ) : hrs ? (
+                      <span className="text-emerald-200">{v.start} – {v.end}</span>
+                    ) : (
+                      <span className="text-white/30">Not working — tap to add times</span>
+                    )}
+                  </span>
+                  <span className="shrink-0 text-[12px] font-semibold text-white/45">
+                    {hrs ? fmtHours(hrs) : ""}
+                  </span>
+                  <span className={`shrink-0 text-white/35 transition-transform ${isOpen ? "rotate-180" : ""}`}>\u25be</span>
+                </button>
+
+                {isOpen && (
+                  <div className="flex flex-wrap items-center gap-2 border-t border-white/10 px-3 py-2.5">
+                    <label className="flex min-w-[140px] flex-1 items-center gap-2">
+                      <span className="text-[11px] font-bold uppercase tracking-wide text-white/40">Start</span>
+                      <input type="time" value={v.start} aria-label={`${DAY_NAMES[d.getDay()]} ${key} start`}
+                        onChange={(ev) => setSchedule((sc) => ({ ...sc, [key]: { start: ev.target.value, end: sc[key]?.end || "" } }))}
+                        className="w-full rounded-lg border border-white/12 bg-white/[0.05] px-2 py-1.5 text-[13px] text-white [color-scheme:dark]" />
+                    </label>
+                    <label className="flex min-w-[140px] flex-1 items-center gap-2">
+                      <span className="text-[11px] font-bold uppercase tracking-wide text-white/40">End</span>
+                      <input type="time" value={v.end} aria-label={`${DAY_NAMES[d.getDay()]} ${key} end`}
+                        onChange={(ev) => setSchedule((sc) => ({ ...sc, [key]: { start: sc[key]?.start || "", end: ev.target.value } }))}
+                        className="w-full rounded-lg border border-white/12 bg-white/[0.05] px-2 py-1.5 text-[13px] text-white [color-scheme:dark]" />
+                    </label>
+                    {(v.start || v.end) && (
+                      <button type="button"
+                        onClick={() => setSchedule((sc) => { const n = { ...sc }; delete n[key]; return n; })}
+                        className="shrink-0 rounded-lg border border-white/12 px-3 py-1.5 text-[12px] font-semibold text-white/45 transition hover:text-rose-300">
+                        Clear day
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
             );

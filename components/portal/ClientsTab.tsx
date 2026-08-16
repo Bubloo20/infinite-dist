@@ -121,6 +121,7 @@ function AgencyDetail({ agency, agents, jobs, payments, post, del }: {
   const [d, setD] = useState({
     name: agency.name, pricePerLeaflet: agency.price_per_leaflet || "",
     email: agency.email || "", phone: agency.phone || "", address: agency.address || "",
+    invoiceSeq: agency.invoice_seq != null ? String(agency.invoice_seq) : "",
   });
 
   const tabs = [
@@ -229,6 +230,17 @@ function AgencyDetail({ agency, agents, jobs, payments, post, del }: {
           <input className={input} placeholder="Email" value={d.email} onChange={(e) => setD({ ...d, email: e.target.value })} />
           <input className={input} placeholder="Phone" value={d.phone} onChange={(e) => setD({ ...d, phone: e.target.value })} />
           <input className={`${input} sm:col-span-2`} placeholder="Address" value={d.address} onChange={(e) => setD({ ...d, address: e.target.value })} />
+          <label className="block sm:col-span-2">
+            <span className="mb-1 block text-[12px] font-semibold text-white/40">
+              Last invoice number used for this agency
+            </span>
+            <input className={input} inputMode="numeric" placeholder="e.g. 6"
+              value={d.invoiceSeq}
+              onChange={(e) => setD({ ...d, invoiceSeq: e.target.value })} />
+            <span className="mt-1 block text-[12px] text-white/30">
+              Each agency runs its own numbering. The next invoice is suggested from this.
+            </span>
+          </label>
           <div className="flex gap-2 sm:col-span-2">
             <button className={btn} onClick={() => post({ entity: "agency", id: agency.id, ...d })}>Save details</button>
             <button className="rounded-xl border border-rose-400/30 px-4 py-2.5 text-sm font-semibold text-rose-300 transition hover:bg-rose-500/10"
@@ -401,6 +413,9 @@ function ClientJobRow({ job, agencyName, agentName, agencies, agents, expenses, 
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [e, setE] = useState(() => seed(job));
+  // Each agency numbers its own invoices, so the suggestion follows theirs.
+  const agencySeq = agencies.find((a) => a.id === job.agency_id)?.invoice_seq ?? null;
+  const nextInvoiceNo = agencySeq != null ? String(agencySeq + 1) : "";
   // Re-seed when the job changes underneath us (another save, a refresh).
   useEffect(() => { if (!editing) setE(seed(job)); }, [job, editing]);
   const s = STATUS[job.status];
@@ -492,9 +507,33 @@ function ClientJobRow({ job, agencyName, agentName, agencies, agents, expenses, 
             {inv === "received" && job.invoice_date ? ` ${day(job.invoice_date)}` : ""}
           </span>
           <div className="flex flex-wrap items-center justify-end gap-2">
-            <input className={`${input} !w-28 !py-1.5 !text-[12px]`} placeholder="Invoice no."
-              defaultValue={job.invoice_no || ""} aria-label="Invoice number"
-              onBlur={(e) => { if (e.target.value !== (job.invoice_no || "")) post({ entity: "job", id: job.id, ...jobPayload(job), invoiceNo: e.target.value }); }} />
+            <label className="flex items-center gap-1.5 rounded-lg border border-white/12 bg-white/[0.04] px-2.5 py-1.5"
+              title="Leave the invoice number off this one">
+              <input type="checkbox" className="h-3.5 w-3.5 accent-[#7c3aed]"
+                checked={Boolean(job.invoice_no_hidden)}
+                onChange={(e) => post({
+                  entity: "job", id: job.id, ...jobPayload(job),
+                  invoiceNoHidden: e.target.checked,
+                  invoiceNo: e.target.checked ? null : job.invoice_no,
+                })} />
+              <span className="text-[11px] font-semibold text-white/50">No number</span>
+            </label>
+            {!job.invoice_no_hidden && (
+              <input className={`${input} !w-28 !py-1.5 !text-[12px]`}
+                placeholder={nextInvoiceNo ? `no. ${nextInvoiceNo}` : "Invoice no."}
+                defaultValue={job.invoice_no || ""} aria-label="Invoice number" key={job.invoice_no || "blank"}
+                onBlur={(e) => { if (e.target.value !== (job.invoice_no || "")) post({ entity: "job", id: job.id, ...jobPayload(job), invoiceNo: e.target.value }); }} />
+            )}
+            {!job.invoice_no_hidden && !job.invoice_no && nextInvoiceNo && (
+              <button
+                onClick={() => post({
+                  entity: "job", id: job.id, ...jobPayload(job), invoiceNo: nextInvoiceNo,
+                  agencyInvoiceSeq: Number(nextInvoiceNo),
+                })}
+                className="rounded-lg border border-orchid/40 bg-orchid/10 px-2.5 py-1.5 text-[11px] font-bold text-orchid transition hover:bg-orchid/20">
+                Use {nextInvoiceNo}
+              </button>
+            )}
             <input type="date" className={`${input} !w-auto !py-1.5 !text-[12px]`}
               value={job.invoice_date || ""} aria-label="Invoice / paid date"
               onChange={(e) => post({ entity: "job", id: job.id, ...jobPayload(job), invoiceDate: e.target.value })} />

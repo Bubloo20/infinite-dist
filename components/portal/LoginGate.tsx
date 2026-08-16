@@ -65,39 +65,22 @@ export default function LoginGate({
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
 
-  const [suggestions, setSuggestions] = useState<string[]>([]);
-  const [showList, setShowList] = useState(false);
-  const nameBox = useRef<HTMLDivElement>(null);
+  const [roster, setRoster] = useState<{ name: string; hasAccount: boolean }[]>([]);
+  const [rosterLoaded, setRosterLoaded] = useState(false);
 
   const isAdmin = mode === "admin";
 
-  // Type-ahead: only fires from 3 characters, so the roster is never listed.
+  // Only people the office has added can sign in, so offer the register
+  // rather than a free-text box that can be typo'd.
   useEffect(() => {
-    if (isAdmin || tab !== "signin" || fullName.trim().length < 3) {
-      setSuggestions([]);
-      return;
-    }
-    const t = setTimeout(async () => {
-      try {
-        const r = await fetch(`/api/portal/name-suggest?q=${encodeURIComponent(fullName.trim())}`);
-        const d = await r.json();
-        const names: string[] = d.names || [];
-        setSuggestions(names.filter((n) => n.toLowerCase() !== fullName.trim().toLowerCase()));
-        setShowList(true);
-      } catch {
-        setSuggestions([]);
-      }
-    }, 250);
-    return () => clearTimeout(t);
-  }, [fullName, tab, isAdmin]);
+    if (isAdmin) return;
+    fetch("/api/portal/roster")
+      .then((r) => r.json())
+      .then((d) => setRoster(d.workers || []))
+      .catch(() => setRoster([]))
+      .finally(() => setRosterLoaded(true));
+  }, [isAdmin]);
 
-  useEffect(() => {
-    const away = (e: MouseEvent) => {
-      if (nameBox.current && !nameBox.current.contains(e.target as Node)) setShowList(false);
-    };
-    document.addEventListener("mousedown", away);
-    return () => document.removeEventListener("mousedown", away);
-  }, []);
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -154,7 +137,7 @@ export default function LoginGate({
           {!isAdmin && (
             <div className="mb-7 grid grid-cols-2 gap-1 rounded-2xl border border-white/10 bg-white/[0.04] p-1">
               {(["signin", "signup"] as const).map((t) => (
-                <button key={t} type="button" onClick={() => { setTab(t); setError(""); setShowList(false); }}
+                <button key={t} type="button" onClick={() => { setTab(t); setError(""); setFullName(""); }}
                   className={`rounded-xl py-2.5 text-sm font-bold transition ${
                     tab === t ? "bg-gradient-to-r from-electric to-orchid text-white shadow-[0_10px_26px_-12px_rgba(182,109,199,0.9)]" : "text-white/50 hover:text-white/80"}`}>
                   {t === "signin" ? "Sign in" : "Create account"}
@@ -174,41 +157,47 @@ export default function LoginGate({
 
           <form onSubmit={submit} className="mt-7 space-y-4">
             {!isAdmin && (
-              <div ref={nameBox}>
-                <label className="mb-2 block text-[13px] font-semibold uppercase tracking-[0.1em] text-white/50">Full name</label>
-                <div className="relative">
-                  <input
-                    className={inputCls}
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    onFocus={() => suggestions.length && setShowList(true)}
-                    placeholder="Start typing your name…"
-                    autoComplete="off"
-                    required
-                  />
-                  <AnimatePresence>
-                    {showList && suggestions.length > 0 && tab === "signin" && (
-                      <motion.ul
-                        initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}
-                        transition={{ duration: 0.15 }}
-                        className="absolute z-20 mt-2 w-full overflow-hidden rounded-2xl border border-white/12 bg-[#141024] shadow-[0_24px_60px_-20px_rgba(0,0,0,0.9)]"
-                      >
-                        {suggestions.map((n) => (
-                          <li key={n}>
-                            <button type="button"
-                              onClick={() => { setFullName(n); setShowList(false); }}
-                              className="flex w-full items-center gap-3 px-5 py-3 text-left text-[15px] text-white/80 transition hover:bg-white/[0.08] hover:text-white">
-                              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-gradient-to-br from-electric to-orchid text-[11px] font-bold text-white">
-                                {n.split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase()}
-                              </span>
-                              {n}
-                            </button>
-                          </li>
+              <div>
+                <label className="mb-2 block text-[13px] font-semibold uppercase tracking-[0.1em] text-white/50">
+                  Your name
+                </label>
+                {rosterLoaded && roster.length === 0 ? (
+                  <>
+                    <input
+                      className={inputCls}
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
+                      placeholder="Your full name"
+                      autoComplete="off"
+                      required
+                    />
+                    <p className="mt-2 text-[13px] text-white/35">
+                      No one is on the register yet, so type your name in.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <select
+                      className={inputCls}
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
+                      required
+                    >
+                      <option value="">{rosterLoaded ? "Choose your name\u2026" : "Loading\u2026"}</option>
+                      {roster
+                        // Signing in needs an account; signing up is for those without one.
+                        .filter((w) => (tab === "signin" ? w.hasAccount : !w.hasAccount))
+                        .map((w) => (
+                          <option key={w.name} value={w.name}>{w.name}</option>
                         ))}
-                      </motion.ul>
-                    )}
-                  </AnimatePresence>
-                </div>
+                    </select>
+                    <p className="mt-2 text-[13px] text-white/35">
+                      {tab === "signin"
+                        ? "Not listed? Set up your account on the Create account tab."
+                        : "Already set up? Sign in instead. If your name isn\u2019t here, ask the office to add you."}
+                    </p>
+                  </>
+                )}
               </div>
             )}
 

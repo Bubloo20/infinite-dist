@@ -204,6 +204,10 @@ export async function ensureSchema() {
   await sql`ALTER TABLE client_jobs ADD COLUMN IF NOT EXISTS job_number TEXT;`;
   await sql`ALTER TABLE client_jobs ADD COLUMN IF NOT EXISTS delivered_count INTEGER;`;
   await sql`ALTER TABLE client_jobs ADD COLUMN IF NOT EXISTS out_count INTEGER;`;
+  // Each agency runs its own invoice sequence, and some invoices go out with no
+  // number at all.
+  await sql`ALTER TABLE agencies ADD COLUMN IF NOT EXISTS invoice_seq INTEGER;`;
+  await sql`ALTER TABLE client_jobs ADD COLUMN IF NOT EXISTS invoice_no_hidden BOOLEAN DEFAULT FALSE;`;
   // A sub-contract can carry its own traced area, separate from the whole job's.
   await sql`ALTER TABLE job_assignments ADD COLUMN IF NOT EXISTS boundary TEXT;`;
   await sql`ALTER TABLE job_assignments ADD COLUMN IF NOT EXISTS map_center TEXT;`;
@@ -294,7 +298,7 @@ export async function ensureSchema() {
 /* -------------------------- agencies, agents, jobs ------------------------- */
 
 export type Agency = {
-  id: number; name: string; price_per_leaflet: string | null;
+  id: number; name: string; price_per_leaflet: string | null; invoice_seq: number | null;
   email: string | null; phone: string | null; address: string | null;
   notes: string | null; created_at: string;
 };
@@ -309,7 +313,7 @@ export type ClientJob = {
   title: string | null; area: string | null; leaflet_type: string | null;
   quantity: number | null; rate_per_leaflet: string | null; amount: string | null;
   status: JobStatus; invoice_status: InvoiceStatus;
-  invoice_no: string | null; invoice_date: string | null;
+  invoice_no: string | null; invoice_date: string | null; invoice_no_hidden: boolean | null;
   picked_on: string | null; completed_on: string | null;
   notes: string | null; created_at: string;
   // marketplace / assignment
@@ -355,18 +359,21 @@ export async function listAgencies(): Promise<Agency[]> {
 export async function upsertAgency(a: {
   id?: number | null; name: string; pricePerLeaflet?: number | null;
   email?: string | null; phone?: string | null; address?: string | null; notes?: string | null;
+  invoiceSeq?: number | null;
 }) {
   await ensureSchema();
   if (a.id) {
     await sql`
       UPDATE agencies SET name=${a.name}, price_per_leaflet=${a.pricePerLeaflet ?? null},
-        email=${a.email ?? null}, phone=${a.phone ?? null}, address=${a.address ?? null}, notes=${a.notes ?? null}
+        email=${a.email ?? null}, phone=${a.phone ?? null}, address=${a.address ?? null}, notes=${a.notes ?? null},
+        invoice_seq=${a.invoiceSeq ?? null}
       WHERE id=${a.id};`;
     return a.id;
   }
   const r = await sql<{ id: number }>`
-    INSERT INTO agencies (name, price_per_leaflet, email, phone, address, notes)
-    VALUES (${a.name}, ${a.pricePerLeaflet ?? null}, ${a.email ?? null}, ${a.phone ?? null}, ${a.address ?? null}, ${a.notes ?? null})
+    INSERT INTO agencies (name, price_per_leaflet, email, phone, address, notes, invoice_seq)
+    VALUES (${a.name}, ${a.pricePerLeaflet ?? null}, ${a.email ?? null}, ${a.phone ?? null},
+            ${a.address ?? null}, ${a.notes ?? null}, ${a.invoiceSeq ?? null})
     RETURNING id;`;
   return r.rows[0].id;
 }
@@ -415,7 +422,7 @@ export async function upsertClientJob(j: {
   id?: number | null; agencyId?: number | null; agentId?: number | null;
   title?: string | null; area?: string | null; leafletType?: string | null;
   quantity?: number | null; ratePerLeaflet?: number | null; amount?: number | null;
-  status?: JobStatus; invoiceStatus?: InvoiceStatus; invoiceNo?: string | null;
+  status?: JobStatus; invoiceStatus?: InvoiceStatus; invoiceNo?: string | null; invoiceNoHidden?: boolean;
   invoiceDate?: string | null; pickedOn?: string | null; completedOn?: string | null; notes?: string | null;
 }) {
   await ensureSchema();
@@ -427,6 +434,7 @@ export async function upsertClientJob(j: {
         rate_per_leaflet=${j.ratePerLeaflet ?? null}, amount=${j.amount ?? null},
         status=${j.status ?? "to_send"}, invoice_status=${j.invoiceStatus ?? "not_sent"},
         invoice_no=${j.invoiceNo ?? null}, invoice_date=${j.invoiceDate ?? null},
+        invoice_no_hidden=${j.invoiceNoHidden ?? false},
         picked_on=${j.pickedOn ?? null}, completed_on=${j.completedOn ?? null}, notes=${j.notes ?? null}
       WHERE id=${j.id};`;
     return j.id;

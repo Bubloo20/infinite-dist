@@ -49,6 +49,7 @@ export async function POST(req: Request) {
         const name = String(b.name || "").trim();
         if (!name) return NextResponse.json({ ok: false, error: "Agency name is required." }, { status: 400 });
         const id = await upsertAgency({
+          invoiceSeq: n(b.invoiceSeq),
           id: n(b.id), name, pricePerLeaflet: n(b.pricePerLeaflet),
           email: (b.email as string) || null, phone: (b.phone as string) || null,
           address: (b.address as string) || null, notes: (b.notes as string) || null,
@@ -77,13 +78,29 @@ export async function POST(req: Request) {
           quantity: qty, ratePerLeaflet: rate, amount,
           status: (b.status as "to_send" | "out_for_delivery" | "completed") || "to_send",
           invoiceStatus: (b.invoiceStatus as "not_sent" | "sent" | "received") || "not_sent",
-          invoiceNo: (b.invoiceNo as string) || null, invoiceDate: (b.invoiceDate as string) || null,
+          invoiceNo: (b.invoiceNo as string) || null,
+          invoiceNoHidden: Boolean(b.invoiceNoHidden), invoiceDate: (b.invoiceDate as string) || null,
           pickedOn: (b.pickedOn as string) || null, completedOn: (b.completedOn as string) || null,
           notes: (b.notes as string) || null,
         });
         if (b.jobNumber !== undefined || b.deliveredCount !== undefined || b.outCount !== undefined) {
           await setJobProgress(id, (b.jobNumber as string) || null, n(b.deliveredCount), n(b.outCount));
         }
+        // Taking the suggested number moves the agency's run along.
+        const usedSeq = n(b.agencyInvoiceSeq);
+        const forAgency = n(b.agencyId);
+        if (usedSeq != null && forAgency) {
+          const agency = (await listAgencies()).find((a) => a.id === forAgency);
+          if (agency && (agency.invoice_seq ?? 0) < usedSeq) {
+            await upsertAgency({
+              id: agency.id, name: agency.name,
+              pricePerLeaflet: agency.price_per_leaflet != null ? Number(agency.price_per_leaflet) : null,
+              email: agency.email, phone: agency.phone, address: agency.address, notes: agency.notes,
+              invoiceSeq: usedSeq,
+            });
+          }
+        }
+
         // Marketplace extras: assignment, publishing, worker brief and boundary.
         if (b.assignedUserId !== undefined) await assignJob(id, n(b.assignedUserId));
         if (b.published !== undefined) await setJobPublished(id, Boolean(b.published));

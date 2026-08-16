@@ -15,7 +15,7 @@ const MAX_AGE = 60 * 60 * 24 * 14; // 14 days
 const ADMIN_HASH = "b750a9185b0b7c8c9fb6b791fb4a250ec5c82bb46a103b3c981ae3bc6d3ad556";
 
 /** Shared team password, required to create a worker account. Override: WORKER_PASSWORD. */
-const TEAM_HASH = "704b7acbacf9cd963218680c4709da2bff5a4020a234f835bb84f454275b1376";
+const TEAM_HASH = "de7d1b721a1e0632b7cf04edf5032c8ecffa9f9a08492152b926f1a5a7e765d7";
 
 const sha256 = (v: string) => crypto.createHash("sha256").update(v).digest("hex");
 

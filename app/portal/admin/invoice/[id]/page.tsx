@@ -77,7 +77,7 @@ export default function InvoicePage() {
             onClick={() => {
               const to = agencyAgents.find((a) => String(a.id) === sendTo);
               if (!to?.email) return;
-              const invNo = job.invoice_no || `00${job.id}`;
+              const invNo = job.invoice_no_hidden ? "" : job.invoice_no || `00${job.id}`;
               const subject = `Invoice ${invNo} — Infinite Distributions`;
               const body =
                 `Hi ${to.name.split(" ")[0]},\n\n` +
@@ -125,7 +125,10 @@ export default function InvoicePage() {
             {agency?.address && <p>{agency.address}</p>}
           </div>
           <div className="text-[15px] text-ink/85">
-            <p>Invoice No: <span className="font-semibold">{job.invoice_no || `00${job.id}`}</span></p>
+            {/* Some invoices go out without a number at all. */}
+            {!job.invoice_no_hidden && (
+              <p>Invoice No: <span className="font-semibold">{job.invoice_no || `00${job.id}`}</span></p>
+            )}
             <p>Invoice Date: <span className="font-semibold">{dateAu(job.invoice_date || job.completed_on)}</span></p>
           </div>
         </div>

@@ -1,33 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { motion } from "framer-motion";
 
-const HOLD_MS = 2200;
-const FADE_MS = 700;
-
-/** The infinity mark, drawn so it tiles crisply at any size. */
-function InfinityMark({ className = "" }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 200 100" className={className} fill="none" aria-hidden="true">
-      <path
-        d="M100 50c-12-19-24-28-38-28a28 28 0 1 0 0 56c14 0 26-9 38-28zm0 0c12 19 24 28 38 28a28 28 0 1 0 0-56c-14 0-26 9-38 28z"
-        stroke="currentColor"
-        strokeWidth="13"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
+const HOLD_MS = 2100;
+const FADE_MS = 650;
 
 /**
- * The intro the site opens on — a tiled infinity watermark, the mark lighting up
- * behind a sweep of brand purple, then the wordmark. Shown once per browser tab
- * so moving around the site doesn't replay it.
+ * The intro the site opens on — the infinity mark turning under a travelling
+ * band of purple light, then the wordmark.
  *
- * The fade-out is driven by state and a CSS transition rather than
- * AnimatePresence: the overlay covers the whole site, so its removal has to be
- * guaranteed, not left to an animation library's exit hook.
+ * The fade-out is driven by state and a CSS transition rather than an
+ * animation library: the overlay covers the whole site, so its removal has to
+ * be guaranteed, not left to an exit hook. Shown once per browser tab.
  */
 export default function LoadingScreen() {
   const [phase, setPhase] = useState<"idle" | "show" | "fading" | "done">("idle");
@@ -39,8 +23,7 @@ export default function LoadingScreen() {
     } catch {
       /* private mode — just show it */
     }
-    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (seen || reduced) {
+    if (seen || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
       setPhase("done");
       return;
     }
@@ -70,67 +53,111 @@ export default function LoadingScreen() {
 
   return (
     <div
-      className={`fixed inset-0 z-[200] grid place-items-center overflow-hidden bg-[#080808] transition-opacity duration-700 ${
+      className={`idp-intro fixed inset-0 z-[200] grid place-items-center overflow-hidden bg-[#070707] transition-opacity duration-[650ms] ${
         phase === "fading" ? "pointer-events-none opacity-0" : "opacity-100"
       }`}
     >
-      {/* Tiled watermark */}
-      <div className="pointer-events-none absolute inset-0 flex flex-col justify-center gap-6 opacity-[0.05]">
-        {Array.from({ length: 9 }).map((_, row) => (
-          <div
-            key={row}
-            className="flex shrink-0 justify-center gap-10"
-            style={{ transform: `translateX(${row % 2 ? "-3.5rem" : "3.5rem"})` }}
-          >
-            {Array.from({ length: 9 }).map((_, col) => (
-              <span key={col} className="relative shrink-0 text-white/80">
-                <InfinityMark className="h-[52px] w-[104px]" />
-                <span className="absolute inset-0 grid place-items-center text-[10px] font-extrabold tracking-[0.18em] text-white/70">
-                  INFINITE
-                </span>
-              </span>
-            ))}
-          </div>
-        ))}
+      {/* Purple bloom, breathing behind the mark */}
+      <div className="idp-bloom pointer-events-none absolute aspect-square w-[min(78vw,30rem)] rounded-full" />
+
+      <div className="relative flex flex-col items-center px-6">
+        <div className="idp-spin relative w-[min(64vw,17rem)]">
+          <svg viewBox="0 0 200 104" className="w-full overflow-visible" aria-hidden="true">
+            <defs>
+              <linearGradient id="idp-trace" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0%" stopColor="#8b93ff" />
+                <stop offset="55%" stopColor="#b66dc7" />
+                <stop offset="100%" stopColor="#8b93ff" />
+              </linearGradient>
+            </defs>
+
+            {/* The loop itself, sitting quietly under the light */}
+            <path
+              d="M100 52c-12-19-24-28-38-28a28 28 0 1 0 0 56c14 0 26-9 38-28zm0 0c12 19 24 28 38 28a28 28 0 1 0 0-56c-14 0-26 9-38 28z"
+              fill="none"
+              stroke="rgba(255,255,255,0.13)"
+              strokeWidth="11"
+              strokeLinecap="round"
+            />
+            {/* A band of light running the length of the loop */}
+            <path
+              className="idp-trace"
+              pathLength={100}
+              d="M100 52c-12-19-24-28-38-28a28 28 0 1 0 0 56c14 0 26-9 38-28zm0 0c12 19 24 28 38 28a28 28 0 1 0 0-56c-14 0-26 9-38 28z"
+              fill="none"
+              stroke="url(#idp-trace)"
+              strokeWidth="11"
+              strokeLinecap="round"
+            />
+          </svg>
+        </div>
+
+        <p className="idp-word mt-8 text-center font-display text-[clamp(0.7rem,2.6vw,0.95rem)] font-bold uppercase tracking-[0.38em] text-white/70">
+          Infinite&nbsp;Distribution
+        </p>
       </div>
 
-      {/* Purple bloom behind the mark */}
-      <motion.div
-        initial={{ opacity: 0, scale: 0.6 }}
-        animate={{ opacity: [0, 0.9, 0.55], scale: [0.6, 1.15, 1] }}
-        transition={{ duration: 1.8, ease: "easeOut", times: [0, 0.55, 1] }}
-        className="pointer-events-none absolute h-[420px] w-[420px] rounded-full bg-[radial-gradient(circle,rgba(182,109,199,0.55)_0%,rgba(124,58,237,0.22)_38%,transparent_70%)] blur-2xl"
-      />
-
-      <div className="relative flex flex-col items-center">
-        {/* The mark, lit by a sweep of light */}
-        <motion.div
-          initial={{ opacity: 0, scale: 0.86 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1] }}
-          className="relative overflow-hidden"
-        >
-          <InfinityMark className="h-[110px] w-[220px] text-white drop-shadow-[0_0_28px_rgba(182,109,199,0.55)]" />
-          <span className="absolute inset-0 grid place-items-center font-display text-[19px] font-extrabold tracking-[0.16em] text-white">
-            INFINITE
-          </span>
-          <motion.span
-            initial={{ x: "-130%" }}
-            animate={{ x: "130%" }}
-            transition={{ duration: 1.5, ease: "easeInOut", delay: 0.35 }}
-            className="pointer-events-none absolute inset-y-0 w-1/2 bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.55),transparent)] blur-md"
-          />
-        </motion.div>
-
-        <motion.p
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.7, delay: 0.7, ease: [0.22, 1, 0.36, 1] }}
-          className="mt-7 font-display text-[13px] font-semibold tracking-[0.42em] text-white/70 sm:text-[15px]"
-        >
-          INFINITE DISTRIBUTION
-        </motion.p>
-      </div>
+      <style jsx global>{`
+        .idp-bloom {
+          background: radial-gradient(
+            circle,
+            rgba(182, 109, 199, 0.5) 0%,
+            rgba(124, 58, 237, 0.22) 38%,
+            transparent 70%
+          );
+          filter: blur(46px);
+          animation: idp-breathe 2.6s ease-out both;
+        }
+        .idp-spin {
+          animation: idp-turn 6s linear infinite, idp-in 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+          filter: drop-shadow(0 0 22px rgba(182, 109, 199, 0.55));
+        }
+        .idp-trace {
+          stroke-dasharray: 22 78;
+          animation: idp-run 1.9s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+        }
+        .idp-word {
+          animation: idp-rise 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.55s both;
+        }
+        @keyframes idp-run {
+          to {
+            stroke-dashoffset: -100;
+          }
+        }
+        @keyframes idp-turn {
+          to {
+            transform: rotate(360deg);
+          }
+        }
+        @keyframes idp-in {
+          from {
+            opacity: 0;
+            transform: scale(0.82);
+          }
+        }
+        @keyframes idp-breathe {
+          0% {
+            opacity: 0;
+            transform: scale(0.65);
+          }
+          55% {
+            opacity: 0.95;
+            transform: scale(1.12);
+          }
+          100% {
+            opacity: 0.6;
+            transform: scale(1);
+          }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .idp-spin,
+          .idp-trace,
+          .idp-bloom,
+          .idp-word {
+            animation: none;
+          }
+        }
+      `}</style>
     </div>
   );
 }
