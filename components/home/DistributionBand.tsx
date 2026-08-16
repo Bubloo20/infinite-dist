@@ -6,7 +6,7 @@ export default function DistributionBand() {
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src="/images/home-distributions.jpg"
-        alt="Infinite Distributions"
+        alt="Infinite Distribution"
         className="absolute inset-0 h-full w-full object-cover"
       />
     </section>

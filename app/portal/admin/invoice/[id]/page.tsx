@@ -78,7 +78,7 @@ export default function InvoicePage() {
               const to = agencyAgents.find((a) => String(a.id) === sendTo);
               if (!to?.email) return;
               const invNo = job.invoice_no || "";
-              const subject = `Invoice ${invNo} — Infinite Distributions`;
+              const subject = `Invoice ${invNo} — Infinite Distribution`;
               const body =
                 `Hi ${to.name.split(" ")[0]},\n\n` +
                 `Please find attached invoice ${invNo} for ${qty ? qty.toLocaleString() : ""} leaflets` +
@@ -86,7 +86,7 @@ export default function InvoicePage() {
                 `Total amount due: $${money(total)}\n` +
                 `Payment terms: within 1 week of the invoice date.\n\n` +
                 `Bank details\nAccount name: Sarvesh Mohanrajh\nBSB: 670 - 864\nAccount No: 3878 5206\n\n` +
-                `Thanks,\nSarvesh Mohanrajh\nInfinite Distributions\nABN 66 177 274 211\n0421 042 007`;
+                `Thanks,\nSarvesh Mohanrajh\nInfinite Distribution\nABN 66 177 274 211\n0421 042 007`;
               window.open(
                 `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(to.email)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`,
                 "_blank", "noopener",

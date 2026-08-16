@@ -10,7 +10,7 @@ const sections: Section[] = [
     h: "Eligibility",
     intro: "Our On-Time Delivery Promise applies where:",
     items: [
-      "The booking has been accepted and confirmed by Infinite Distributions.",
+      "The booking has been accepted and confirmed by Infinite Distribution.",
       "A delivery deadline has been agreed upon before collection.",
       "The shipment is collected at the agreed pickup time.",
       "The sender and recipient are available to hand over and receive the goods.",
@@ -32,7 +32,7 @@ const sections: Section[] = [
     h: "Same-day deliveries",
     items: [
       "Same-day delivery is available upon request and is subject to driver availability and service capacity.",
-      "A same-day delivery is only considered confirmed once accepted by Infinite Distributions.",
+      "A same-day delivery is only considered confirmed once accepted by Infinite Distribution.",
       "If a same-day booking is accepted, the agreed delivery deadline will be confirmed at the time of booking.",
     ],
   },
@@ -51,7 +51,7 @@ const sections: Section[] = [
       "Vehicle breakdowns or accidents that could not reasonably have been prevented.",
       "Road closures due to police, emergency services or government authorities.",
       "Severe weather, floods, bushfires, storms or other natural disasters.",
-      "Industrial action, public emergencies or any event beyond the reasonable control of Infinite Distributions.",
+      "Industrial action, public emergencies or any event beyond the reasonable control of Infinite Distribution.",
     ],
   },
   {
@@ -65,7 +65,7 @@ const sections: Section[] = [
   {
     h: "General",
     paragraph:
-      "Infinite Distributions reserves the right to decline any booking where the requested delivery timeframe cannot reasonably be achieved.",
+      "Infinite Distribution reserves the right to decline any booking where the requested delivery timeframe cannot reasonably be achieved.",
   },
 ];
 

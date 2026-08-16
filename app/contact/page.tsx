@@ -9,18 +9,18 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     locale: "en_AU",
-    siteName: "Infinite Distributions",
-    title: "Contact & Free Quote | Infinite Distributions",
+    siteName: "Infinite Distribution",
+    title: "Contact & Free Quote | Infinite Distribution",
     description:
       "Free, no-obligation letterbox distribution quote for your Melbourne campaign. Reply within one business day.",
     url: "/contact",
     images: [
-      { url: "/og.png", width: 1200, height: 630, alt: "Infinite Distributions — Letterbox Flyer Distribution in Melbourne" },
+      { url: "/og.png", width: 1200, height: 630, alt: "Infinite Distribution — Letterbox Flyer Distribution in Melbourne" },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Contact & Free Quote | Infinite Distributions",
+    title: "Contact & Free Quote | Infinite Distribution",
     description:
       "Free, no-obligation letterbox distribution quote for your Melbourne campaign. Reply within one business day.",
     images: ["/og.png"],

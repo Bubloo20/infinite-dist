@@ -30,7 +30,7 @@ export default function About() {
           >
             <p>As a previous small business owner, large letter distribution companies overcharged us.</p>
             <p className="mt-2">So we had to fix that.</p>
-            <p className="mt-2">That&apos;s the goal of Infinite Distributions.</p>
+            <p className="mt-2">That&apos;s the goal of Infinite Distribution.</p>
             <p className="mt-2 italic text-orchid">Maximum impact. Minimum cost.</p>
           </motion.div>
         </div>

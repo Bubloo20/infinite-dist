@@ -173,7 +173,7 @@ export default function Locations() {
             <div
               ref={containerRef}
               className="h-[420px] w-full sm:h-[560px]"
-              aria-label="Map of Infinite Distributions delivery coverage area"
+              aria-label="Map of Infinite Distribution delivery coverage area"
             />
           </motion.div>
           <p className="mt-4 text-sm text-slate-500">

@@ -212,10 +212,25 @@ export default function BoundaryMap({
     (async () => {
       const mod = (await import("leaflet")) as unknown as { default?: typeof import("leaflet") };
       const L = (mod.default ?? mod) as typeof import("leaflet");
+      // Core Leaflet can't rotate; this plugin adds bearing and the gestures.
+      await import("leaflet-rotate");
       if (dead || !holder.current || mapRef.current) return;
       LRef.current = L;
 
-      const map = L.map(holder.current, { scrollWheelZoom: true, zoomControl: true });
+      const map = L.map(holder.current, {
+        scrollWheelZoom: true,
+        zoomControl: true,
+        // Pinch to zoom, and let it settle anywhere rather than snapping a whole level.
+        touchZoom: true,
+        zoomSnap: 0,
+        zoomDelta: 0.5,
+        wheelPxPerZoomLevel: 90,
+        // Two-finger twist on a touchscreen, shift-drag with a mouse.
+        rotate: true,
+        touchRotate: true,
+        shiftKeyRotate: true,
+        rotateControl: { closeOnZeroBearing: false },
+      } as L.MapOptions);
       mapRef.current = map;
 
       L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {

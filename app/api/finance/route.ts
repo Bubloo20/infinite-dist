@@ -32,7 +32,7 @@ export async function OPTIONS() {
 }
 
 /**
- * Read-only financial summary for Infinite Distributions.
+ * Read-only financial summary for Infinite Distribution.
  *
  *   GET /api/finance?key=<FINANCE_API_KEY>[&from=YYYY-MM-DD&to=YYYY-MM-DD]
  *
@@ -91,7 +91,7 @@ export async function GET(req: Request) {
     return NextResponse.json(
       {
         ok: true,
-        business: "Infinite Distributions",
+        business: "Infinite Distribution",
         currency: "AUD",
         period: { from: from || null, to: to || null },
         generatedAt: new Date().toISOString(),

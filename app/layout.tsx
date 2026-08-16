@@ -20,8 +20,8 @@ const jakarta = Plus_Jakarta_Sans({
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: "Infinite Distributions — Letterbox Distribution & Courier Melbourne",
-    template: "%s | Infinite Distributions",
+    default: "Infinite Distribution — Letterbox Distribution & Courier Melbourne",
+    template: "%s | Infinite Distribution",
   },
   description:
     "Melbourne letterbox flyer distribution and same-day courier — GPS-tracked, crease-free, and on-time delivery guaranteed or it's free. Door-to-door drops and parcel delivery across Northcote, Ivanhoe, Heidelberg, Kew, Hawthorn, Balwyn and Melbourne's north-east.",
@@ -33,20 +33,20 @@ export const metadata: Metadata = {
     "pamphlet delivery Melbourne",
     "real estate flyer distribution",
     "GPS tracked letterbox distribution",
-    "Infinite Distributions",
+    "Infinite Distribution",
     "Manningham flyer distribution",
     "Heidelberg leaflet delivery",
   ],
-  authors: [{ name: "Infinite Distributions" }],
-  creator: "Infinite Distributions",
-  publisher: "Infinite Distributions",
+  authors: [{ name: "Infinite Distribution" }],
+  creator: "Infinite Distribution",
+  publisher: "Infinite Distribution",
   alternates: { canonical: "/" },
   openGraph: {
     type: "website",
     locale: "en_AU",
     url: "/",
-    siteName: "Infinite Distributions",
-    title: "Infinite Distributions — Letterbox Distribution & Courier Melbourne",
+    siteName: "Infinite Distribution",
+    title: "Infinite Distribution — Letterbox Distribution & Courier Melbourne",
     description:
       "Melbourne's trusted letterbox flyer distribution — GPS-tracked, crease-free, delivery guaranteed. No middleman, no hassle.",
     images: [
@@ -54,13 +54,13 @@ export const metadata: Metadata = {
         url: "/og.png",
         width: 1200,
         height: 630,
-        alt: "Infinite Distributions — Letterbox Flyer Distribution in Melbourne",
+        alt: "Infinite Distribution — Letterbox Flyer Distribution in Melbourne",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Infinite Distributions — Letterbox Distribution & Courier Melbourne",
+    title: "Infinite Distribution — Letterbox Distribution & Courier Melbourne",
     description:
       "Melbourne's trusted letterbox flyer distribution — GPS-tracked, crease-free, delivery guaranteed.",
     images: ["/og.png"],
@@ -95,14 +95,14 @@ const jsonLd = {
     {
       "@type": "WebSite",
       "@id": `${SITE_URL}/#website`,
-      name: "Infinite Distributions",
+      name: "Infinite Distribution",
       url: SITE_URL,
       publisher: { "@id": `${SITE_URL}/#business` },
     },
     {
       "@type": "LocalBusiness",
       "@id": `${SITE_URL}/#business`,
-      name: "Infinite Distributions",
+      name: "Infinite Distribution",
       description:
         "Melbourne letterbox flyer distribution and courier service. GPS-tracked, crease-free drops direct to residential letterboxes, plus fast parcel and document courier — backed by an on-time delivery guarantee.",
       url: SITE_URL,

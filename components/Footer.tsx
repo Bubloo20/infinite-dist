@@ -17,7 +17,7 @@ export default function Footer() {
     try {
       await submitForm(
         { Email: email, "Sign-up": "Newsletter subscription" },
-        { subject: "New Newsletter Signup — Infinite Distributions", from_name: "Website Newsletter" },
+        { subject: "New Newsletter Signup — Infinite Distribution", from_name: "Website Newsletter" },
       );
     } catch {
       /* confirmation already shown; signup is best-effort */

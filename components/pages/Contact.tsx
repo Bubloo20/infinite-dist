@@ -24,7 +24,7 @@ export default function Contact() {
           Phone: (d.get("phone") as string) || "—",
           Message: (d.get("message") as string) || "—",
         },
-        { subject: "New Quote Request — Infinite Distributions", from_name: "Website Contact Form" },
+        { subject: "New Quote Request — Infinite Distribution", from_name: "Website Contact Form" },
       );
       if (ok) {
         setSent(true);

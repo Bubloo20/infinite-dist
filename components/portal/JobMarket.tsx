@@ -157,7 +157,8 @@ export default function JobMarket({ workerName, only }: {
   const [assignments, setAssignments] = useState<JobAssignment[]>([]);
   const [logs, setLogs] = useState<MyLog[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tabState, setTab] = useState<"available" | "mine">("available");
+  // Phones land on the work they already have; the wide layout shows both.
+  const [tabState, setTab] = useState<"available" | "mine">("mine");
   const tab = only ?? tabState;
   const [busyId, setBusyId] = useState<number | null>(null);
   const [expanded, setExpanded] = useState<number | null>(null);

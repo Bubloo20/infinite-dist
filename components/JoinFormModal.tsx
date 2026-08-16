@@ -110,8 +110,8 @@ export default function JoinFormModal({
     setStatus("submitting");
     try {
       const ok = await submitForm(payload, {
-        subject: "New Distributor Application — Infinite Distributions",
-        from_name: "Join The Team — Infinite Distributions",
+        subject: "New Distributor Application — Infinite Distribution",
+        from_name: "Join The Team — Infinite Distribution",
       });
       if (ok) {
         setStatus("success");
@@ -158,7 +158,7 @@ export default function JoinFormModal({
               <h2 className="font-display text-2xl font-extrabold tracking-tight sm:text-3xl">
                 Hiring Form
               </h2>
-              <p className="mt-1 text-white/80">Infinite Distributions</p>
+              <p className="mt-1 text-white/80">Infinite Distribution</p>
             </div>
 
             {status === "success" ? (
@@ -170,7 +170,7 @@ export default function JoinFormModal({
                 </span>
                 <h3 className="mt-5 font-display text-2xl font-bold text-ink">Application sent!</h3>
                 <p className="mt-2 max-w-sm text-slate-600">
-                  Thanks for applying to Infinite Distributions. We&apos;ll review your details and be
+                  Thanks for applying to Infinite Distribution. We&apos;ll review your details and be
                   in touch soon.
                 </p>
                 <button onClick={onClose} className="btn-primary mt-7">
@@ -286,7 +286,7 @@ export default function JoinFormModal({
                     {status === "submitting" ? "Sending…" : "Submit Application"}
                   </button>
                   <p className="mt-3 pb-1 text-center text-xs text-slate-400">
-                    Your application is sent securely to Infinite Distributions.
+                    Your application is sent securely to Infinite Distribution.
                   </p>
                 </div>
               </form>

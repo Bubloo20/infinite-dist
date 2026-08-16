@@ -9,18 +9,18 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     locale: "en_AU",
-    siteName: "Infinite Distributions",
-    title: "Join The Team — Flyer Distributor Jobs | Infinite Distributions",
+    siteName: "Infinite Distribution",
+    title: "Join The Team — Flyer Distributor Jobs | Infinite Distribution",
     description:
       "Flexible, contract-based flyer delivery work in Melbourne. Paid per flier, on your own schedule. Apply now.",
     url: "/join",
     images: [
-      { url: "/og.png", width: 1200, height: 630, alt: "Infinite Distributions — Letterbox Flyer Distribution in Melbourne" },
+      { url: "/og.png", width: 1200, height: 630, alt: "Infinite Distribution — Letterbox Flyer Distribution in Melbourne" },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Join The Team — Flyer Distributor Jobs | Infinite Distributions",
+    title: "Join The Team — Flyer Distributor Jobs | Infinite Distribution",
     description:
       "Flexible, contract-based flyer delivery work in Melbourne. Paid per flier, on your own schedule. Apply now.",
     images: ["/og.png"],

@@ -2,7 +2,7 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Infinite Distributions",
+    name: "Infinite Distribution",
     short_name: "Infinite",
     description:
       "Melbourne's trusted letterbox flyer & leaflet distribution — GPS-tracked, crease-free, delivery guaranteed.",
