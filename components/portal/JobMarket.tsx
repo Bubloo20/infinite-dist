@@ -279,7 +279,37 @@ export default function JobMarket({ workerName, only }: {
   }
 
   const signedFor = (id: number) => contracts.find((c) => c.jobId === id)?.signedDate ?? null;
-  const mineFor = (id: number) => assignments.find((a) => a.job_id === id) ?? null;
+  /**
+   * A worker can hold several sub-contracts on one job. Their card shows the
+   * job once, with the parts added together: pay and leaflets summed, the
+   * earliest start, the latest due date, and the longest minimum.
+   */
+  const mineFor = (id: number): JobAssignment | null => {
+    const parts = assignments.filter((a) => a.job_id === id);
+    if (!parts.length) return null;
+    if (parts.length === 1) return parts[0];
+
+    const sum = (pick: (a: JobAssignment) => number | null) =>
+      parts.reduce((t, a) => t + (pick(a) ?? 0), 0);
+    const earliest = parts.map((a) => a.start_date).filter(Boolean).sort()[0] ?? null;
+    const latest = parts.map((a) => a.due_date).filter(Boolean).sort().slice(-1)[0] ?? null;
+    const areas = [...new Set(parts.map((a) => a.area_note).filter(Boolean))].join(" · ");
+
+    return {
+      ...parts[0],
+      pay: String(sum((a) => (a.pay != null ? Number(a.pay) : 0))),
+      leaflet_share: sum((a) => a.leaflet_share) || null,
+      area_note: areas || parts[0].area_note,
+      start_date: earliest,
+      due_date: latest,
+      min_hours: parts.map((a) => a.min_hours).filter(Boolean).sort((x, y) => Number(y) - Number(x))[0] ?? null,
+      // Whichever part they've drawn an area for.
+      boundary: parts.find((a) => a.boundary)?.boundary ?? null,
+      map_center: parts.find((a) => a.map_center)?.map_center ?? null,
+      map_image: parts.find((a) => a.map_image)?.map_image ?? null,
+      status: parts.every((a) => a.status === "accepted") ? "accepted" : parts[0].status,
+    };
+  };
   const logsFor = (id: number) => logs.filter((l) => l.jobId === id);
 
   return (

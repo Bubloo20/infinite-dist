@@ -346,7 +346,7 @@ export function SubContracts({ job, users, rows, post, del }: {
                         setSaving(true);
                         // Send the row back whole — the upsert overwrites what it's given.
                         const ok = await post({
-                          entity: "assignment", jobId: job.id, userId: r.user_id,
+                          entity: "assignment", id: r.id, jobId: job.id, userId: r.user_id,
                           pay: r.pay, leafletShare: r.leaflet_share, areaNote: r.area_note,
                           startDate: r.start_date, dueDate: r.due_date, status: r.status,
                           minHours: r.min_hours, allocatedTime: r.allocated_time,
@@ -388,8 +388,14 @@ export function SubContracts({ job, users, rows, post, del }: {
       <div className={`mt-3 grid gap-2 sm:grid-cols-6 ${adding ? "" : "hidden"}`}>
         <select className={input} value={f.userId} onChange={(e) => setF({ ...f, userId: e.target.value })}>
           <option value="">Worker…</option>
-          {users.filter((u) => !rows.some((r) => r.user_id === u.id)).map((u) => (
-            <option key={u.id} value={u.id}>{u.full_name}</option>
+          {/* Anyone can take another slice of the same job. */}
+          {users.map((u) => (
+            <option key={u.id} value={u.id}>
+              {u.full_name}
+              {rows.filter((r) => r.user_id === u.id).length
+                ? ` (already on ${rows.filter((r) => r.user_id === u.id).length})`
+                : ""}
+            </option>
           ))}
         </select>
         <input className={input} placeholder="Pay $" inputMode="decimal" value={f.pay} onChange={(e) => setF({ ...f, pay: e.target.value })} />

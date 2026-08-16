@@ -225,6 +225,9 @@ async function migrateSchema(): Promise<void> {
   await sql`ALTER TABLE agencies ADD COLUMN IF NOT EXISTS invoice_seq INTEGER;`;
   await sql`ALTER TABLE client_jobs ADD COLUMN IF NOT EXISTS invoice_no_hidden BOOLEAN DEFAULT FALSE;`;
   // A sub-contract can carry its own traced area, separate from the whole job's.
+  // A worker can hold several sub-contracts on one job — different streets,
+  // different weeks — so the one-per-worker constraint had to go.
+  await sql`ALTER TABLE job_assignments DROP CONSTRAINT IF EXISTS job_assignments_job_id_user_id_key;`;
   await sql`ALTER TABLE job_assignments ADD COLUMN IF NOT EXISTS boundary TEXT;`;
   await sql`ALTER TABLE job_assignments ADD COLUMN IF NOT EXISTS map_center TEXT;`;
 
@@ -522,6 +525,24 @@ export async function upsertAssignment(a: {
   boundary?: string | null; mapCenter?: string | null;
 }) {
   await ensureSchema();
+
+  // With an id we're editing that exact row; without one it's a new
+  // sub-contract, even if this worker already has one on the job.
+  if (a.id) {
+    const u = await sql<{ id: number }>`
+      UPDATE job_assignments SET
+        pay = ${a.pay ?? null}, leaflet_share = ${a.leafletShare ?? null},
+        area_note = ${a.areaNote ?? null}, start_date = ${a.startDate || null},
+        due_date = ${a.dueDate || null}, status = ${a.status || 'assigned'},
+        min_hours = ${a.minHours ?? null}, allocated_time = ${a.allocatedTime ?? null},
+        map_image = COALESCE(${a.mapImage ?? null}, map_image),
+        boundary = COALESCE(${a.boundary ?? null}, boundary),
+        map_center = COALESCE(${a.mapCenter ?? null}, map_center)
+      WHERE id = ${a.id}
+      RETURNING id;`;
+    if (u.rows[0]) return u.rows[0].id;
+  }
+
   const r = await sql<{ id: number }>`
     INSERT INTO job_assignments
       (job_id, user_id, pay, leaflet_share, area_note, start_date, due_date, status,
@@ -531,15 +552,16 @@ export async function upsertAssignment(a: {
        ${a.startDate || null}, ${a.dueDate || null}, ${a.status || 'assigned'},
        ${a.minHours ?? null}, ${a.allocatedTime ?? null}, ${a.mapImage ?? null},
        ${a.boundary ?? null}, ${a.mapCenter ?? null})
-    ON CONFLICT (job_id, user_id) DO UPDATE SET
-      pay = EXCLUDED.pay, leaflet_share = EXCLUDED.leaflet_share, area_note = EXCLUDED.area_note,
-      start_date = EXCLUDED.start_date, due_date = EXCLUDED.due_date, status = EXCLUDED.status,
-      min_hours = EXCLUDED.min_hours, allocated_time = EXCLUDED.allocated_time,
-      map_image = COALESCE(EXCLUDED.map_image, job_assignments.map_image),
-      boundary = COALESCE(EXCLUDED.boundary, job_assignments.boundary),
-      map_center = COALESCE(EXCLUDED.map_center, job_assignments.map_center)
     RETURNING id;`;
   return r.rows[0].id;
+}
+
+/** Mark all of a worker's sub-contracts on a job as accepted. */
+export async function acceptAssignments(jobId: number, userId: number) {
+  await ensureSchema();
+  await sql`
+    UPDATE job_assignments SET status = 'accepted'
+     WHERE job_id = ${jobId} AND user_id = ${userId};`;
 }
 
 export async function deleteAssignment(id: number) {

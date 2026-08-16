@@ -20,9 +20,18 @@ type Totals = {
 
 function Stat({ label, value, tone }: { label: string; value: string; tone?: "owed" | "paid" }) {
   return (
-    <GlassCard className="p-5 sm:p-6">
-      <p className="text-[12px] font-bold uppercase tracking-[0.14em] text-white/40">{label}</p>
-      <p className={`mt-2.5 font-display text-3xl font-extrabold tracking-tight sm:text-4xl ${
+    <GlassCard className="min-w-0 p-4 sm:p-5">
+      {/* Sits in a narrow column beside the jobs list, so the label holds one
+          line and the figure scales rather than spilling out of the tile. */}
+      <p className="truncate text-[10px] font-bold uppercase tracking-[0.1em] text-white/40 sm:text-[11px]">
+        {label}
+      </p>
+      <p className={`mt-2 font-display font-extrabold leading-none tracking-tight tabular-nums ${
+        // A four-figure total is far wider than "$0.00" — step the size down so
+        // it still fits the tile instead of running past it.
+        value.length > 9 ? "text-[clamp(0.95rem,3.2vw,1.35rem)]"
+          : value.length > 6 ? "text-[clamp(1.1rem,4vw,1.65rem)]"
+          : "text-[clamp(1.3rem,5vw,2.1rem)]"} ${
         tone === "owed" ? "text-amber-300" : tone === "paid" ? "text-emerald-300" : "text-white"}`}>
         {value}
       </p>
@@ -200,7 +209,7 @@ export default function MyEarnings() {
 
   return (
     <div>
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-3 gap-2 sm:gap-3">
         <Stat label="You're owed" value={money(totals?.owed ?? 0)} tone="owed" />
         <Stat label="Paid to you" value={money(totals?.paid ?? 0)} tone="paid" />
         <Stat label="Jobs logged" value={String(totals?.jobCount ?? 0)} />
@@ -208,7 +217,7 @@ export default function MyEarnings() {
 
       {totals && totals.awaitingRate > 0 && (
         <p className="mt-4 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/55">
-          {totals.awaitingRate} job{totals.awaitingRate > 1 ? "s" : ""} still waiting for the office to set a rate — they&apos;ll appear in your owed total once priced.
+          {totals.awaitingRate} job{totals.awaitingRate > 1 ? "s" : ""} still to be priced — they&apos;ll appear in your owed total once a rate is set.
         </p>
       )}
 

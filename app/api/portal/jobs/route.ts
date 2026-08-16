@@ -3,7 +3,7 @@ import { currentSession } from "@/lib/portal/auth";
 import {
   listOpenJobs, listJobsForWorkerAll, listInterest, addInterest, removeInterest,
   getContract, saveContract, findUserById, dbConfigured, listAssignmentsForUser,
-  upsertAssignment, listWorkLogsForUser, syncJobOutCount,
+  upsertAssignment, listWorkLogsForUser, syncJobOutCount, acceptAssignments,
 } from "@/lib/portal/db";
 
 export const dynamic = "force-dynamic";
@@ -66,18 +66,19 @@ export async function POST(req: Request) {
       const mine = await listJobsForWorkerAll(s.userId);
       const job = mine.find((j) => j.id === jobId);
       if (!job) return NextResponse.json({ ok: false, error: "That job isn't assigned to you." }, { status: 403 });
-      const existing = (await listAssignmentsForUser(s.userId)).find((a) => a.job_id === jobId);
-      await upsertAssignment({
-        jobId, userId: s.userId, status: "accepted",
-        // Keep any sub-contract figures the office set; otherwise fall back to the job.
-        pay: existing?.pay != null ? Number(existing.pay) : (job.worker_pay != null ? Number(job.worker_pay) : null),
-        leafletShare: existing?.leaflet_share ?? null,
-        areaNote: existing?.area_note ?? null,
-        startDate: existing?.start_date ?? null,
-        dueDate: existing?.due_date ?? null,
-        minHours: existing?.min_hours ?? null,
-        allocatedTime: existing?.allocated_time ?? null,
-      });
+      // A worker can hold several sub-contracts on one job; accepting takes
+      // them all, and never invents a new one.
+      const held = (await listAssignmentsForUser(s.userId)).filter((a) => a.job_id === jobId);
+      if (held.length) {
+        await acceptAssignments(jobId, s.userId);
+      } else {
+        await upsertAssignment({
+          jobId, userId: s.userId, status: "accepted",
+          pay: job.worker_pay != null ? Number(job.worker_pay) : null,
+          minHours: job.min_hours ?? null,
+          allocatedTime: job.allocated_time ?? null,
+        });
+      }
       await syncJobOutCount(jobId);
       return NextResponse.json({ ok: true });
     }

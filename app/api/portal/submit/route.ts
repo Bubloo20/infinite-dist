@@ -114,8 +114,9 @@ export async function POST(req: Request) {
     // figure comes from their sub-contract, never from the browser.
     const linked = Number(b.clientJobId) || null;
     if (linked && logId && session.userId) {
-      const mine = (await listAssignmentsForUser(session.userId)).find((a) => a.job_id === linked);
-      if (mine?.pay != null) await setWorkLogAmount(logId, Number(mine.pay));
+      const mine = (await listAssignmentsForUser(session.userId)).filter((a) => a.job_id === linked);
+      const due = mine.reduce((t, a) => t + (a.pay != null ? Number(a.pay) : 0), 0);
+      if (due > 0) await setWorkLogAmount(logId, due);
       await syncJobOutCount(linked);
     }
   } catch (e) {

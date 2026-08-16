@@ -121,6 +121,7 @@ export async function POST(req: Request) {
         const userId = n(b.userId);
         if (!jobId || !userId) return NextResponse.json({ ok: false, error: "Job and worker are required." }, { status: 400 });
         const id = await upsertAssignment({
+          id: n(b.id),
           jobId, userId, pay: n(b.pay), leafletShare: n(b.leafletShare),
           areaNote: (b.areaNote as string) || null,
           startDate: (b.startDate as string) || null, dueDate: (b.dueDate as string) || null,
