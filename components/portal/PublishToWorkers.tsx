@@ -28,6 +28,11 @@ const parsePts = (s: string | null): LatLng[] => {
   try { const v = JSON.parse(s); return Array.isArray(v) ? v : []; } catch { return []; }
 };
 
+const parseCenter = (s: string | null): [number, number, number] | null => {
+  if (!s) return null;
+  try { const v = JSON.parse(s); return Array.isArray(v) && v.length === 3 ? (v as [number, number, number]) : null; } catch { return null; }
+};
+
 /**
  * Turns an internal job into a worker-facing offer: pay, hours, the delivery
  * boundary, and either a direct assignment or a marketplace listing.
@@ -256,6 +261,10 @@ export function SubContracts({ job, users, rows, post, del }: {
   };
   const [f, setF] = useState(blank);
   const [tracing, setTracing] = useState(false);
+  const [editing, setEditing] = useState<number | null>(null);
+  const [editPts, setEditPts] = useState<LatLng[]>([]);
+  const [editCenter, setEditCenter] = useState<[number, number, number] | null>(null);
+  const [saving, setSaving] = useState(false);
   const tracePts: LatLng[] = (() => {
     try { const v = JSON.parse(f.boundary || "[]"); return Array.isArray(v) ? v : []; } catch { return []; }
   })();
@@ -283,7 +292,8 @@ export function SubContracts({ job, users, rows, post, del }: {
       {rows.length > 0 && (
         <div className="mt-4 space-y-2">
           {rows.map((r) => (
-            <div key={r.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3">
+            <div key={r.id} className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-white/[0.04] px-4 py-3 ${
+              editing === r.id ? "border-orchid/40" : "border-white/10"}`}>
               <div>
                 <p className="font-semibold text-white">{nameOf(r.user_id)}</p>
                 <p className="text-[13px] text-white/45">
@@ -296,12 +306,70 @@ export function SubContracts({ job, users, rows, post, del }: {
                   {r.min_hours ? `min ${r.min_hours} hrs` : "no minimum set"}
                   {r.allocated_time ? ` · ${r.allocated_time}` : ""}
                   {r.map_image ? " · area diagram attached" : ""}
+                  {parsePts(r.boundary).length >= 3 ? " · area drawn on map" : ""}
                 </p>
               </div>
               <div className="flex items-center gap-4">
                 <span className="font-display text-lg font-extrabold text-emerald-300">${Number(r.pay || 0).toFixed(2)}</span>
+                <button
+                  onClick={() => {
+                    if (editing === r.id) { setEditing(null); return; }
+                    setEditing(r.id);
+                    setEditPts(parsePts(r.boundary));
+                    setEditCenter(null);
+                  }}
+                  className="text-[13px] font-semibold text-orchid transition hover:text-white">
+                  {editing === r.id ? "Close map" : parsePts(r.boundary).length >= 3 ? "Edit area" : "Draw area"}
+                </button>
                 <button onClick={() => del("assignment", r.id)} className="text-[13px] text-white/30 transition hover:text-rose-300">Remove</button>
               </div>
+
+              {editing === r.id && (
+                <div className="w-full border-t border-white/10 pt-3">
+                  <div className="grid gap-3 lg:grid-cols-2">
+                    {r.map_image && (
+                      <div>
+                        <p className="mb-2 text-[12px] text-white/40">
+                          {nameOf(r.user_id)}&apos;s diagram — trace the same area on the map beside it.
+                        </p>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={r.map_image} alt="Area diagram" className="w-full rounded-xl border border-white/12" />
+                      </div>
+                    )}
+                    <div className={r.map_image ? "" : "lg:col-span-2"}>
+                      <p className="mb-2 text-[12px] text-white/40">
+                        Click to drop boundary points. {nameOf(r.user_id)} gets this as a live map with their own position on it.
+                      </p>
+                      <BoundaryMap boundary={editPts} center={parseCenter(r.map_center)} editable height={360}
+                        onChange={(pnts, c) => { setEditPts(pnts); setEditCenter(c); }} />
+                    </div>
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <button
+                      disabled={saving || editPts.length < 3}
+                      onClick={async () => {
+                        setSaving(true);
+                        // Send the row back whole — the upsert overwrites what it's given.
+                        const ok = await post({
+                          entity: "assignment", jobId: job.id, userId: r.user_id,
+                          pay: r.pay, leafletShare: r.leaflet_share, areaNote: r.area_note,
+                          startDate: r.start_date, dueDate: r.due_date, status: r.status,
+                          minHours: r.min_hours, allocatedTime: r.allocated_time,
+                          boundary: JSON.stringify(editPts),
+                          mapCenter: JSON.stringify(editCenter ?? [editPts[0][0], editPts[0][1], 15]),
+                        });
+                        setSaving(false);
+                        if (ok) setEditing(null);
+                      }}
+                      className={btn}>
+                      {saving ? "Saving…" : "Save this area"}
+                    </button>
+                    <span className="text-[12px] text-white/35">
+                      {editPts.length < 3 ? "Drop at least 3 points to close the area." : `${editPts.length} points`}
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
           ))}
         </div>
