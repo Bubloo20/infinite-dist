@@ -136,10 +136,13 @@ function SignaturePad({ onChange }: { onChange: (dataUrl: string | null) => void
 }
 
 export default function JobContract({
-  job, workerName, signedDate, mine, onSigned,
+  job, workerName, signedDate, mine, onSigned, onClose, autoOpen = false,
 }: {
   job: ClientJob; workerName: string; signedDate?: string | null;
   mine?: JobAssignment | null; onSigned: () => void;
+  onClose?: () => void;
+  /** Opened straight from "View job" — send them to the agreement immediately. */
+  autoOpen?: boolean;
 }) {
   const [name, setName] = useState(workerName);
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
@@ -147,6 +150,7 @@ export default function JobContract({
   const [agreed, setAgreed] = useState(false);
   const [schedule, setSchedule] = useState<Record<string, { start: string; end: string }>>({});
   const [openDay, setOpenDay] = useState<string | null>(null);
+  const [saved, setSaved] = useState("");
   const [weekStart, setWeekStart] = useState(() => weekStartOf(mine?.start_date ? new Date(mine.start_date) : new Date()));
 
   const minHours = parseMinHours(mine?.min_hours || job.min_hours);
@@ -155,6 +159,36 @@ export default function JobContract({
   const shortBy = Math.max(0, minHours - totalHours);
   const halfEntered = Object.values(schedule).some((v) => (v?.start && !v?.end) || (!v?.start && v?.end));
   const scheduleOk = minHours === 0 ? true : totalHours + 1e-9 >= minHours && !halfEntered;
+
+  // Pick up an unfinished draft, and open the agreement if they came here to read it.
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(`idp_contract_draft_${job.id}`);
+      if (raw) {
+        const d = JSON.parse(raw);
+        if (d.name) setName(d.name);
+        if (d.date) setDate(d.date);
+        if (d.schedule) setSchedule(d.schedule);
+      }
+    } catch { /* nothing saved */ }
+  }, [job.id]);
+
+  useEffect(() => {
+    if (!autoOpen || signedDate) return;
+    try { localStorage.setItem(`idp_contract_seen_${job.id}`, "1"); } catch {}
+    const w = window.open(`/portal/contract/${job.id}`, "_blank", "noreferrer");
+    if (w) setSeen(true);
+  }, [autoOpen, signedDate, job.id]);
+
+  const saveDraft = () => {
+    try {
+      localStorage.setItem(`idp_contract_draft_${job.id}`, JSON.stringify({ name, date, schedule }));
+      setSaved("Saved — you can come back and finish this later.");
+      setTimeout(() => setSaved(""), 4000);
+    } catch {
+      setSaved("Couldn't save on this device.");
+    }
+  };
 
   const shiftWeek = (delta: number) => {
     const d = new Date(weekStart);
@@ -178,6 +212,14 @@ export default function JobContract({
   // The agreement must actually be opened before it can be signed.
   const [seen, setSeen] = useState(false);
 
+  const blocker = !seen ? "Read the agreement first"
+    : !name.trim() ? "Add your full name"
+    : !sig ? "Sign above to continue"
+    : !scheduleOk ? "Your hours don't meet the minimum yet"
+    : !agreed ? "Tick the box to agree"
+    : "Accept job & sign";
+  const ready = !busy && seen && Boolean(name.trim()) && Boolean(sig) && scheduleOk && agreed;
+
   useEffect(() => {
     const check = () => {
       try { setSeen(localStorage.getItem(`idp_contract_seen_${job.id}`) === "1"); } catch { /* private mode */ }
@@ -196,6 +238,13 @@ export default function JobContract({
     }
     setBusy(true); setErr("");
     try {
+      // Signing is the acceptance — take the job, then record the agreement.
+      if (mine?.status !== "accepted") {
+        await fetch("/api/portal/jobs", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "accept", jobId: job.id }),
+        });
+      }
       const r = await fetch("/api/portal/jobs", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -225,6 +274,7 @@ export default function JobContract({
             from_name: "Infinite Distribution Portal",
           },
         ).catch(() => {});
+        try { localStorage.removeItem(`idp_contract_draft_${job.id}`); } catch {}
         onSigned();
       }
     } catch { setErr("Network error."); }
@@ -347,7 +397,7 @@ export default function JobContract({
                   <span className="shrink-0 text-[12px] font-semibold text-white/45">
                     {hrs ? fmtHours(hrs) : ""}
                   </span>
-                  <span className={`shrink-0 text-white/35 transition-transform ${isOpen ? "rotate-180" : ""}`}>\u25be</span>
+                  <span className={`shrink-0 text-white/35 transition-transform ${isOpen ? "rotate-180" : ""}`}>\▾</span>
                 </button>
 
                 {isOpen && (
@@ -426,10 +476,29 @@ export default function JobContract({
 
       {err && <p className="mt-4 rounded-xl border border-rose-400/25 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">{err}</p>}
 
-      <button onClick={submit} disabled={busy || !seen || !agreed || !sig || !name.trim()}
-        className="mt-6 w-full rounded-2xl bg-gradient-to-r from-electric to-orchid px-6 py-4 font-display text-[15px] font-bold text-white shadow-[0_16px_40px_-14px_rgba(182,109,199,0.85)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0">
-        {busy ? "Submitting…" : seen ? "Sign and accept the agreement" : "Read the agreement to continue"}
+      {saved && <p className="mt-4 rounded-xl border border-emerald-400/25 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">{saved}</p>}
+
+      {/* Accept stays dim until it's been read, signed and the hours add up. */}
+      <button onClick={submit} disabled={!ready}
+        className={`mt-6 w-full rounded-2xl px-6 py-4 font-display text-[15px] font-bold transition ${
+          ready
+            ? "bg-gradient-to-r from-electric to-orchid text-white shadow-[0_16px_40px_-14px_rgba(182,109,199,0.85)] hover:-translate-y-0.5"
+            : "cursor-not-allowed border border-white/10 bg-white/[0.06] text-white/35"}`}>
+        {busy ? "Submitting…" : ready ? "Accept job & sign" : blocker}
       </button>
+
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button type="button" onClick={saveDraft}
+          className="flex-1 rounded-2xl border border-white/12 bg-white/[0.05] px-5 py-3 font-display text-[14px] font-bold text-white/75 transition hover:bg-white/[0.1] hover:text-white">
+          Save for later
+        </button>
+        {onClose && (
+          <button type="button" onClick={onClose}
+            className="flex-1 rounded-2xl border border-white/12 bg-white/[0.05] px-5 py-3 font-display text-[14px] font-bold text-white/55 transition hover:bg-white/[0.1] hover:text-white">
+            Close
+          </button>
+        )}
+      </div>
     </GlassCard>
   );
 }

@@ -36,7 +36,7 @@ export async function POST(req: Request) {
     if (!b.id) return NextResponse.json({ ok: false, error: "Missing worker." }, { status: 400 });
 
     if (b.action === "notes") {
-      await updateUserNotes(b.id, (b.notes || "").trim() || null, (b.area || "").trim() || null);
+      await updateUserNotes(b.id, (b.notes || "").trim() || null, (b.area || "").trim() || null, (b.fullName || "").trim() || null);
       return NextResponse.json({ ok: true });
     }
 

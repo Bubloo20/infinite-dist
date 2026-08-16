@@ -531,8 +531,10 @@ function ClientJobRow({ job, agencyName, agentName, agencies, agents, expenses, 
             <Link href={`/portal/admin/invoice/${job.id}`} className={btnGhost}>Invoice PDF ↗</Link>
           </div>
           <div className="flex gap-3">
-            <button onClick={() => setOpen((v) => !v)} className="text-sm font-semibold text-white/50 transition hover:text-white">
-              {open ? "Close" : `Assign work${assignments.length ? ` (${assignments.length})` : ""}`}
+            <button onClick={() => setOpen((v) => !v)}
+              className="flex items-center gap-1.5 rounded-lg border border-white/12 bg-white/[0.05] px-3 py-1.5 text-sm font-semibold text-white/70 transition hover:bg-white/[0.1] hover:text-white">
+              {open ? "Collapse" : `Expand${assignments.length ? ` (${assignments.length} worker${assignments.length === 1 ? "" : "s"})` : ""}`}
+              <span className={`text-white/40 transition-transform ${open ? "rotate-180" : ""}`}>▾</span>
             </button>
             <button onClick={() => del("job", job.id)} className="text-sm text-white/30 transition hover:text-rose-300">Delete</button>
           </div>
@@ -546,10 +548,10 @@ function ClientJobRow({ job, agencyName, agentName, agencies, agents, expenses, 
             <span>
               <span className="block text-[14px] font-bold text-white">Edit job details</span>
               <span className="mt-0.5 block text-[12px] text-white/45">
-                Leaflets, rate, area, agency and dates \u2014 changeable at any time.
+                Leaflets, rate, area, agency and dates \— changeable at any time.
               </span>
             </span>
-            <span className={`shrink-0 text-white/40 transition-transform ${editing ? "rotate-180" : ""}`}>\u25be</span>
+            <span className={`shrink-0 text-white/40 transition-transform ${editing ? "rotate-180" : ""}`}>\▾</span>
           </button>
 
           {editing && (
@@ -583,7 +585,7 @@ function ClientJobRow({ job, agencyName, agentName, agencies, agents, expenses, 
                   <input className={input} inputMode="numeric" value={e.quantity} onChange={(ev) => setE({ ...e, quantity: ev.target.value })} />
                 </label>
                 <label className="block">
-                  <span className="mb-1 block text-[12px] font-semibold text-orchid">Leaflet rate \u2014 what the agency pays you</span>
+                  <span className="mb-1 block text-[12px] font-semibold text-orchid">Leaflet rate \— what the agency pays you</span>
                   <input className={input} inputMode="decimal" value={e.ratePerLeaflet} onChange={(ev) => setE({ ...e, ratePerLeaflet: ev.target.value })} />
                 </label>
                 <label className="block">

@@ -29,19 +29,32 @@ const stamp = (l: MyLog) =>
       ? new Date(`${l.paidOn}T00:00:00`).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })
       : "";
 
-/** Orange until the office has paid for this job, green once they have. */
-function PayState({ logs, owed }: { logs: MyLog[]; owed: string | null }) {
-  const paid = logs.length > 0 && logs.every((l) => l.paidOn);
-  const when = paid ? stamp(logs.slice().sort((a, b) => (b.paidAt || b.paidOn || "").localeCompare(a.paidAt || a.paidOn || ""))[0]) : "";
+/**
+ * Where this job's money stands, but only once there's something to say: a job
+ * nobody has accepted or worked isn't awaiting payment, it just hasn't started.
+ */
+function PayState({ logs, accepted }: { logs: MyLog[]; accepted: boolean }) {
+  if (!accepted || !logs.length) return null;
+
+  const paid = logs.every((l) => l.paidOn);
+  if (paid) {
+    const latest = logs.slice().sort((a, b) =>
+      (b.paidAt || b.paidOn || "").localeCompare(a.paidAt || a.paidOn || ""))[0];
+    return (
+      <div className="mt-2 inline-flex flex-col items-end rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-3 py-1.5 text-right">
+        <span className="text-[12px] font-bold uppercase tracking-wide text-emerald-300">Paid</span>
+        <span className="text-[12px] text-emerald-100/70">{stamp(latest)}</span>
+      </div>
+    );
+  }
+
+  // Work has been submitted — the office checks the tracking before paying.
   return (
-    <div className={`mt-2 inline-flex flex-col items-end rounded-xl border px-3 py-1.5 text-right ${
-      paid ? "border-emerald-400/30 bg-emerald-500/10" : "border-amber-400/30 bg-amber-500/10"}`}>
-      <span className={`text-[12px] font-bold uppercase tracking-wide ${paid ? "text-emerald-300" : "text-amber-300"}`}>
-        {paid ? "Paid" : "Awaiting payment"}
+    <div className="mt-2 inline-flex flex-col items-end rounded-xl border border-amber-400/30 bg-amber-500/10 px-3 py-1.5 text-right">
+      <span className="text-[12px] font-bold uppercase tracking-wide text-amber-300">
+        Awaiting verification of tracking
       </span>
-      <span className={`text-[12px] ${paid ? "text-emerald-100/70" : "text-amber-100/70"}`}>
-        {paid ? when : logs.length ? `${owed || ""} owing`.trim() : "log your shifts below"}
-      </span>
+      <span className="text-[12px] text-amber-100/70">paid once your links check out</span>
     </div>
   );
 }
@@ -142,6 +155,15 @@ export default function JobMarket({ workerName }: { workerName: string }) {
   const [busyId, setBusyId] = useState<number | null>(null);
   const [expanded, setExpanded] = useState<number | null>(null);
   const [logging, setLogging] = useState<number | null>(null);
+  const [viewing, setViewing] = useState<number | null>(null);
+
+  /** Reveal the contract for this job, then slide down to it. */
+  const viewJob = (jobId: number) => {
+    setViewing(jobId);
+    setTimeout(() => {
+      document.getElementById(`contract-${jobId}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 80);
+  };
 
   const load = useCallback(() => {
     fetch("/api/portal/jobs")
@@ -157,6 +179,18 @@ export default function JobMarket({ workerName }: { workerName: string }) {
   }, []);
 
   useEffect(load, [load]);
+
+  // Coming back from the printable agreement lands on that job, ready to sign.
+  useEffect(() => {
+    if (loading) return;
+    const want = Number(new URLSearchParams(window.location.search).get("job"));
+    if (!want) return;
+    setTab("mine");
+    setViewing(want);
+    setTimeout(() => {
+      document.getElementById(`contract-${want}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 120);
+  }, [loading]);
 
   const accept = async (jobId: number) => {
     setBusyId(jobId);
@@ -175,14 +209,14 @@ export default function JobMarket({ workerName }: { workerName: string }) {
           {
             Worker: workerName || "A worker",
             Job: job?.title || `Job #${jobId}`,
-            Area: a?.area_note || job?.area || "\u2014",
-            Leaflets: a?.leaflet_share ? a.leaflet_share.toLocaleString() : (job?.quantity?.toLocaleString() ?? "\u2014"),
+            Area: a?.area_note || job?.area || "\—",
+            Leaflets: a?.leaflet_share ? a.leaflet_share.toLocaleString() : (job?.quantity?.toLocaleString() ?? "\—"),
             Pay: money(a?.pay ?? job?.worker_pay ?? null),
-            Start: a?.start_date || "\u2014",
-            Due: a?.due_date || "\u2014",
-            Status: "Accepted \u2014 contract drawn up, awaiting their signature",
+            Start: a?.start_date || "\—",
+            Due: a?.due_date || "\—",
+            Status: "Accepted \— contract drawn up, awaiting their signature",
           },
-          { subject: `Job accepted \u2014 ${workerName || "worker"} \u2014 ${job?.title || `#${jobId}`}`, from_name: "Infinite Distribution Portal" },
+          { subject: `Job accepted \— ${workerName || "worker"} \— ${job?.title || `#${jobId}`}`, from_name: "Infinite Distribution Portal" },
         ).catch(() => {});
       }
       load();
@@ -313,12 +347,12 @@ export default function JobMarket({ workerName }: { workerName: string }) {
                       {j.title || `Job #${j.id}`}
                     </h3>
                     <p className="mt-2 max-w-xl text-[14px] leading-relaxed text-white/65">
-                      Accepting draws up your contractor agreement with the pay, hours and dates below filled in.
-                      You&apos;ll read the terms and sign it electronically, and a copy goes to the office.
+                      Have a look at the agreement — the pay, hours and dates are already filled in. You can
+                      accept it once you&apos;ve read it through and signed.
                     </p>
-                    <button onClick={() => accept(j.id)} disabled={busyId === j.id}
-                      className="mt-5 w-full rounded-2xl bg-white px-8 py-4 font-display text-[16px] font-extrabold text-ink shadow-[0_18px_44px_-14px_rgba(255,255,255,0.5)] transition hover:-translate-y-0.5 disabled:opacity-50 sm:w-auto">
-                      {busyId === j.id ? "Accepting…" : "Accept this job →"}
+                    <button onClick={() => viewJob(j.id)}
+                      className="mt-5 w-full rounded-2xl bg-white px-8 py-4 font-display text-[16px] font-extrabold text-ink shadow-[0_18px_44px_-14px_rgba(255,255,255,0.5)] transition hover:-translate-y-0.5 sm:w-auto">
+                      {viewing === j.id ? "Agreement below ↓" : "View job →"}
                     </button>
                   </div>
                 )}
@@ -332,7 +366,7 @@ export default function JobMarket({ workerName }: { workerName: string }) {
                       <p className="font-display text-2xl font-extrabold text-emerald-300">
                         {money(mineFor(j.id)?.pay ?? j.worker_pay)}
                       </p>
-                      <PayState logs={logsFor(j.id)} owed={money(mineFor(j.id)?.pay ?? j.worker_pay)} />
+                      <PayState logs={logsFor(j.id)} accepted={accepted} />
                     </div>
                   </div>
                   <div className="mt-5"><BriefWithCountdown job={j} mine={mineFor(j.id)} /></div>
@@ -376,12 +410,15 @@ export default function JobMarket({ workerName }: { workerName: string }) {
                   )}
                 </GlassCard>
 
-                {accepted && (
-                  <div className="mt-2 space-y-2 border-l-2 border-orchid/35 pl-3 sm:pl-4">
+                {(accepted || viewing === j.id) && (
+                  <div id={`contract-${j.id}`} className="mt-2 space-y-2 border-l-2 border-orchid/35 pl-3 sm:pl-4">
                     <p className="pt-1 text-[11px] font-bold uppercase tracking-[0.14em] text-white/30">
                       For {j.title || `Job #${j.id}`}
                     </p>
-                    <JobContract job={j} workerName={workerName} signedDate={signed} mine={a} onSigned={load} />
+                    <JobContract job={j} workerName={workerName} signedDate={signed} mine={a}
+                      autoOpen={viewing === j.id && !signed}
+                      onClose={accepted ? undefined : () => setViewing(null)}
+                      onSigned={() => { setViewing(null); load(); }} />
                     {signed && (
                       <div>
                         <button onClick={() => setLogging(logging === j.id ? null : j.id)}

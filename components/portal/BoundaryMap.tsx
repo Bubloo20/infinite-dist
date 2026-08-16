@@ -109,6 +109,7 @@ export default function BoundaryMap({
   const specRef = useRef<AreaSpec>(specProp);
   const newRunRef = useRef(false);
   const onChangeRef = useRef(onChange);
+  const emitRef = useRef<((next: AreaSpec) => void) | null>(null);
 
   const [spec, setSpec] = useState<AreaSpec>(specProp);
   const [me, setMe] = useState<{ lat: number; lng: number; accuracy: number } | null>(null);
@@ -122,12 +123,56 @@ export default function BoundaryMap({
   useEffect(() => { onChangeRef.current = onChange; }, [onChange]);
   useEffect(() => { specRef.current = specProp; setSpec(specProp); }, [specProp]);
 
+  /** Move one point of one shape — used when a node is dragged. */
+  const movePoint = useCallback((si: number, pi: number, to: LatLng) => {
+    const cur = specRef.current;
+    const shapes = cur.shapes.map((r, i) => (i === si ? r.map((q, j) => (j === pi ? to : q)) : r));
+    emitRef.current?.({ mode: cur.mode, shapes });
+  }, []);
+
+  /** Drop one point, and the shape with it if that was the last one. */
+  const removePoint = useCallback((si: number, pi: number) => {
+    const cur = specRef.current;
+    const shapes = cur.shapes
+      .map((r, i) => (i === si ? r.filter((_, j) => j !== pi) : r))
+      .filter((r) => r.length > 0);
+    emitRef.current?.({ mode: cur.mode, shapes });
+  }, []);
+
   /** Repaint everything the office has drawn. */
   const redraw = useCallback(() => {
     const L = LRef.current;
     const group = groupRef.current;
     if (!L || !group) return;
     group.clearLayers();
+
+    // A draggable handle the office can grab, or click to take out again.
+    const node = (pt: LatLng, si: number, pi: number, label: string, colour: string) => {
+      if (!editable) {
+        L.circleMarker(pt, { radius: 5, color: "#fff", weight: 2, fillColor: colour, fillOpacity: 1 }).addTo(group);
+        return;
+      }
+      const marker = L.marker(pt, {
+        draggable: true,
+        keyboard: false,
+        icon: L.divIcon({
+          className: "",
+          iconSize: [18, 18],
+          iconAnchor: [9, 9],
+          html: `<span style="display:block;width:18px;height:18px;border-radius:9999px;background:${colour};border:3px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.45);cursor:grab"></span>`,
+        }),
+      }).addTo(group);
+
+      marker.bindTooltip(label, { permanent: true, direction: "top", offset: [0, -12], className: "coverage-label" });
+      marker.on("dragend", (ev: { target: { getLatLng: () => { lat: number; lng: number } } }) => {
+        const ll = ev.target.getLatLng();
+        movePoint(si, pi, [ll.lat, ll.lng]);
+      });
+      marker.on("click", (ev: { originalEvent?: Event }) => {
+        ev.originalEvent?.stopPropagation();
+        if (window.confirm(`Remove ${label}?`)) removePoint(si, pi);
+      });
+    };
 
     const s = specRef.current;
     if (s.mode === "area") {
@@ -137,13 +182,7 @@ export default function BoundaryMap({
       } else if (pts.length === 2) {
         L.polyline(pts, { color: "#7c3aed", weight: 3 }).addTo(group);
       }
-      if (editable) {
-        pts.forEach((p, i) => {
-          L.circleMarker(p, { radius: 6, color: "#fff", weight: 2, fillColor: "#7c3aed", fillOpacity: 1 })
-            .addTo(group)
-            .bindTooltip(String(i + 1), { permanent: true, direction: "top", offset: [0, -8], className: "coverage-label" });
-        });
-      }
+      pts.forEach((pt, i) => node(pt, 0, i, String(i + 1), "#7c3aed"));
       return;
     }
 
@@ -153,18 +192,9 @@ export default function BoundaryMap({
       if (run.length >= 2) {
         L.polyline(run, { color: colour, weight: 6, opacity: 0.85, lineCap: "round" }).addTo(group);
       }
-      run.forEach((p, i) => {
-        const dot = L.circleMarker(p, {
-          radius: i === 0 ? 7 : 5, color: "#fff", weight: 2, fillColor: colour, fillOpacity: 1,
-        }).addTo(group);
-        if (i === 0) {
-          dot.bindTooltip(`Road ${ri + 1}`, {
-            permanent: true, direction: "top", offset: [0, -9], className: "coverage-label",
-          });
-        }
-      });
+      run.forEach((pt, i) => node(pt, ri, i, i === 0 ? `Road ${ri + 1}` : `Road ${ri + 1}.${i + 1}`, colour));
     });
-  }, [editable]);
+  }, [editable, movePoint, removePoint]);
 
   const emit = useCallback((next: AreaSpec) => {
     specRef.current = next;
@@ -174,6 +204,8 @@ export default function BoundaryMap({
     const c = m?.getCenter();
     onChangeRef.current?.(next, c ? [c.lat, c.lng, m!.getZoom()] : [-37.7697, 145.0017, 13]);
   }, [redraw]);
+
+  useEffect(() => { emitRef.current = emit; }, [emit]);
 
   useEffect(() => {
     let dead = false;

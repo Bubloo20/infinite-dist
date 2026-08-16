@@ -60,6 +60,9 @@ export default function WorkerContractPage() {
     ? `${dateAu(mine?.start_date)} to ${dateAu(mine?.due_date)}`
     : mine?.allocated_time || job.allocated_time || "____________________";
 
+  // The day this agreement was drawn up for them.
+  const drawnUp = (mine?.created_at || "").slice(0, 10) || new Date().toISOString().slice(0, 10);
+
   const signedSchedule: Record<string, { start: string; end: string }> = (() => {
     try { return signed?.schedule ? JSON.parse(signed.schedule) : {}; } catch { return {}; }
   })();
@@ -70,7 +73,7 @@ export default function WorkerContractPage() {
   return (
     <div className="min-h-screen bg-slate-100 py-8 print:bg-white print:py-0">
       <div className="mx-auto mb-6 flex max-w-[820px] items-center justify-between px-6 print:hidden">
-        <Link href="/portal" className="text-sm font-semibold text-slate-600 hover:text-ink">← Back to your portal</Link>
+        <Link href={`/portal?job=${id}`} className="text-sm font-semibold text-slate-600 hover:text-ink">← Back to sign this job</Link>
         <button onClick={() => window.print()} className="rounded-xl bg-ink px-6 py-3 text-sm font-bold text-white transition hover:-translate-y-0.5">
           Save as PDF / Print
         </button>
@@ -127,9 +130,9 @@ export default function WorkerContractPage() {
         <h2 className="mt-8 font-display text-xl font-bold text-ink">Signatures</h2>
         <div className="mt-3 grid gap-8 text-[15px] text-ink/85 sm:grid-cols-2">
           <div>
+            <p className="text-[13px] font-bold uppercase tracking-wide text-ink/50">Contractor</p>
             {signed ? (
               <>
-                <p className="text-[13px] font-bold uppercase tracking-wide text-ink/50">Contractor signature</p>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={signed.signaturePng} alt="Your signature"
                   className="mt-2 h-24 w-full rounded border border-slate-300 bg-slate-900 object-contain p-2" />
@@ -137,15 +140,28 @@ export default function WorkerContractPage() {
                 <p className="text-[14px] text-ink/70">Date: {dateAu(signed.signedDate)}</p>
               </>
             ) : (
-              <>
-                <p>Contractor Signature: ______________________</p>
-                <p className="mt-3">Date: ____________________</p>
-              </>
+              <div className="mt-2 rounded-lg border border-dashed border-slate-300 bg-slate-50 p-4 print:bg-white">
+                <p className="text-[15px] font-semibold text-ink">Not signed yet</p>
+                <p className="mt-1 text-[14px] leading-relaxed text-ink/70">
+                  Go back to your portal to sign this electronically — your signature and the date are
+                  recorded there and a signed copy comes straight to the office.
+                </p>
+                <Link href={`/portal?job=${id}`} className="mt-2 inline-block text-[14px] font-bold text-[#5b21b6] underline">
+                  Go back and sign this job
+                </Link>
+              </div>
             )}
           </div>
           <div>
-            <p>Infinite Distribution Representative: ______________________</p>
-            <p className="mt-3">Date: ____________________</p>
+            <p className="text-[13px] font-bold uppercase tracking-wide text-ink/50">
+              Infinite Distribution representative
+            </p>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/images/signature.png" alt="Sarvesh Mohanrajh"
+              className="mt-2 h-24 w-full object-contain object-left"
+              onError={(ev) => { (ev.currentTarget as HTMLImageElement).style.display = "none"; }} />
+            <p className="mt-1 font-semibold text-ink">Sarvesh Mohanrajh</p>
+            <p className="text-[14px] text-ink/70">Date: {dateAu(drawnUp)}</p>
           </div>
         </div>
         <p className="mt-6 text-[13px] text-ink/50">

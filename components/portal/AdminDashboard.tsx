@@ -10,6 +10,7 @@ import ClientsTab, { ClientJobsTab } from "./ClientsTab";
 import TrendChart, { type TrendPoint } from "./TrendChart";
 import PublishToWorkers from "./PublishToWorkers";
 import type { JobInterest, JobAssignment } from "@/lib/portal/db";
+import { isTestName } from "@/lib/portal/db";
 
 const money = (v: number) => `$${v.toFixed(2)}`;
 const num = (v: string | null) => (v === null ? 0 : Number(v) || 0);
@@ -102,9 +103,16 @@ export default function AdminDashboard({ onSignOut }: { onSignOut: () => void })
     return Number.isFinite(t) && t >= since.getTime();
   }, [since]);
 
+  // Test jobs and the Test agency are excluded from every figure below.
+  const isTestJob = useCallback((j: { title: string | null; agency_id: number | null }) =>
+    isTestName(j.title) || isTestName(agencies.find((a) => a.id === j.agency_id)?.name),
+    [agencies]);
+
   const totals = useMemo(() => {
     const lg = logs.filter((l) => inPeriod(l.created_at));
-    const cj = clientJobs.filter((j) => inPeriod(j.completed_on || j.picked_on || j.created_at));
+    const cj = clientJobs
+      .filter((j) => !isTestJob(j))
+      .filter((j) => inPeriod(j.completed_on || j.picked_on || j.created_at));
     const fe = finance.filter((f) => inPeriod(f.entry_date));
     const owed = lg.filter((l) => !l.paid_on).reduce((t, l) => t + num(l.amount), 0);
     const paid = lg.filter((l) => l.paid_on).reduce((t, l) => t + num(l.amount), 0);
@@ -118,7 +126,7 @@ export default function AdminDashboard({ onSignOut }: { onSignOut: () => void })
     const agenciesOwe = cj.filter((j) => j.invoice_status === "sent").reduce((t, j) => t + num(j.amount), 0);
     const uninvoiced = cj.filter((j) => j.invoice_status === "not_sent").reduce((t, j) => t + num(j.amount), 0);
     return { owed, paid, revenue, expenses, agenciesOwe, uninvoiced, profit: revenue - expenses - (owed + paid) };
-  }, [logs, finance, clientJobs, inPeriod]);
+  }, [logs, finance, clientJobs, inPeriod, isTestJob]);
 
   // Revenue and profit grouped by month for the finance chart.
   const trend = useMemo<TrendPoint[]>(() => {
@@ -128,6 +136,7 @@ export default function AdminDashboard({ onSignOut }: { onSignOut: () => void })
       return Number.isNaN(dt.getTime()) ? null : `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}`;
     };
     clientJobs.forEach((j) => {
+      if (isTestJob(j)) return;                    // sandbox record, not real money
       if (j.invoice_status === "not_sent") return; // not revenue until invoiced
       const k = key(j.invoice_date || j.completed_on || j.picked_on || j.created_at);
       if (!k) return;
@@ -484,15 +493,15 @@ function WorkerRow({ user, t, post, contracts, jobs, mine, onDelete }: {
 
   const STATE: Record<string, { label: string; cls: string }> = {
     waiting: { label: "Awaiting acceptance", cls: "border-amber-400/35 bg-amber-500/10 text-amber-300" },
-    accepted: { label: "Accepted \u2014 not signed", cls: "border-sky-400/35 bg-sky-500/10 text-sky-300" },
-    signed: { label: "Signed \u2014 on the job", cls: "border-emerald-400/35 bg-emerald-500/10 text-emerald-300" },
+    accepted: { label: "Accepted \— not signed", cls: "border-sky-400/35 bg-sky-500/10 text-sky-300" },
+    signed: { label: "Signed \— on the job", cls: "border-emerald-400/35 bg-emerald-500/10 text-emerald-300" },
     done: { label: "Completed", cls: "border-white/15 bg-white/[0.06] text-white/55" },
   };
   const [f, setF] = useState({
     bankName: user.bank_name || "", bankBsb: user.bank_bsb || "",
     bankAccount: user.bank_account || "", payid: user.payid || "",
   });
-  const [n, setN] = useState({ area: user.area || "", notes: user.notes || "" });
+  const [n, setN] = useState({ fullName: user.full_name, area: user.area || "", notes: user.notes || "" });
 
   const viewAs = async () => {
     const r = await fetch("/api/portal/admin/impersonate", {
@@ -584,6 +593,14 @@ function WorkerRow({ user, t, post, contracts, jobs, mine, onDelete }: {
           <input className={input} placeholder="Bank name" value={f.bankName} onChange={(e) => setF({ ...f, bankName: e.target.value })} />
           <input className={input} placeholder="BSB" value={f.bankBsb} onChange={(e) => setF({ ...f, bankBsb: e.target.value })} />
           <input className={input} placeholder="Account number" value={f.bankAccount} onChange={(e) => setF({ ...f, bankAccount: e.target.value })} />
+          <label className="block sm:col-span-2">
+            <span className="mb-1 block text-[12px] font-semibold text-white/40">Full name</span>
+            <input className={input} placeholder="Full name" value={n.fullName}
+              onChange={(e) => setN({ ...n, fullName: e.target.value })} />
+            <span className="mt-1 block text-[12px] text-white/30">
+              This is the name they sign in with.
+            </span>
+          </label>
           <input className={input} placeholder="Suburbs they work / can work" value={n.area} onChange={(e) => setN({ ...n, area: e.target.value })} />
           <input className={input} placeholder="Notes about this worker" value={n.notes} onChange={(e) => setN({ ...n, notes: e.target.value })} />
           {contracts.length > 0 && (
@@ -609,7 +626,7 @@ function WorkerRow({ user, t, post, contracts, jobs, mine, onDelete }: {
 
           <div className="flex flex-wrap gap-2 sm:col-span-2">
             <button onClick={() => post("/api/portal/admin/user", { id: user.id, ...f })} className={btn}>Save pay details</button>
-            <button onClick={() => post("/api/portal/admin/user", { action: "notes", id: user.id, ...n })} className={btn}>Save notes &amp; suburbs</button>
+            <button onClick={() => post("/api/portal/admin/user", { action: "notes", id: user.id, ...n })} className={btn}>Save name, notes &amp; suburbs</button>
             <button onClick={onDelete} className="rounded-xl border border-rose-400/30 px-4 py-2.5 text-sm font-semibold text-rose-300 transition hover:bg-rose-500/10">Delete worker</button>
           </div>
         </div>

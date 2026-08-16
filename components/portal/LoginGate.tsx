@@ -183,7 +183,7 @@ export default function LoginGate({
                       onChange={(e) => setFullName(e.target.value)}
                       required
                     >
-                      <option value="">{rosterLoaded ? "Choose your name\u2026" : "Loading\u2026"}</option>
+                      <option value="">{rosterLoaded ? "Choose your name\…" : "Loading\…"}</option>
                       {roster
                         // Signing in needs an account; signing up is for those without one.
                         .filter((w) => (tab === "signin" ? w.hasAccount : !w.hasAccount))
@@ -194,7 +194,7 @@ export default function LoginGate({
                     <p className="mt-2 text-[13px] text-white/35">
                       {tab === "signin"
                         ? "Not listed? Set up your account on the Create account tab."
-                        : "Already set up? Sign in instead. If your name isn\u2019t here, ask the office to add you."}
+                        : "Already set up? Sign in instead. If your name isn\’t here, ask the office to add you."}
                     </p>
                   </>
                 )}

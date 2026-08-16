@@ -317,6 +317,14 @@ export type Agency = {
   email: string | null; phone: string | null; address: string | null;
   notes: string | null; created_at: string;
 };
+/**
+ * Anything named "test" is a sandbox record — it's kept and shown, but never
+ * counted in revenue, profit, what's owed, or the finance chart.
+ */
+export function isTestName(name: string | null | undefined): boolean {
+  return /^\s*test\s*$/i.test(String(name ?? ""));
+}
+
 export type Agent = {
   id: number; agency_id: number; name: string;
   email: string | null; phone: string | null; notes: string | null; created_at: string;
@@ -757,8 +765,23 @@ export async function deleteUser(id: number) {
   await sql`DELETE FROM portal_users WHERE id = ${id};`;
 }
 
-export async function updateUserNotes(id: number, notes: string | null, area: string | null) {
+export async function updateUserNotes(
+  id: number, notes: string | null, area: string | null, fullName?: string | null,
+) {
   await ensureSchema();
+  const name = (fullName ?? "").trim();
+  if (name) {
+    // The sign-in key is derived from the name, so a rename has to move both or
+    // they'd be locked out of the account.
+    const key = nameKey(name);
+    const clash = await sql<{ id: number }>`
+      SELECT id FROM portal_users WHERE name_key = ${key} AND id <> ${id} LIMIT 1;`;
+    if (clash.rows.length) throw new Error(`Someone is already on the register as "${name}".`);
+    await sql`
+      UPDATE portal_users SET notes = ${notes}, area = ${area}, full_name = ${name}, name_key = ${key}
+       WHERE id = ${id};`;
+    return;
+  }
   await sql`UPDATE portal_users SET notes = ${notes}, area = ${area} WHERE id = ${id};`;
 }
 
