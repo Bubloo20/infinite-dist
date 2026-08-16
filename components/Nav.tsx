@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
+import Image from "next/image";
 
 const commonLinks = [
   { label: "Locations", href: "/locations" },
@@ -60,8 +61,8 @@ export default function Nav() {
     >
       <div className="container-site flex h-[68px] items-center justify-between gap-5">
         <Link href="/" className="flex shrink-0 items-center" aria-label="Infinite Distribution — home">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/images/logo.png" alt="Infinite Distribution" className="h-7 w-auto sm:h-8" />
+          <Image src="/images/logo.png" alt="Infinite Distribution" width={168} height={32} priority
+            className="h-7 w-auto sm:h-8" />
         </Link>
 
         {/* Desktop nav */}

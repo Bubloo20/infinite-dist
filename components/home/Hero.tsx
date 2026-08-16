@@ -3,6 +3,7 @@
 import { motion } from "framer-motion";
 import Link from "next/link";
 import ArrowPill from "../ui/ArrowPill";
+import Image from "next/image";
 
 export default function Hero() {
   return (
@@ -10,12 +11,15 @@ export default function Hero() {
       {/* Gradient field — the site's real hero image + animated glow */}
       <div className="absolute inset-0">
         <div className="absolute inset-0 bg-night" />
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
+        <Image
           src="/images/home-hero.jpg"
           alt=""
           aria-hidden
-          className="absolute inset-0 h-full w-full object-cover"
+          fill
+          // The first thing anyone sees, so it isn't lazy-loaded.
+          priority
+          sizes="100vw"
+          className="object-cover"
         />
         {/* animated colorful glow layered over the photo for life */}
         <div className="absolute right-[-10%] top-[-5%] h-[90%] w-[70%] animate-blob rounded-full bg-[radial-gradient(circle_at_40%_40%,#8b7bff_0%,#5a6bff_30%,transparent_70%)] opacity-40 blur-[50px] mix-blend-screen" />

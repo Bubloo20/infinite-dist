@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { usePathname } from "next/navigation";
 import { submitForm } from "@/lib/forms";
+import Image from "next/image";
 
 export default function Footer() {
   const pathname = usePathname();
@@ -31,8 +32,8 @@ export default function Footer() {
     <footer className="bg-night text-white">
       <div className="container-site py-16">
         {/* Brand mark */}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/images/logo.png" alt="Infinite Distribution" className="w-full max-w-2xl" />
+        <Image src="/images/logo.png" alt="Infinite Distribution" width={672} height={128}
+          sizes="(max-width: 768px) 100vw, 672px" className="h-auto w-full max-w-2xl" />
         <p className="mt-5 text-lg text-white/70">A part of the Infinite Group</p>
 
         <div className="mt-14 grid gap-12 border-t border-white/10 pt-12 md:grid-cols-2">

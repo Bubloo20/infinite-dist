@@ -1,13 +1,16 @@
 "use client";
 
+import Image from "next/image";
+
 export default function DistributionBand() {
   return (
     <section className="relative h-[320px] overflow-hidden sm:h-[460px]">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
+      <Image
         src="/images/home-distributions.jpg"
         alt="Infinite Distribution"
-        className="absolute inset-0 h-full w-full object-cover"
+        fill
+        sizes="100vw"
+        className="object-cover"
       />
     </section>
   );

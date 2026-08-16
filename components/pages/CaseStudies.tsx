@@ -3,6 +3,7 @@
 import { motion } from "framer-motion";
 import type { ReactNode } from "react";
 import ArrowPill from "../ui/ArrowPill";
+import Image from "next/image";
 
 const photos = [
   { src: "/images/case-1.jpg", alt: "Flyer delivered to a letterbox" },
@@ -143,11 +144,12 @@ export default function CaseStudies() {
                   transition={{ duration: 0.5, delay: i * 0.1 }}
                   className="relative aspect-[3/4] overflow-hidden rounded-2xl bg-mist"
                 >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
+                  <Image
                     src={p.src}
                     alt={p.alt}
-                    className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 hover:scale-105"
+                    fill
+                    sizes="(max-width: 768px) 100vw, 33vw"
+                    className="object-cover transition-transform duration-500 hover:scale-105"
                   />
                 </motion.div>
               ))}

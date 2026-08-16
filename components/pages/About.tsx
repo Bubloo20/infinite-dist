@@ -1,6 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
+import Image from "next/image";
 
 const team = [
   { name: "Bubloo Mohanrajh", role: "Director & Distributor", img: "/images/team-bubloo.jpg", photo: true },
@@ -52,18 +53,21 @@ export default function About() {
               >
                 {m.photo ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img
+                  <Image
                     src={m.img}
                     alt={m.name}
-                    className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                    fill
+                    sizes="(max-width: 768px) 100vw, 33vw"
+                    className="object-cover transition-transform duration-500 group-hover:scale-105"
                   />
                 ) : (
                   <>
                     <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_30%,#2a2150,#111111_70%)]" />
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
+                    <Image
                       src={m.img}
                       alt={m.name}
+                      width={112}
+                      height={112}
                       className="absolute left-1/2 top-1/2 h-28 w-28 -translate-x-1/2 -translate-y-1/2 opacity-80 transition-transform duration-500 group-hover:scale-110"
                     />
                   </>

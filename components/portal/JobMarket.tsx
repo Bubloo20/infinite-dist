@@ -296,11 +296,18 @@ export default function JobMarket({ workerName, only }: {
    * work is the first thing they see.
    */
   const entries = (() => {
-    const out: { key: string; job: ClientJob; a: JobAssignment | null }[] = [];
+    const out: { key: string; job: ClientJob; a: JobAssignment | null; part?: string }[] = [];
     for (const j of mine) {
       const parts = assignments.filter((x) => x.job_id === j.id);
       if (parts.length) parts.forEach((a) => out.push({ key: `a${a.id}`, job: j, a }));
       else out.push({ key: `j${j.id}`, job: j, a: null });
+    }
+    // Several parts of one job all carry the job's title, so number them.
+    for (const e of out) {
+      const siblings = out.filter((o) => o.job.id === e.job.id);
+      if (siblings.length > 1) {
+        (e as { part?: string }).part = `Part ${siblings.indexOf(e) + 1} of ${siblings.length}`;
+      }
     }
     const rank = (e: { a: JobAssignment | null }) => (e.a?.status === "accepted" ? 1 : 0);
     return out.sort((x, y) => rank(x) - rank(y) || (y.a?.id ?? 0) - (x.a?.id ?? 0));
@@ -388,7 +395,7 @@ export default function JobMarket({ workerName, only }: {
         </GlassCard>
       ) : (
         <div className="space-y-4">
-          {entries.map(({ key, job: j, a }) => {
+          {entries.map(({ key, job: j, a, part }) => {
             const own = parseSpec(a?.boundary ?? null);
             const spec = specHasDrawing(own) ? own : parseSpec(j.boundary);
             const signed = signedFor(j.id, a?.id);
@@ -402,7 +409,11 @@ export default function JobMarket({ workerName, only }: {
                     <p className="text-xs font-bold uppercase tracking-[0.16em] text-orchid">New job for you</p>
                     <h3 className="mt-2 font-display text-[clamp(1.5rem,4.5vw,2rem)] font-extrabold leading-tight tracking-tight text-white">
                       {j.title || `Job #${j.id}`}
+                      {a?.area_note ? <span className="text-white/65"> — {a.area_note}</span> : null}
                     </h3>
+                    {part && (
+                      <p className="mt-1 text-[13px] font-bold uppercase tracking-wide text-orchid">{part} — sign this one separately</p>
+                    )}
                     <p className="mt-2 max-w-xl text-[14px] leading-relaxed text-white/65">
                       Have a look at the agreement — the pay, hours and dates are already filled in. You can
                       accept it once you&apos;ve read it through and signed.
@@ -415,9 +426,19 @@ export default function JobMarket({ workerName, only }: {
                 )}
                 <GlassCard className="p-6">
                   <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div>
-                      <h3 className="font-display text-xl font-bold text-white">{j.title || `Job #${j.id}`}</h3>
-                      <p className="mt-1 text-sm text-white/50">{j.area || "—"}</p>
+                    <div className="min-w-0">
+                      <h3 className="font-display text-xl font-bold text-white">
+                        {j.title || `Job #${j.id}`}
+                        {a?.area_note ? <span className="text-white/55"> — {a.area_note}</span> : null}
+                      </h3>
+                      <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-white/50">
+                        {part && (
+                          <span className="rounded-md bg-orchid/20 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-orchid">
+                            {part}
+                          </span>
+                        )}
+                        {a?.leaflet_share ? `${a.leaflet_share.toLocaleString()} leaflets` : j.area || "—"}
+                      </p>
                     </div>
                     <div className="text-right">
                       <p className="font-display text-2xl font-extrabold text-emerald-300">

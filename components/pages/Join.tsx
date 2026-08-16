@@ -1,6 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
+import Image from "next/image";
 
 const FORM_URL =
   "https://docs.google.com/forms/d/18HeW-LXhJ0BuOjZeWkdysck_2JzKWbJjVA1foGbFSC8/viewform";
@@ -10,11 +11,12 @@ export default function Join() {
     <section className="grid min-h-[90vh] lg:grid-cols-2">
       {/* Left graphic — person reading a flyer */}
       <div className="relative min-h-[360px] overflow-hidden bg-night lg:min-h-full">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
+        <Image
           src="/images/join-person.jpg"
           alt="Distributor reading a flyer"
-          className="absolute inset-0 h-full w-full object-cover"
+          fill
+          sizes="100vw"
+          className="object-cover"
         />
       </div>
 

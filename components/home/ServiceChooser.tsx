@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import Link from "next/link";
+import Image from "next/image";
 
 const services = [
   {
@@ -73,11 +74,12 @@ export default function ServiceChooser() {
                   className={`overflow-hidden rounded-4xl shadow-[0_10px_30px_-15px_rgba(0,0,0,0.25)] ring-1 ring-black/5 transition-all duration-300 group-hover:-translate-y-1.5 ${s.glow}`}
                 >
                   <div className="relative aspect-square overflow-hidden bg-night">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
+                    <Image
                       src={s.img}
                       alt={s.title}
-                      className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                      fill
+                      sizes="(max-width: 768px) 100vw, 50vw"
+                      className="object-cover transition-transform duration-500 group-hover:scale-105"
                     />
                   </div>
                 </div>

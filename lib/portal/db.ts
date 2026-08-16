@@ -153,15 +153,21 @@ async function migrateSchema(): Promise<void> {
   // the piece of work. Where the worker holds exactly one on that job it's
   // unambiguous, so attach it — otherwise a fresh sub-contract would inherit a
   // signature that wasn't given for it.
+  // It belongs to the sub-contract that existed when it was signed — the
+  // earliest one — so later additions still need signing of their own.
   await sql`
     UPDATE job_contracts c
        SET assignment_id = a.id
-      FROM job_assignments a
+      FROM (
+        SELECT DISTINCT ON (job_id, user_id) id, job_id, user_id
+          FROM job_assignments ORDER BY job_id, user_id, id
+      ) a
      WHERE c.assignment_id IS NULL
        AND a.job_id = c.job_id
        AND a.user_id = c.user_id
-       AND (SELECT COUNT(*) FROM job_assignments x
-             WHERE x.job_id = c.job_id AND x.user_id = c.user_id) = 1;`;
+       AND NOT EXISTS (
+         SELECT 1 FROM job_contracts d WHERE d.assignment_id = a.id
+       );`;
   await sql`ALTER TABLE work_logs ADD COLUMN IF NOT EXISTS strava_urls TEXT;`;
   await sql`ALTER TABLE work_logs ADD COLUMN IF NOT EXISTS mapmy_urls TEXT;`;
   // Ties a worker's earnings to the agency job they were paid for.

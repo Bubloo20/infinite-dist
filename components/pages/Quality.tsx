@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import ProcessSteps, { type Step, type Aside } from "@/components/ProcessSteps";
+import Image from "next/image";
 
 const leafletSteps: Step[] = [
   {
@@ -135,11 +136,12 @@ export default function Quality() {
             </p>
           </motion.div>
           <motion.div {...fade} className="relative h-72 overflow-hidden rounded-4xl bg-[#e9ece6] shadow-soft sm:h-80">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
+            <Image
               src="/images/quality-map.jpeg"
               alt="GPS-tracked distribution route"
-              className="absolute inset-0 h-full w-full object-cover"
+              fill
+              sizes="(max-width: 1024px) 100vw, 50vw"
+              className="object-cover"
             />
           </motion.div>
         </div>
@@ -149,11 +151,12 @@ export default function Quality() {
       <section className="bg-white py-16">
         <div className="container-site grid items-center gap-12 lg:grid-cols-2">
           <motion.div {...fade} className="order-2 relative h-96 overflow-hidden rounded-4xl bg-mist shadow-soft sm:h-[420px] lg:order-1">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
+            <Image
               src="/images/quality-track.jpeg"
               alt="Authenticated tracking data from a completed distribution walk"
-              className="absolute inset-0 h-full w-full object-contain p-4"
+              fill
+              sizes="(max-width: 1024px) 100vw, 50vw"
+              className="object-contain p-4"
             />
           </motion.div>
           <motion.div {...fade} className="order-1 lg:order-2">

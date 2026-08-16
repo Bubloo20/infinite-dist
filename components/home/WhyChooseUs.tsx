@@ -1,6 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
+import Image from "next/image";
 
 const points = [
   {
@@ -52,11 +53,12 @@ export default function WhyChooseUs() {
 
         {/* Right: real device graphic */}
         <div className="relative min-h-[360px] overflow-hidden bg-night lg:min-h-full">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
+          <Image
             src="/images/home-send-card.jpg"
             alt="Send to address — tracked delivery"
-            className="absolute inset-0 h-full w-full object-cover"
+            fill
+            sizes="(max-width: 1024px) 100vw, 50vw"
+            className="object-cover"
           />
         </div>
       </div>
