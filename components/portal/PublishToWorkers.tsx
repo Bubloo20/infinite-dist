@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { GlassCard } from "./PortalShell";
-import BoundaryMap, { type LatLng } from "./BoundaryMap";
+import BoundaryMap, { type AreaSpec, EMPTY_SPEC, parseSpec, specHasDrawing, countPoints } from "./BoundaryMap";
 import ImageDrop from "./ImageDrop";
 import type { Agency, ClientJob, PortalUser, JobInterest, JobAssignment } from "@/lib/portal/db";
 
@@ -13,20 +13,16 @@ const btn =
 const btnGhost =
   "rounded-xl border border-white/12 bg-white/[0.05] px-4 py-2.5 text-sm font-semibold text-white/70 transition hover:bg-white/[0.1] hover:text-white";
 
-/** Allocated time is the start-to-due window, not something to type in twice. */
+/** Each worker's allocated time is their own start-to-due window. */
 export function spanOf(start: string | null | undefined, due: string | null | undefined): string {
+  const day = (d: string) => new Date(`${d}T00:00:00`).toLocaleDateString("en-AU", { day: "numeric", month: "short" });
   if (!start || !due) return "set start and due";
   const a = new Date(`${start}T00:00:00`).getTime();
   const b = new Date(`${due}T00:00:00`).getTime();
   if (!Number.isFinite(a) || !Number.isFinite(b) || b < a) return "set start and due";
   const days = Math.round((b - a) / 86400000) + 1;
-  return days === 1 ? "1 day" : `${days} days`;
+  return `${day(start)} – ${day(due)} · ${days === 1 ? "1 day" : `${days} days`}`;
 }
-
-const parsePts = (s: string | null): LatLng[] => {
-  if (!s) return [];
-  try { const v = JSON.parse(s); return Array.isArray(v) ? v : []; } catch { return []; }
-};
 
 const parseCenter = (s: string | null): [number, number, number] | null => {
   if (!s) return null;
@@ -49,7 +45,7 @@ export default function PublishToWorkers({
   const [f, setF] = useState({ workerPay: "", allocatedTime: "", minHours: "" });
   const [mode, setMode] = useState<"market" | "assign">("market");
   const [assignTo, setAssignTo] = useState("");
-  const [pts, setPts] = useState<LatLng[]>([]);
+  const [spec, setSpec] = useState<AreaSpec>(EMPTY_SPEC);
   const [center, setCenter] = useState<[number, number, number] | null>(null);
   const [showMap, setShowMap] = useState(false);
 
@@ -66,7 +62,7 @@ export default function PublishToWorkers({
       allocatedTime: j?.allocated_time || "",
       minHours: j?.min_hours || "",
     });
-    setPts(parsePts(j?.boundary ?? null));
+    setSpec(parseSpec(j?.boundary ?? null));
     setAssignTo(j?.assigned_user_id ? String(j.assigned_user_id) : "");
     setMode(j?.assigned_user_id ? "assign" : "market");
   };
@@ -82,12 +78,12 @@ export default function PublishToWorkers({
       pickedOn: job.picked_on, completedOn: job.completed_on, notes: job.notes,
       jobNumber: job.job_number, deliveredCount: job.delivered_count,
       workerPay: f.workerPay, allocatedTime: f.allocatedTime, minHours: f.minHours,
-      boundary: pts.length >= 3 ? JSON.stringify(pts) : null,
+      boundary: specHasDrawing(spec) ? JSON.stringify(spec) : null,
       mapCenter: center ? JSON.stringify(center) : job.map_center,
       published: mode === "market",
       assignedUserId: mode === "assign" ? assignTo || null : null,
     });
-    if (ok) { setJobId(""); setPts([]); setShowMap(false); setF({ workerPay: "", allocatedTime: "", minHours: "" }); }
+    if (ok) { setJobId(""); setSpec(EMPTY_SPEC); setShowMap(false); setF({ workerPay: "", allocatedTime: "", minHours: "" }); }
   };
 
   const live = jobs.filter((j) => j.published || j.assigned_user_id);
@@ -127,7 +123,7 @@ export default function PublishToWorkers({
 
               <div className="sm:col-span-3 flex flex-wrap items-center gap-2">
                 <button type="button" onClick={() => setShowMap((v) => !v)} className={btnGhost}>
-                  {showMap ? "Hide map" : pts.length ? `Delivery area (${pts.length} points)` : "Draw delivery area"}
+                  {showMap ? "Hide map" : countPoints(spec) ? `Delivery area (${countPoints(spec)} points)` : "Draw delivery area"}
                 </button>
                 <div className="ml-auto flex gap-1 rounded-xl border border-white/10 bg-white/[0.04] p-1">
                   {([["market", "List on marketplace"], ["assign", "Assign to a worker"]] as const).map(([k, label]) => (
@@ -151,7 +147,7 @@ export default function PublishToWorkers({
                   <p className="mb-2 text-[13px] text-white/45">
                     Click to trace the boundary. The worker gets this as a map they can zoom to street level.
                   </p>
-                  <BoundaryMap boundary={pts} editable height={420} onChange={(p, c) => { setPts(p); setCenter(c); }} />
+                  <BoundaryMap spec={spec} editable height={420} onChange={(sp, c) => { setSpec(sp); setCenter(c); }} />
                 </div>
               )}
 
@@ -262,12 +258,10 @@ export function SubContracts({ job, users, rows, post, del }: {
   const [f, setF] = useState(blank);
   const [tracing, setTracing] = useState(false);
   const [editing, setEditing] = useState<number | null>(null);
-  const [editPts, setEditPts] = useState<LatLng[]>([]);
+  const [editSpec, setEditSpec] = useState<AreaSpec>(EMPTY_SPEC);
   const [editCenter, setEditCenter] = useState<[number, number, number] | null>(null);
   const [saving, setSaving] = useState(false);
-  const tracePts: LatLng[] = (() => {
-    try { const v = JSON.parse(f.boundary || "[]"); return Array.isArray(v) ? v : []; } catch { return []; }
-  })();
+  const traceSpec = parseSpec(f.boundary || null);
 
   const nameOf = (id: number) => users.find((u) => u.id === id)?.full_name || `User ${id}`;
   const shortDate = (d: string | null) =>
@@ -306,7 +300,7 @@ export function SubContracts({ job, users, rows, post, del }: {
                   {r.min_hours ? `min ${r.min_hours} hrs` : "no minimum set"}
                   {r.allocated_time ? ` · ${r.allocated_time}` : ""}
                   {r.map_image ? " · area diagram attached" : ""}
-                  {parsePts(r.boundary).length >= 3 ? " · area drawn on map" : ""}
+                  {specHasDrawing(parseSpec(r.boundary)) ? " · area drawn on map" : ""}
                 </p>
               </div>
               <div className="flex items-center gap-4">
@@ -315,11 +309,11 @@ export function SubContracts({ job, users, rows, post, del }: {
                   onClick={() => {
                     if (editing === r.id) { setEditing(null); return; }
                     setEditing(r.id);
-                    setEditPts(parsePts(r.boundary));
+                    setEditSpec(parseSpec(r.boundary));
                     setEditCenter(null);
                   }}
                   className="text-[13px] font-semibold text-orchid transition hover:text-white">
-                  {editing === r.id ? "Close map" : parsePts(r.boundary).length >= 3 ? "Edit area" : "Draw area"}
+                  {editing === r.id ? "Close map" : specHasDrawing(parseSpec(r.boundary)) ? "Edit area" : "Draw area"}
                 </button>
                 <button onClick={() => del("assignment", r.id)} className="text-[13px] text-white/30 transition hover:text-rose-300">Remove</button>
               </div>
@@ -340,13 +334,13 @@ export function SubContracts({ job, users, rows, post, del }: {
                       <p className="mb-2 text-[12px] text-white/40">
                         Click to drop boundary points. {nameOf(r.user_id)} gets this as a live map with their own position on it.
                       </p>
-                      <BoundaryMap boundary={editPts} center={parseCenter(r.map_center)} editable height={360}
-                        onChange={(pnts, c) => { setEditPts(pnts); setEditCenter(c); }} />
+                      <BoundaryMap spec={editSpec} center={parseCenter(r.map_center)} editable height={360}
+                        onChange={(sp, c) => { setEditSpec(sp); setEditCenter(c); }} />
                     </div>
                   </div>
                   <div className="mt-3 flex flex-wrap items-center gap-2">
                     <button
-                      disabled={saving || editPts.length < 3}
+                      disabled={saving || !specHasDrawing(editSpec)}
                       onClick={async () => {
                         setSaving(true);
                         // Send the row back whole — the upsert overwrites what it's given.
@@ -355,8 +349,8 @@ export function SubContracts({ job, users, rows, post, del }: {
                           pay: r.pay, leafletShare: r.leaflet_share, areaNote: r.area_note,
                           startDate: r.start_date, dueDate: r.due_date, status: r.status,
                           minHours: r.min_hours, allocatedTime: r.allocated_time,
-                          boundary: JSON.stringify(editPts),
-                          mapCenter: JSON.stringify(editCenter ?? [editPts[0][0], editPts[0][1], 15]),
+                          boundary: JSON.stringify(editSpec),
+                          mapCenter: JSON.stringify(editCenter ?? [editSpec.shapes[0][0][0], editSpec.shapes[0][0][1], 15]),
                         });
                         setSaving(false);
                         if (ok) setEditing(null);
@@ -365,7 +359,9 @@ export function SubContracts({ job, users, rows, post, del }: {
                       {saving ? "Saving…" : "Save this area"}
                     </button>
                     <span className="text-[12px] text-white/35">
-                      {editPts.length < 3 ? "Drop at least 3 points to close the area." : `${editPts.length} points`}
+                      {!specHasDrawing(editSpec)
+                        ? editSpec.mode === "area" ? "Drop at least 3 points to close the area." : "Mark at least 2 points along a road."
+                        : `${countPoints(editSpec)} points`}
                     </span>
                   </div>
                 </div>
@@ -414,7 +410,7 @@ export function SubContracts({ job, users, rows, post, del }: {
         <div className="sm:col-span-6">
           <button type="button" onClick={() => setTracing((v) => !v)}
             className="rounded-xl border border-white/12 bg-white/[0.05] px-4 py-2.5 text-sm font-semibold text-white/70 transition hover:bg-white/[0.1] hover:text-white">
-            {tracing ? "Hide map" : tracePts.length ? `This worker's area (${tracePts.length} points)` : "Draw this worker's area on the map"}
+            {tracing ? "Hide map" : countPoints(traceSpec) ? `This worker's area (${countPoints(traceSpec)} points)` : "Draw this worker's area on the map"}
           </button>
         </div>
 
@@ -431,8 +427,8 @@ export function SubContracts({ job, users, rows, post, del }: {
               <p className="mb-2 text-[12px] text-white/40">
                 Click to drop boundary points. The worker gets this as a live map they can zoom, with their own position on it.
               </p>
-              <BoundaryMap boundary={tracePts} editable height={380}
-                onChange={(pnts, c) => setF((prev) => ({ ...prev, boundary: JSON.stringify(pnts), mapCenter: JSON.stringify(c) }))} />
+              <BoundaryMap spec={traceSpec} editable height={380}
+                onChange={(sp, c) => setF((prev) => ({ ...prev, boundary: JSON.stringify(sp), mapCenter: JSON.stringify(c) }))} />
             </div>
           </div>
         )}

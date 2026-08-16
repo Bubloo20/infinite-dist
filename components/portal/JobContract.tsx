@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { GlassCard } from "./PortalShell";
+import { submitForm } from "@/lib/forms";
 import type { ClientJob, JobAssignment } from "@/lib/portal/db";
 
 /** Terms transcribed from the Independent Contractor Agreement. */
@@ -202,7 +203,28 @@ export default function JobContract({
       });
       const d = await r.json();
       if (!d.ok) setErr(d.error || "Couldn't submit.");
-      else onSigned();
+      else {
+        // The signed agreement is stored; let the office know it's waiting.
+        // Web3Forms only accepts browser posts, so it's sent from here.
+        submitForm(
+          {
+            Worker: name.trim() || workerName,
+            Job: job.title || `Job #${job.id}`,
+            Area: mine?.area_note || job.area || "—",
+            Leaflets: (mine?.leaflet_share ?? job.quantity)?.toLocaleString() ?? "—",
+            Pay: (mine?.pay ?? job.worker_pay) ? `$${Number(mine?.pay ?? job.worker_pay).toFixed(2)}` : "—",
+            "Minimum hours": mine?.min_hours || job.min_hours || "—",
+            "Hours they scheduled": fmtHours(totalHours),
+            "Signed on": date,
+            "Signed copy": `${window.location.origin}/portal/admin/contract/${job.id}`,
+          },
+          {
+            subject: `Contract signed — ${name.trim() || workerName} — ${job.title || `job #${job.id}`}`,
+            from_name: "Infinite Distribution Portal",
+          },
+        ).catch(() => {});
+        onSigned();
+      }
     } catch { setErr("Network error."); }
     finally { setBusy(false); }
   };

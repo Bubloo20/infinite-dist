@@ -445,6 +445,12 @@ export async function upsertClientJob(j: {
 }
 export async function deleteClientJob(id: number) {
   await ensureSchema();
+  // Everything hanging off the job goes too, or it lingers on the worker's
+  // dashboard and in their contracts with nothing behind it.
+  await sql`DELETE FROM job_assignments WHERE job_id=${id};`;
+  await sql`DELETE FROM job_interest WHERE job_id=${id};`;
+  await sql`DELETE FROM job_contracts WHERE job_id=${id};`;
+  await sql`UPDATE work_logs SET client_job_id = NULL WHERE client_job_id=${id};`;
   await sql`DELETE FROM client_jobs WHERE id=${id};`;
 }
 

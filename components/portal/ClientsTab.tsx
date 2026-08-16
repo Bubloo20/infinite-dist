@@ -321,15 +321,6 @@ export function ClientJobsTab({ agencies, agents, jobs, workLogs, users, assignm
             <input className={input} type="date" value={f.completedOn} onChange={(e) => setF({ ...f, completedOn: e.target.value })} />
           </label>
 
-          <label className="block">
-            <span className="mb-1 block text-[12px] font-semibold text-emerald-300">Worker pay (optional) — total $ they get</span>
-            <input className={input} placeholder="e.g. 120" inputMode="decimal" value={f.workerPay} onChange={(e) => setF({ ...f, workerPay: e.target.value })} />
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-[12px] font-semibold text-white/40">Minimum hours (optional)</span>
-            <input className={input} placeholder="e.g. 6" value={f.minHours} onChange={(e) => setF({ ...f, minHours: e.target.value })} />
-          </label>
-
           <div className="sm:col-span-3">
             <button className={btn} disabled={!f.agencyId && !f.title}
               onClick={async () => { if (await post({ entity: "job", ...f })) setF(blank); }}>

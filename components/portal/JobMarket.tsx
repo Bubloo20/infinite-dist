@@ -3,16 +3,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { GlassCard } from "./PortalShell";
-import BoundaryMap, { type LatLng } from "./BoundaryMap";
+import BoundaryMap, { parseSpec, specHasDrawing } from "./BoundaryMap";
 import JobContract from "./JobContract";
 import WorkLogForm from "./WorkLogForm";
 import type { ClientJob, JobAssignment } from "@/lib/portal/db";
+import { submitForm } from "@/lib/forms";
 
 const money = (v: string | null) => (v ? `$${Number(v).toFixed(2)}` : "—");
-const parsePts = (s: string | null): LatLng[] => {
-  if (!s) return [];
-  try { const v = JSON.parse(s); return Array.isArray(v) ? v : []; } catch { return []; }
-};
 const parseCenter = (s: string | null): [number, number, number] | null => {
   if (!s) return null;
   try { const v = JSON.parse(s); return Array.isArray(v) && v.length === 3 ? (v as [number, number, number]) : null; } catch { return null; }
@@ -164,10 +161,30 @@ export default function JobMarket({ workerName }: { workerName: string }) {
   const accept = async (jobId: number) => {
     setBusyId(jobId);
     try {
-      await fetch("/api/portal/jobs", {
+      const r = await fetch("/api/portal/jobs", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "accept", jobId }),
       });
+      const d = await r.json().catch(() => ({ ok: false }));
+      if (d.ok) {
+        // Tell the office straight away. Web3Forms only accepts browser posts,
+        // so this is sent from here rather than the API route.
+        const job = [...mine, ...open].find((j) => j.id === jobId);
+        const a = assignments.find((x) => x.job_id === jobId);
+        submitForm(
+          {
+            Worker: workerName || "A worker",
+            Job: job?.title || `Job #${jobId}`,
+            Area: a?.area_note || job?.area || "\u2014",
+            Leaflets: a?.leaflet_share ? a.leaflet_share.toLocaleString() : (job?.quantity?.toLocaleString() ?? "\u2014"),
+            Pay: money(a?.pay ?? job?.worker_pay ?? null),
+            Start: a?.start_date || "\u2014",
+            Due: a?.due_date || "\u2014",
+            Status: "Accepted \u2014 contract drawn up, awaiting their signature",
+          },
+          { subject: `Job accepted \u2014 ${workerName || "worker"} \u2014 ${job?.title || `#${jobId}`}`, from_name: "Infinite Distribution Portal" },
+        ).catch(() => {});
+      }
       load();
     } finally { setBusyId(null); }
   };
@@ -223,7 +240,7 @@ export default function JobMarket({ workerName }: { workerName: string }) {
           <div className="space-y-3">
             {open.map((j, i) => {
               const keen = interest.includes(j.id);
-              const pts = parsePts(j.boundary);
+              const spec = parseSpec(j.boundary);
               return (
                 <motion.div key={j.id} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: Math.min(i * 0.05, 0.3) }}>
                   <GlassCard className="p-6">
@@ -239,14 +256,14 @@ export default function JobMarket({ workerName }: { workerName: string }) {
 
                     <div className="mt-5"><Brief job={j} mine={mineFor(j.id)} /></div>
 
-                    {pts.length >= 3 && (
+                    {specHasDrawing(spec) && (
                       <button onClick={() => setExpanded(expanded === j.id ? null : j.id)}
                         className="mt-4 text-sm font-semibold text-orchid transition hover:text-white">
                         {expanded === j.id ? "Hide map" : "View delivery area map"}
                       </button>
                     )}
                     {expanded === j.id && (
-                      <div className="mt-4"><BoundaryMap boundary={pts} center={parseCenter(j.map_center)} height={340} /></div>
+                      <div className="mt-4"><BoundaryMap spec={spec} center={parseCenter(j.map_center)} height={340} /></div>
                     )}
 
                     <div className="mt-5 flex flex-wrap gap-2">
@@ -283,7 +300,8 @@ export default function JobMarket({ workerName }: { workerName: string }) {
         <div className="space-y-4">
           {mine.map((j) => {
             const a = mineFor(j.id);
-            const pts = parsePts(a?.boundary ?? null).length >= 3 ? parsePts(a?.boundary ?? null) : parsePts(j.boundary);
+            const own = parseSpec(a?.boundary ?? null);
+            const spec = specHasDrawing(own) ? own : parseSpec(j.boundary);
             const signed = signedFor(j.id);
             const accepted = a?.status === "accepted" || Boolean(signed);
             return (
@@ -318,12 +336,12 @@ export default function JobMarket({ workerName }: { workerName: string }) {
                     </div>
                   </div>
                   <div className="mt-5"><BriefWithCountdown job={j} mine={mineFor(j.id)} /></div>
-                  {pts.length >= 3 && (
+                  {specHasDrawing(spec) && (
                     <div className="mt-5">
                       <p className="mb-2 text-[13px] font-semibold uppercase tracking-[0.1em] text-white/50">
                         Your delivery area — zoom, pan, and see where you are
                       </p>
-                      <BoundaryMap boundary={pts} center={parseCenter(a?.map_center ?? j.map_center)} height={400} locate />
+                      <BoundaryMap spec={spec} center={parseCenter(a?.map_center ?? j.map_center)} height={400} locate />
                     </div>
                   )}
                   {logsFor(j.id).length > 0 && (
