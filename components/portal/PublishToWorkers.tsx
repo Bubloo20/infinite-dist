@@ -180,7 +180,10 @@ export default function PublishToWorkers({
                     </div>
                     <div className="flex items-center gap-2">
                       {j.assigned_user_id && (
-                        <a href={`/portal/admin/contract/${j.id}`} className={btnGhost}>Signed contract ↗</a>
+                        <>
+                          <a href={`/portal/admin/contract/${j.id}`} className={btnGhost}>Signed contract ↗</a>
+                          <a href={`/portal/admin/timesheet/${j.id}`} className={btnGhost}>Timesheet ↗</a>
+                        </>
                       )}
                       <button className={btnGhost}
                         onClick={() => post({
