@@ -55,8 +55,10 @@ export default function AdminDashboard({ onSignOut }: { onSignOut: () => void })
   const [msg, setMsg] = useState("");
   const [period, setPeriod] = useState<"week" | "fortnight" | "month" | "year" | "all">("all");
 
-  const load = useCallback(() => {
-    setLoading(true);
+  // `silent` refreshes keep the screen up: saving shouldn't wipe the dashboard
+  // back to a spinner and lose whatever drawer or half-typed field was open.
+  const load = useCallback((silent = false) => {
+    if (!silent) setLoading(true);
     Promise.all([
       fetch("/api/portal/logs").then((r) => r.json()),
       fetch("/api/portal/admin/finance").then((r) => r.json()).catch(() => ({ entries: [] })),
@@ -73,13 +75,13 @@ export default function AdminDashboard({ onSignOut }: { onSignOut: () => void })
       .finally(() => setLoading(false));
   }, []);
 
-  useEffect(load, [load]);
+  useEffect(() => { load(); }, [load]);
 
   const post = async (url: string, body: unknown) => {
     const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     const d = await r.json();
     if (!d.ok) { setMsg(d.error || "Action failed."); return false; }
-    setMsg(""); load(); return true;
+    setMsg(""); load(true); return true;
   };
 
   // Period window: the week runs Sunday -> Saturday.
@@ -156,12 +158,12 @@ export default function AdminDashboard({ onSignOut }: { onSignOut: () => void })
     });
     const d = await r.json();
     if (!d.ok) { setMsg(d.error || "Save failed."); return false; }
-    setMsg(""); load(); return true;
+    setMsg(""); load(true); return true;
   };
   const delClient = async (entity: string, id: number) => {
     const r = await fetch(`/api/portal/admin/clients?entity=${entity}&id=${id}`, { method: "DELETE" });
     const d = await r.json();
-    if (!d.ok) setMsg(d.error || "Delete failed."); else load();
+    if (!d.ok) setMsg(d.error || "Delete failed."); else load(true);
   };
 
   const filtered = useMemo(() => {

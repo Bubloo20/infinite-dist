@@ -61,17 +61,17 @@ export default function Nav() {
         scrolled ? "bg-dark/95 backdrop-blur-md" : "bg-dark"
       }`}
     >
-      <div className="container-site flex h-[68px] items-center justify-between">
-        <Link href="/" className="flex items-center" aria-label="Infinite Distribution — home">
+      <div className="container-site flex h-[68px] items-center justify-between gap-5">
+        <Link href="/" className="flex shrink-0 items-center" aria-label="Infinite Distribution — home">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/images/logo.png" alt="Infinite Distribution" className="h-7 w-auto sm:h-8" />
         </Link>
 
         {/* Desktop nav */}
-        <nav className="hidden items-center gap-6 xl:flex">
+        <nav className="hidden shrink-0 items-center gap-[18px] whitespace-nowrap xl:flex 2xl:gap-6">
           <Link
             href="/"
-            className={`text-[15px] transition-colors ${
+            className={`text-[14px] transition-colors 2xl:text-[15px] ${
               pathname === "/" ? "text-orchid" : "text-white/85 hover:text-white"
             }`}
           >
@@ -82,7 +82,7 @@ export default function Nav() {
           <div ref={servicesRef} className="relative">
             <button
               onClick={() => setDesktopServicesOpen((v) => !v)}
-              className={`flex items-center gap-1.5 text-[15px] transition-colors ${
+              className={`flex items-center gap-1.5 text-[14px] transition-colors 2xl:text-[15px] ${
                 servicesActive ? "text-orchid" : "text-white/85 hover:text-white"
               }`}
             >
@@ -153,7 +153,7 @@ export default function Nav() {
                 href={l.href}
                 target="_blank"
                 rel="noreferrer"
-                className="text-[15px] text-white/85 transition-colors hover:text-white"
+                className="text-[14px] text-white/85 transition-colors hover:text-white 2xl:text-[15px]"
               >
                 {l.label}
               </a>
@@ -161,7 +161,7 @@ export default function Nav() {
               <Link
                 key={l.href}
                 href={l.href}
-                className={`text-[15px] transition-colors ${
+                className={`text-[14px] transition-colors 2xl:text-[15px] ${
                   pathname === l.href ? "text-orchid" : "text-white/85 hover:text-white"
                 }`}
               >
@@ -173,7 +173,7 @@ export default function Nav() {
 
         <Link
           href="/contact"
-          className="hidden rounded-full bg-white px-6 py-2.5 text-[15px] font-semibold text-ink transition-transform hover:-translate-y-0.5 xl:inline-flex"
+          className="hidden shrink-0 whitespace-nowrap rounded-full bg-white px-5 py-2.5 text-[14px] font-semibold text-ink transition-transform hover:-translate-y-0.5 xl:inline-flex 2xl:px-6 2xl:text-[15px]"
         >
           Get A Quote
         </Link>

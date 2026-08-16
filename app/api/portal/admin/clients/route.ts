@@ -6,7 +6,7 @@ import {
   listClientJobs, upsertClientJob, deleteClientJob,
   assignJob, setJobPublished, setJobBrief, setJobProgress,
   listAgencyPayments, addAgencyPayment, deleteAgencyPayment, listInterest,
-  listAssignments, upsertAssignment, deleteAssignment,
+  listAssignments, upsertAssignment, deleteAssignment, syncJobOutCount,
   dbConfigured,
 } from "@/lib/portal/db";
 
@@ -111,7 +111,10 @@ export async function POST(req: Request) {
           minHours: (b.minHours as string) || null,
           allocatedTime: (b.allocatedTime as string) || null,
           mapImage: (b.mapImage as string) || null,
+          boundary: (b.boundary as string) || null,
+          mapCenter: (b.mapCenter as string) || null,
         });
+        await syncJobOutCount(jobId);
         return NextResponse.json({ ok: true, id });
       }
       case "agencyPayment": {
@@ -146,7 +149,11 @@ export async function DELETE(req: Request) {
     else if (entity === "agent") await deleteAgent(id);
     else if (entity === "job") await deleteClientJob(id);
     else if (entity === "agencyPayment") await deleteAgencyPayment(id);
-    else if (entity === "assignment") await deleteAssignment(id);
+    else if (entity === "assignment") {
+      const jobId = (await listAssignments()).find((a) => a.id === id)?.job_id ?? null;
+      await deleteAssignment(id);
+      if (jobId) await syncJobOutCount(jobId);
+    }
     else return NextResponse.json({ ok: false, error: "Unknown entity." }, { status: 400 });
     return NextResponse.json({ ok: true });
   } catch (e) {

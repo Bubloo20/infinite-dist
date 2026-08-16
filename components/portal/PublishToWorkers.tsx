@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { GlassCard } from "./PortalShell";
 import BoundaryMap, { type LatLng } from "./BoundaryMap";
+import ImageDrop from "./ImageDrop";
 import type { Agency, ClientJob, PortalUser, JobInterest, JobAssignment } from "@/lib/portal/db";
 
 const input =
@@ -11,6 +12,16 @@ const btn =
   "rounded-xl bg-gradient-to-r from-electric to-orchid px-4 py-2.5 text-sm font-bold text-white shadow-[0_12px_30px_-14px_rgba(182,109,199,0.9)] transition hover:-translate-y-0.5 disabled:opacity-40";
 const btnGhost =
   "rounded-xl border border-white/12 bg-white/[0.05] px-4 py-2.5 text-sm font-semibold text-white/70 transition hover:bg-white/[0.1] hover:text-white";
+
+/** Allocated time is the start-to-due window, not something to type in twice. */
+export function spanOf(start: string | null | undefined, due: string | null | undefined): string {
+  if (!start || !due) return "set start and due";
+  const a = new Date(`${start}T00:00:00`).getTime();
+  const b = new Date(`${due}T00:00:00`).getTime();
+  if (!Number.isFinite(a) || !Number.isFinite(b) || b < a) return "set start and due";
+  const days = Math.round((b - a) / 86400000) + 1;
+  return days === 1 ? "1 day" : `${days} days`;
+}
 
 const parsePts = (s: string | null): LatLng[] => {
   if (!s) return [];
@@ -241,20 +252,13 @@ export function SubContracts({ job, users, rows, post, del }: {
   const blank = {
     userId: "", pay: "", leafletShare: "", areaNote: "",
     startDate: "", dueDate: "", minHours: "", allocatedTime: "", mapImage: "",
+    boundary: "", mapCenter: "",
   };
   const [f, setF] = useState(blank);
-  const [imgErr, setImgErr] = useState("");
-
-  /** Area diagrams are stored inline, so keep them small. */
-  const readImage = (file: File | undefined) => {
-    setImgErr("");
-    if (!file) return;
-    if (!file.type.startsWith("image/")) { setImgErr("That file isn't an image."); return; }
-    if (file.size > 1_500_000) { setImgErr("Image is over 1.5MB — please shrink it first."); return; }
-    const fr = new FileReader();
-    fr.onload = () => setF((p) => ({ ...p, mapImage: String(fr.result || "") }));
-    fr.readAsDataURL(file);
-  };
+  const [tracing, setTracing] = useState(false);
+  const tracePts: LatLng[] = (() => {
+    try { const v = JSON.parse(f.boundary || "[]"); return Array.isArray(v) ? v : []; } catch { return []; }
+  })();
 
   const nameOf = (id: number) => users.find((u) => u.id === id)?.full_name || `User ${id}`;
   const shortDate = (d: string | null) =>
@@ -329,25 +333,46 @@ export function SubContracts({ job, users, rows, post, del }: {
         </label>
         <label className="block">
           <span className="mb-1 block text-[11px] font-semibold text-white/35">Allocated time</span>
-          <input className={input} placeholder="e.g. 3 days" value={f.allocatedTime} onChange={(e) => setF({ ...f, allocatedTime: e.target.value })} />
+          <p className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5 text-[13px] text-white/45">
+            {spanOf(f.startDate, f.dueDate)}
+          </p>
         </label>
-        <label className="block sm:col-span-2">
-          <span className="mb-1 block text-[11px] font-semibold text-white/35">Area diagram (image, optional)</span>
-          <input type="file" accept="image/*" onChange={(e) => readImage(e.target.files?.[0])}
-            className="w-full rounded-xl border border-white/12 bg-white/[0.05] px-3 py-2 text-[13px] text-white/70 file:mr-3 file:rounded-lg file:border-0 file:bg-white/10 file:px-3 file:py-1.5 file:text-[12px] file:font-bold file:text-white" />
-        </label>
-        {f.mapImage && (
-          <div className="sm:col-span-6 flex items-center gap-3">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={f.mapImage} alt="Area diagram preview" className="h-24 rounded-lg border border-white/12 object-contain" />
-            <button type="button" onClick={() => setF({ ...f, mapImage: "" })} className="text-[13px] text-white/40 hover:text-rose-300">Remove image</button>
+        <div className="block sm:col-span-2">
+          <ImageDrop value={f.mapImage} onChange={(v) => setF({ ...f, mapImage: v })}
+            label="Area diagram (optional)"
+            hint="Paste a Google Maps screenshot — then trace it below to turn it into a live map." />
+        </div>
+
+        <div className="sm:col-span-6">
+          <button type="button" onClick={() => setTracing((v) => !v)}
+            className="rounded-xl border border-white/12 bg-white/[0.05] px-4 py-2.5 text-sm font-semibold text-white/70 transition hover:bg-white/[0.1] hover:text-white">
+            {tracing ? "Hide map" : tracePts.length ? `This worker's area (${tracePts.length} points)` : "Draw this worker's area on the map"}
+          </button>
+        </div>
+
+        {tracing && (
+          <div className="sm:col-span-6 grid gap-3 lg:grid-cols-2">
+            {f.mapImage && (
+              <div>
+                <p className="mb-2 text-[12px] text-white/40">Your diagram — trace the same area on the map beside it.</p>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={f.mapImage} alt="Area diagram reference" className="w-full rounded-xl border border-white/12" />
+              </div>
+            )}
+            <div className={f.mapImage ? "" : "lg:col-span-2"}>
+              <p className="mb-2 text-[12px] text-white/40">
+                Click to drop boundary points. The worker gets this as a live map they can zoom, with their own position on it.
+              </p>
+              <BoundaryMap boundary={tracePts} editable height={380}
+                onChange={(pnts, c) => setF((prev) => ({ ...prev, boundary: JSON.stringify(pnts), mapCenter: JSON.stringify(c) }))} />
+            </div>
           </div>
         )}
-        {imgErr && <p className="sm:col-span-6 text-[13px] text-rose-300">{imgErr}</p>}
+
 
         <div className="sm:col-span-6">
           <button className={btn} disabled={!f.userId}
-            onClick={async () => { if (await post({ entity: "assignment", jobId: job.id, ...f })) setF(blank); }}>
+            onClick={async () => { if (await post({ entity: "assignment", jobId: job.id, ...f, allocatedTime: spanOf(f.startDate, f.dueDate) })) setF(blank); }}>
             Add sub-contract
           </button>
         </div>

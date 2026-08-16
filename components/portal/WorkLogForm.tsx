@@ -212,9 +212,9 @@ export default function WorkLogForm({ onDone, job, mine }: {
           </div>
         )}
         <div className="grid gap-6 sm:grid-cols-2">
-          <Field label="Job number" required hint={job ? "Set by the office for this job." : undefined}>
+          <Field label="Job number" hint={job ? "Set by the office for this job." : "Optional."}>
             <input className={`${inputCls} ${job ? "cursor-not-allowed opacity-60" : ""}`} value={jobNumber}
-              onChange={(e) => setJobNumber(e.target.value)} placeholder="e.g. JOB-1042" required readOnly={Boolean(job)} />
+              onChange={(e) => setJobNumber(e.target.value)} placeholder="e.g. JOB-1042" readOnly={Boolean(job)} />
           </Field>
           <Field label="Area worked" hint="Suburb or streets covered.">
             <input className={inputCls} value={areaWorked} onChange={(e) => setAreaWorked(e.target.value)} placeholder="e.g. Northcote — High St" />

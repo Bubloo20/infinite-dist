@@ -204,6 +204,9 @@ export async function ensureSchema() {
   await sql`ALTER TABLE client_jobs ADD COLUMN IF NOT EXISTS job_number TEXT;`;
   await sql`ALTER TABLE client_jobs ADD COLUMN IF NOT EXISTS delivered_count INTEGER;`;
   await sql`ALTER TABLE client_jobs ADD COLUMN IF NOT EXISTS out_count INTEGER;`;
+  // A sub-contract can carry its own traced area, separate from the whole job's.
+  await sql`ALTER TABLE job_assignments ADD COLUMN IF NOT EXISTS boundary TEXT;`;
+  await sql`ALTER TABLE job_assignments ADD COLUMN IF NOT EXISTS map_center TEXT;`;
 
   /**
    * A job split across several workers. Each sub-contract carries its own pay,
@@ -327,6 +330,7 @@ export type JobAssignment = {
   pay: string | null; leaflet_share: number | null; area_note: string | null;
   start_date: string | null; due_date: string | null;
   min_hours: string | null; allocated_time: string | null; map_image: string | null;
+  boundary: string | null; map_center: string | null;
   status: string; created_at: string;
 };
 
@@ -478,21 +482,25 @@ export async function upsertAssignment(a: {
   leafletShare?: number | null; areaNote?: string | null;
   startDate?: string | null; dueDate?: string | null; status?: string | null;
   minHours?: string | null; allocatedTime?: string | null; mapImage?: string | null;
+  boundary?: string | null; mapCenter?: string | null;
 }) {
   await ensureSchema();
   const r = await sql<{ id: number }>`
     INSERT INTO job_assignments
       (job_id, user_id, pay, leaflet_share, area_note, start_date, due_date, status,
-       min_hours, allocated_time, map_image)
+       min_hours, allocated_time, map_image, boundary, map_center)
     VALUES
       (${a.jobId}, ${a.userId}, ${a.pay ?? null}, ${a.leafletShare ?? null}, ${a.areaNote ?? null},
        ${a.startDate || null}, ${a.dueDate || null}, ${a.status || 'assigned'},
-       ${a.minHours ?? null}, ${a.allocatedTime ?? null}, ${a.mapImage ?? null})
+       ${a.minHours ?? null}, ${a.allocatedTime ?? null}, ${a.mapImage ?? null},
+       ${a.boundary ?? null}, ${a.mapCenter ?? null})
     ON CONFLICT (job_id, user_id) DO UPDATE SET
       pay = EXCLUDED.pay, leaflet_share = EXCLUDED.leaflet_share, area_note = EXCLUDED.area_note,
       start_date = EXCLUDED.start_date, due_date = EXCLUDED.due_date, status = EXCLUDED.status,
       min_hours = EXCLUDED.min_hours, allocated_time = EXCLUDED.allocated_time,
-      map_image = COALESCE(EXCLUDED.map_image, job_assignments.map_image)
+      map_image = COALESCE(EXCLUDED.map_image, job_assignments.map_image),
+      boundary = COALESCE(EXCLUDED.boundary, job_assignments.boundary),
+      map_center = COALESCE(EXCLUDED.map_center, job_assignments.map_center)
     RETURNING id;`;
   return r.rows[0].id;
 }
@@ -537,6 +545,23 @@ export async function assignJob(jobId: number, userId: number | null) {
 export async function setJobPublished(jobId: number, published: boolean) {
   await ensureSchema();
   await sql`UPDATE client_jobs SET published = ${published} WHERE id = ${jobId};`;
+}
+
+/**
+ * Leaflets allocated to workers count as out for delivery, so "yet to be
+ * dispatched" drops by the same amount. Recomputed from the sub-contracts each
+ * time one changes, which keeps it right when a share is edited or removed.
+ */
+export async function syncJobOutCount(jobId: number) {
+  await ensureSchema();
+  await sql`
+    UPDATE client_jobs j
+       SET out_count = GREATEST(
+             0,
+             COALESCE((SELECT SUM(a.leaflet_share) FROM job_assignments a WHERE a.job_id = j.id), 0)
+               - COALESCE(j.delivered_count, 0)
+           )
+     WHERE j.id = ${jobId};`;
 }
 
 /** Worker-facing job settings: pay, time, boundary and map. */

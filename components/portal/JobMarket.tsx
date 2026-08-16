@@ -144,6 +144,7 @@ export default function JobMarket({ workerName }: { workerName: string }) {
   const [tab, setTab] = useState<"available" | "mine">("available");
   const [busyId, setBusyId] = useState<number | null>(null);
   const [expanded, setExpanded] = useState<number | null>(null);
+  const [logging, setLogging] = useState<number | null>(null);
 
   const load = useCallback(() => {
     fetch("/api/portal/jobs")
@@ -281,9 +282,28 @@ export default function JobMarket({ workerName }: { workerName: string }) {
       ) : (
         <div className="space-y-4">
           {mine.map((j) => {
-            const pts = parsePts(j.boundary);
+            const a = mineFor(j.id);
+            const pts = parsePts(a?.boundary ?? null).length >= 3 ? parsePts(a?.boundary ?? null) : parsePts(j.boundary);
+            const signed = signedFor(j.id);
+            const accepted = a?.status === "accepted" || Boolean(signed);
             return (
-              <div key={j.id} className="space-y-4">
+              <div key={j.id} className="rounded-[26px] border border-white/10 bg-white/[0.02] p-2 sm:p-3">
+                {!accepted && (
+                  <div className="mb-2 overflow-hidden rounded-[20px] border border-orchid/40 bg-gradient-to-br from-electric/25 to-orchid/20 p-6 sm:p-7">
+                    <p className="text-xs font-bold uppercase tracking-[0.16em] text-orchid">New job for you</p>
+                    <h3 className="mt-2 font-display text-[clamp(1.5rem,4.5vw,2rem)] font-extrabold leading-tight tracking-tight text-white">
+                      {j.title || `Job #${j.id}`}
+                    </h3>
+                    <p className="mt-2 max-w-xl text-[14px] leading-relaxed text-white/65">
+                      Accepting draws up your contractor agreement with the pay, hours and dates below filled in.
+                      You&apos;ll read the terms and sign it electronically, and a copy goes to the office.
+                    </p>
+                    <button onClick={() => accept(j.id)} disabled={busyId === j.id}
+                      className="mt-5 w-full rounded-2xl bg-white px-8 py-4 font-display text-[16px] font-extrabold text-ink shadow-[0_18px_44px_-14px_rgba(255,255,255,0.5)] transition hover:-translate-y-0.5 disabled:opacity-50 sm:w-auto">
+                      {busyId === j.id ? "Accepting…" : "Accept this job →"}
+                    </button>
+                  </div>
+                )}
                 <GlassCard className="p-6">
                   <div className="flex flex-wrap items-start justify-between gap-4">
                     <div>
@@ -300,8 +320,10 @@ export default function JobMarket({ workerName }: { workerName: string }) {
                   <div className="mt-5"><BriefWithCountdown job={j} mine={mineFor(j.id)} /></div>
                   {pts.length >= 3 && (
                     <div className="mt-5">
-                      <p className="mb-2 text-[13px] font-semibold uppercase tracking-[0.1em] text-white/50">Delivery area — zoom and pan</p>
-                      <BoundaryMap boundary={pts} center={parseCenter(j.map_center)} height={400} />
+                      <p className="mb-2 text-[13px] font-semibold uppercase tracking-[0.1em] text-white/50">
+                        Your delivery area — zoom, pan, and see where you are
+                      </p>
+                      <BoundaryMap boundary={pts} center={parseCenter(a?.map_center ?? j.map_center)} height={400} locate />
                     </div>
                   )}
                   {logsFor(j.id).length > 0 && (
@@ -336,24 +358,34 @@ export default function JobMarket({ workerName }: { workerName: string }) {
                   )}
                 </GlassCard>
 
-                {mineFor(j.id)?.status === "accepted" || signedFor(j.id) ? (
-                  <>
-                    <JobContract job={j} workerName={workerName} signedDate={signedFor(j.id)} mine={mineFor(j.id)} onSigned={load} />
-                    {signedFor(j.id) && <WorkLogForm job={j} mine={mineFor(j.id)} onDone={load} />}
-                  </>
-                ) : (
-                  <GlassCard className="p-6 sm:p-8">
-                    <p className="text-xs font-bold uppercase tracking-[0.16em] text-orchid">Next step</p>
-                    <h3 className="mt-3 font-display text-2xl font-extrabold tracking-tight text-white">Accept this job</h3>
-                    <p className="mt-2 max-w-xl text-[15px] leading-relaxed text-white/55">
-                      Accepting draws up your contractor agreement with the pay, hours and dates above filled in.
-                      You&apos;ll then read the terms and sign it electronically, and a copy goes straight to the office.
+                {accepted && (
+                  <div className="mt-2 space-y-2 border-l-2 border-orchid/35 pl-3 sm:pl-4">
+                    <p className="pt-1 text-[11px] font-bold uppercase tracking-[0.14em] text-white/30">
+                      For {j.title || `Job #${j.id}`}
                     </p>
-                    <button onClick={() => accept(j.id)} disabled={busyId === j.id}
-                      className="mt-6 rounded-2xl bg-gradient-to-r from-electric to-orchid px-8 py-4 font-display text-[15px] font-bold text-white shadow-[0_16px_40px_-14px_rgba(182,109,199,0.85)] transition hover:-translate-y-0.5 disabled:opacity-50">
-                      {busyId === j.id ? "Accepting…" : "Accept job & view contract"}
-                    </button>
-                  </GlassCard>
+                    <JobContract job={j} workerName={workerName} signedDate={signed} mine={a} onSigned={load} />
+                    {signed && (
+                      <div>
+                        <button onClick={() => setLogging(logging === j.id ? null : j.id)}
+                          className="flex w-full items-center justify-between gap-3 rounded-2xl border border-white/12 bg-white/[0.05] px-5 py-4 text-left transition hover:bg-white/[0.08]">
+                          <span>
+                            <span className="block font-display text-[15px] font-bold text-white">Log your work on this job</span>
+                            <span className="mt-0.5 block text-[13px] text-white/45">
+                              {logsFor(j.id).length
+                                ? `${logsFor(j.id).length} shift${logsFor(j.id).length === 1 ? "" : "s"} logged — add another`
+                                : "Hours, leaflets and your tracking links"}
+                            </span>
+                          </span>
+                          <span className={`shrink-0 text-white/40 transition-transform ${logging === j.id ? "rotate-180" : ""}`}>▾</span>
+                        </button>
+                        {logging === j.id && (
+                          <div className="mt-2">
+                            <WorkLogForm job={j} mine={a} onDone={load} />
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
             );

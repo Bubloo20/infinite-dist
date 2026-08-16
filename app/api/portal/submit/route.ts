@@ -47,7 +47,6 @@ export async function POST(req: Request) {
   const mapmyUrls = (b.mapmyUrls || []).map((u) => (u || "").trim()).filter(Boolean);
 
   const missing: string[] = [];
-  if (!jobNumber) missing.push("job number");
   if (!startedAt) missing.push("start time");
   if (!endedAt) missing.push("finish time");
   if (!stravaUrls.length) missing.push("at least one Strava link");
@@ -97,7 +96,7 @@ export async function POST(req: Request) {
     logId = await insertWorkLog({
       userId: session.userId,
       workerName,
-      jobNumber,
+      jobNumber: jobNumber || `JOB-${b.clientJobId ?? ""}`.replace(/-$/, "") || "—",
       startedAt,
       endedAt,
       timeSpent: b.timeSpent || null,
