@@ -113,7 +113,9 @@ export default function AdminDashboard({ onSignOut }: { onSignOut: () => void })
     const jobRevenue = cj.filter((j) => j.invoice_status !== "not_sent").reduce((t, j) => t + num(j.amount), 0);
     const revenue = fe.filter((f) => f.kind === "revenue").reduce((t, f) => t + num(f.amount), 0) + jobRevenue;
     const expenses = fe.filter((f) => f.kind === "expense").reduce((t, f) => t + num(f.amount), 0);
-    const agenciesOwe = cj.filter((j) => j.invoice_status !== "received").reduce((t, j) => t + num(j.amount), 0);
+    // An agency only owes once they've been invoiced. Work that's finished but
+    // unbilled is money to chase up, not a debt they're carrying.
+    const agenciesOwe = cj.filter((j) => j.invoice_status === "sent").reduce((t, j) => t + num(j.amount), 0);
     const uninvoiced = cj.filter((j) => j.invoice_status === "not_sent").reduce((t, j) => t + num(j.amount), 0);
     return { owed, paid, revenue, expenses, agenciesOwe, uninvoiced, profit: revenue - expenses - (owed + paid) };
   }, [logs, finance, clientJobs, inPeriod]);
@@ -217,8 +219,9 @@ export default function AdminDashboard({ onSignOut }: { onSignOut: () => void })
         ))}
       </div>
 
-      <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
         <Stat label="Agencies owe me" value={money(totals.agenciesOwe)} tone="accent" />
+        <Stat label="Not yet invoiced" value={money(totals.uninvoiced)} tone="owed" />
         <Stat label="Owed to team" value={money(totals.owed)} tone="owed" />
         <Stat label="Paid to team" value={money(totals.paid)} />
         <Stat label="Revenue" value={money(totals.revenue)} />
