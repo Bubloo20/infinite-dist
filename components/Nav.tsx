@@ -5,12 +5,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 
-const MERCH_URL = "https://infinitemelb.au/merch";
-
 const commonLinks = [
   { label: "Locations", href: "/locations" },
   { label: "Case Studies", href: "/case-studies" },
-  { label: "Merch", href: MERCH_URL, external: true },
   { label: "About Us", href: "/about" },
   { label: "Contact", href: "/contact" },
   { label: "Join The Team", href: "/join" },
@@ -146,37 +143,40 @@ export default function Nav() {
           </div>
 
           {/* Common links */}
-          {commonLinks.map((l) =>
-            l.external ? (
-              <a
-                key={l.href}
-                href={l.href}
-                target="_blank"
-                rel="noreferrer"
-                className="text-[14px] text-white/85 transition-colors hover:text-white 2xl:text-[15px]"
-              >
-                {l.label}
-              </a>
-            ) : (
-              <Link
-                key={l.href}
-                href={l.href}
-                className={`text-[14px] transition-colors 2xl:text-[15px] ${
-                  pathname === l.href ? "text-orchid" : "text-white/85 hover:text-white"
-                }`}
-              >
-                {l.label}
-              </Link>
-            ),
-          )}
+          {commonLinks.map((l) => (
+            <Link
+              key={l.href}
+              href={l.href}
+              className={`text-[14px] transition-colors 2xl:text-[15px] ${
+                pathname === l.href ? "text-orchid" : "text-white/85 hover:text-white"
+              }`}
+            >
+              {l.label}
+            </Link>
+          ))}
         </nav>
 
-        <Link
-          href="/contact"
-          className="hidden shrink-0 whitespace-nowrap rounded-full bg-white px-5 py-2.5 text-[14px] font-semibold text-ink transition-transform hover:-translate-y-0.5 xl:inline-flex 2xl:px-6 2xl:text-[15px]"
-        >
-          Get A Quote
-        </Link>
+        <div className="hidden shrink-0 items-center gap-2.5 xl:flex">
+          {/* Merch gets its own pill rather than a nav link — it's a shop, not a page. */}
+          <a
+            href="https://infinitemelb.au/merch"
+            target="_blank"
+            rel="noreferrer"
+            className="group relative overflow-hidden whitespace-nowrap rounded-full bg-gradient-to-r from-electric to-orchid px-5 py-2.5 text-[14px] font-bold text-white shadow-[0_12px_30px_-12px_rgba(182,109,199,0.95)] transition-transform hover:-translate-y-0.5 2xl:px-6 2xl:text-[15px]"
+          >
+            <span
+              aria-hidden
+              className="pointer-events-none absolute inset-y-0 -left-1/3 w-1/3 bg-gradient-to-r from-transparent via-white/40 to-transparent transition-transform duration-700 group-hover:translate-x-[400%]"
+            />
+            <span className="relative">Shop Merch</span>
+          </a>
+          <Link
+            href="/contact"
+            className="whitespace-nowrap rounded-full bg-white px-5 py-2.5 text-[14px] font-semibold text-ink transition-transform hover:-translate-y-0.5 2xl:px-6 2xl:text-[15px]"
+          >
+            Get A Quote
+          </Link>
+        </div>
 
         {/* Hamburger */}
         <button
@@ -261,30 +261,26 @@ export default function Nav() {
               </div>
 
               {/* Common links */}
-              {commonLinks.map((l) =>
-                l.external ? (
-                  <a
-                    key={l.href}
-                    href={l.href}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="rounded-xl px-3 py-3 text-base text-white/85"
-                  >
-                    {l.label} ↗
-                  </a>
-                ) : (
-                  <Link
-                    key={l.href}
-                    href={l.href}
-                    className={`rounded-xl px-3 py-3 text-base ${
-                      pathname === l.href ? "bg-white/10 text-orchid" : "text-white/85"
-                    }`}
-                  >
-                    {l.label}
-                  </Link>
-                ),
-              )}
+              {commonLinks.map((l) => (
+                <Link
+                  key={l.href}
+                  href={l.href}
+                  className={`rounded-xl px-3 py-3 text-base ${
+                    pathname === l.href ? "bg-white/10 text-orchid" : "text-white/85"
+                  }`}
+                >
+                  {l.label}
+                </Link>
+              ))}
 
+              <a
+                href="https://infinitemelb.au/merch"
+                target="_blank"
+                rel="noreferrer"
+                className="mt-2 rounded-full bg-gradient-to-r from-electric to-orchid px-6 py-3.5 text-center text-base font-bold text-white shadow-[0_14px_34px_-14px_rgba(182,109,199,0.95)]"
+              >
+                Shop Merch ↗
+              </a>
               <Link
                 href="/contact"
                 className="mt-2 rounded-full bg-white px-6 py-3 text-center text-base font-semibold text-ink"

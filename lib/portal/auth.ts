@@ -6,7 +6,9 @@ export type Role = "worker" | "admin";
 export type Session = { role: Role; userId: number | null };
 
 export const COOKIE_NAME = "idp_session";
-const MAX_AGE = 60 * 60 * 24 * 14; // 14 days
+const MAX_AGE = 60 * 60 * 24 * 14;   // 14 days
+/** Thirty days when they ask to be remembered on this device. */
+const REMEMBER_AGE = 60 * 60 * 24 * 30;
 
 /**
  * Admin password, stored as a SHA-256 hash so no plaintext lives in the repo.
@@ -65,8 +67,9 @@ function secret(): string {
 }
 
 /** token = role.userId.exp.hmac */
-export function createToken(role: Role, userId: number | null): string {
-  const exp = Date.now() + MAX_AGE * 1000;
+export function createToken(role: Role, userId: number | null, remember = false): string {
+  // The token has to outlive its cookie, or "remember me" expires early anyway.
+  const exp = Date.now() + (remember ? REMEMBER_AGE : MAX_AGE) * 1000;
   const body = `${role}.${userId ?? 0}.${exp}`;
   const sig = crypto.createHmac("sha256", secret()).update(body).digest("hex");
   return `${body}.${sig}`;
@@ -85,7 +88,7 @@ export function verifyToken(token: string | undefined): Session | null {
   return { role, userId: userId > 0 ? userId : null };
 }
 
-export function sessionCookie(token: string) {
+export function sessionCookie(token: string, remember = false) {
   return {
     name: COOKIE_NAME,
     value: token,
@@ -93,7 +96,7 @@ export function sessionCookie(token: string) {
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax" as const,
     path: "/",
-    maxAge: MAX_AGE,
+    maxAge: remember ? REMEMBER_AGE : MAX_AGE,
   };
 }
 

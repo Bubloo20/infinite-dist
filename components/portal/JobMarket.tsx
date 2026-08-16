@@ -145,7 +145,11 @@ function BriefWithCountdown({ job, mine }: { job: ClientJob; mine?: JobAssignmen
   );
 }
 
-export default function JobMarket({ workerName }: { workerName: string }) {
+export default function JobMarket({ workerName, only }: {
+  workerName: string;
+  /** Pin to one list so both can be shown at once on a wide screen. */
+  only?: "available" | "mine";
+}) {
   const [open, setOpen] = useState<ClientJob[]>([]);
   const [mine, setMine] = useState<ClientJob[]>([]);
   const [interest, setInterest] = useState<number[]>([]);
@@ -153,7 +157,8 @@ export default function JobMarket({ workerName }: { workerName: string }) {
   const [assignments, setAssignments] = useState<JobAssignment[]>([]);
   const [logs, setLogs] = useState<MyLog[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<"available" | "mine">("available");
+  const [tabState, setTab] = useState<"available" | "mine">("available");
+  const tab = only ?? tabState;
   const [busyId, setBusyId] = useState<number | null>(null);
   const [expanded, setExpanded] = useState<number | null>(null);
   const [logging, setLogging] = useState<number | null>(null);
@@ -270,7 +275,7 @@ export default function JobMarket({ workerName }: { workerName: string }) {
 
   return (
     <div>
-      <div className="mb-6 grid grid-cols-2 gap-1 rounded-2xl border border-white/10 bg-white/[0.04] p-1">
+      <div className={`mb-6 grid grid-cols-2 gap-1 rounded-2xl border border-white/10 bg-white/[0.04] p-1 ${only ? "hidden" : ""}`}>
         {([["available", `Available (${open.length})`], ["mine", `My jobs (${mine.length})`]] as const).map(([k, label]) => (
           <button key={k} onClick={() => setTab(k)}
             className={`rounded-xl py-2.5 text-sm font-bold transition ${

@@ -29,9 +29,19 @@ export default function PortalPage() {
   const loadSession = useCallback(() => {
     fetch("/api/portal/session")
       .then((r) => r.json())
-      .then((d) => { setRole(d.role); setFullName(d.fullName || null); })
-      .catch(() => setRole(null))
-      .finally(() => setLoading(false));
+      .then((d) => {
+        // An admin belongs on their own dashboard, not the worker view — unless
+        // they've deliberately stepped into someone's account.
+        const asWorker = document.cookie.split("; ").some((c) => c.startsWith("idp_impersonating=1"));
+        if (d.role === "admin" && !asWorker) {
+          window.location.replace("/portal/admin");
+          return;
+        }
+        setRole(d.role);
+        setFullName(d.fullName || null);
+        setLoading(false);
+      })
+      .catch(() => { setRole(null); setLoading(false); });
   }, []);
 
   useEffect(loadSession, [loadSession]);
@@ -88,7 +98,7 @@ export default function PortalPage() {
           </motion.div>
 
           {/* Narrow screens tab between the two; wide ones show both at once. */}
-          <div className="mb-7 grid grid-cols-3 gap-1 rounded-2xl border border-white/10 bg-white/[0.04] p-1 xl:hidden">
+          <div className="mb-7 grid grid-cols-2 gap-1 rounded-2xl border border-white/10 bg-white/[0.04] p-1 xl:hidden">
             {([["jobs", "Jobs"], ["earnings", "Earnings"]] as const).map(([k, label]) => (
               <button key={k} onClick={() => { setTab(k); if (k === "earnings") setRefreshKey((n) => n + 1); }}
                 className={`rounded-xl py-2.5 text-sm font-bold transition ${
@@ -96,10 +106,6 @@ export default function PortalPage() {
                 {label}
               </button>
             ))}
-            <a href="https://infinitemelb.au/merch" target="_blank" rel="noreferrer"
-              className="rounded-xl py-2.5 text-center text-sm font-bold text-white/50 transition hover:text-white/80">
-              Merch ↗
-            </a>
           </div>
 
           <div className="xl:hidden">
@@ -107,19 +113,21 @@ export default function PortalPage() {
           </div>
 
           {/* Side by side, each column scrolling on its own. */}
-          <div className="hidden gap-5 xl:grid xl:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]">
+          <div className="hidden gap-5 xl:grid xl:grid-cols-2 2xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.8fr)]">
             <section className="min-w-0">
-              <h2 className="mb-3 text-[13px] font-bold uppercase tracking-[0.14em] text-white/40">Jobs</h2>
+              <h2 className="mb-3 text-[13px] font-bold uppercase tracking-[0.14em] text-white/40">Available jobs</h2>
               <div className="max-h-[calc(100vh-14rem)] overflow-y-auto pr-2">
-                <JobMarket workerName={fullName || ""} />
+                <JobMarket workerName={fullName || ""} only="available" />
               </div>
             </section>
             <section className="min-w-0">
-              <div className="mb-3 flex items-center justify-between">
-                <h2 className="text-[13px] font-bold uppercase tracking-[0.14em] text-white/40">Earnings</h2>
-                <a href="https://infinitemelb.au/merch" target="_blank" rel="noreferrer"
-                  className="text-[13px] font-bold text-white/45 transition hover:text-white">Merch ↗</a>
+              <h2 className="mb-3 text-[13px] font-bold uppercase tracking-[0.14em] text-white/40">My jobs</h2>
+              <div className="max-h-[calc(100vh-14rem)] overflow-y-auto pr-2">
+                <JobMarket workerName={fullName || ""} only="mine" />
               </div>
+            </section>
+            <section className="min-w-0 xl:col-span-2 2xl:col-span-1">
+              <h2 className="mb-3 text-[13px] font-bold uppercase tracking-[0.14em] text-white/40">Earnings</h2>
               <div className="max-h-[calc(100vh-14rem)] overflow-y-auto pr-2">
                 <MyEarnings key={refreshKey} />
               </div>

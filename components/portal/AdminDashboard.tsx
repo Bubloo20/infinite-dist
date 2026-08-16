@@ -54,7 +54,7 @@ export default function AdminDashboard({ onSignOut }: { onSignOut: () => void })
   const [tab, setTab] = useState<"clientjobs" | "agencies" | "workers" | "shifts" | "payments" | "finance">("clientjobs");
   const [q, setQ] = useState("");
   const [msg, setMsg] = useState("");
-  const [period, setPeriod] = useState<"week" | "fortnight" | "month" | "year" | "all">("all");
+  const [period, setPeriod] = useState<"week" | "fortnight" | "month" | "year" | "all">("week");
 
   // `silent` refreshes keep the screen up: saving shouldn't wipe the dashboard
   // back to a spinner and lose whatever drawer or half-typed field was open.
@@ -202,7 +202,7 @@ export default function AdminDashboard({ onSignOut }: { onSignOut: () => void })
   ];
 
   return (
-    <div className="relative z-10 mx-auto w-full max-w-6xl px-6 py-14 sm:py-20">
+    <div className="relative z-10 mx-auto w-full max-w-6xl px-4 py-10 sm:px-6 sm:py-16 2xl:max-w-[1700px]">
       <div className="mb-10 flex flex-wrap items-center justify-between gap-4">
         <PortalMark small />
         <div className="flex items-center gap-3">
@@ -431,6 +431,22 @@ function WorkersTab({ users, totals, contracts, jobs, assignments, post, reload,
   setMsg: (m: string) => void;
 }) {
   const [nw, setNw] = useState({ fullName: "", area: "", notes: "" });
+  const [only, setOnly] = useState<"all" | "working" | "owed">("owed");
+
+  const working = (id: number) =>
+    assignments.some((a) => {
+      if (a.user_id !== id) return false;
+      const job = jobs.find((j) => j.id === a.job_id);
+      return job ? job.status !== "completed" : true;
+    });
+
+  // Whoever is owed most sits at the top — that's the list you act on.
+  const shown = users
+    .filter((u) => (only === "working" ? working(u.id) : only === "owed" ? totals(u.id).owed > 0 : true))
+    .sort((a, b) => {
+      const d = totals(b.id).owed - totals(a.id).owed;
+      return d !== 0 ? d : a.full_name.localeCompare(b.full_name);
+    });
 
   const removeWorker = async (id: number, name: string) => {
     if (!window.confirm(`Delete ${name}? Their shifts stay in the ledger but are unlinked.`)) return;

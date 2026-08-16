@@ -26,13 +26,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "Too many attempts. Try again in a few minutes." }, { status: 429 });
   }
 
-  let b: { fullName?: string; password?: string; role?: string };
+  let b: { fullName?: string; password?: string; role?: string; remember?: boolean };
   try {
     b = await req.json();
   } catch {
     return NextResponse.json({ ok: false, error: "Bad request." }, { status: 400 });
   }
 
+  const remember = Boolean(b.remember);
   const password = (b.password || "").trim();
   const fullName = (b.fullName || "").trim();
 
@@ -41,7 +42,7 @@ export async function POST(req: Request) {
     if (checkAdminPassword(password)) {
       attempts.delete(ip);
       const res = NextResponse.json({ ok: true, role: "admin", fullName: "Admin" });
-      res.cookies.set(sessionCookie(createToken("admin", null)));
+      res.cookies.set(sessionCookie(createToken("admin", null, remember), remember));
       return res;
     }
     if (b.role === "admin") {
@@ -62,7 +63,7 @@ export async function POST(req: Request) {
     }
     attempts.delete(ip);
     const res = NextResponse.json({ ok: true, role: "worker", fullName: user.full_name, userId: user.id });
-    res.cookies.set(sessionCookie(createToken("worker", user.id)));
+    res.cookies.set(sessionCookie(createToken("worker", user.id, remember), remember));
     return res;
   } catch (e) {
     return NextResponse.json(

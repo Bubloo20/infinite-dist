@@ -61,6 +61,7 @@ export default function LoginGate({
   const [fullName, setFullName] = useState("");
   const [password, setPassword] = useState("");
   const [teamPassword, setTeamPassword] = useState("");
+  const [remember, setRemember] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
@@ -92,9 +93,9 @@ export default function LoginGate({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(
-          isAdmin ? { password, role: "admin" }
-            : signingUp ? { fullName, password, teamPassword }
-            : { fullName, password },
+          isAdmin ? { password, role: "admin", remember }
+            : signingUp ? { fullName, password, teamPassword, remember }
+            : { fullName, password, remember },
         ),
       });
       const data = await res.json();
@@ -217,6 +218,12 @@ export default function LoginGate({
                 {error}
               </motion.p>
             )}
+
+            <label className="flex cursor-pointer items-center gap-2.5 text-[13px] text-white/55">
+              <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)}
+                className="h-4 w-4 accent-[#7c3aed]" />
+              Stay signed in on this device
+            </label>
 
             <button type="submit" disabled={busy}
               className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-electric to-orchid px-6 py-4 font-display text-[15px] font-bold text-white shadow-[0_16px_40px_-14px_rgba(182,109,199,0.85)] transition hover:-translate-y-0.5 disabled:opacity-45 disabled:hover:translate-y-0">
