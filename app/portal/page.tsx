@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { PortalBackdrop, PortalMark } from "@/components/portal/PortalShell";
+import { PortalBackdrop, PortalMark, Loading } from "@/components/portal/PortalShell";
 import LoginGate from "@/components/portal/LoginGate";
 import MyEarnings from "@/components/portal/MyEarnings";
 import JobMarket from "@/components/portal/JobMarket";
@@ -48,12 +48,12 @@ export default function PortalPage() {
 
       {loading ? (
         <div className="relative z-10 grid min-h-[100svh] place-items-center">
-          <span className="h-8 w-8 animate-spin rounded-full border-2 border-white/15 border-t-orchid" />
+          <Loading label="Loading" />
         </div>
       ) : !role ? (
         <LoginGate mode="worker" onSuccess={() => { setLoading(true); loadSession(); }} />
       ) : (
-        <div className="relative z-10 mx-auto w-full max-w-3xl px-6 py-14 sm:py-20">
+        <div className="relative z-10 mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 sm:py-16 xl:max-w-[1600px]">
           {impersonating && (
             <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-400/30 bg-amber-500/10 px-5 py-3.5">
               <p className="text-sm text-amber-100">
@@ -66,7 +66,7 @@ export default function PortalPage() {
             </div>
           )}
 
-          <div className="mb-10 flex flex-wrap items-center justify-between gap-4">
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-3 sm:mb-10">
             <PortalMark small />
             <div className="flex items-center gap-3">
               {role === "admin" && (
@@ -78,16 +78,17 @@ export default function PortalPage() {
             </div>
           </div>
 
-          <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }} className="mb-8">
+          <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }} className="mb-6">
             <p className="text-xs font-bold uppercase tracking-[0.16em] text-orchid">
               {fullName ? `Signed in as ${fullName}` : "Team portal"}
             </p>
-            <h1 className="mt-4 font-display text-[clamp(2.1rem,5vw,3.2rem)] font-extrabold leading-[1.05] tracking-tight text-white">
+            <h1 className="mt-3 font-display text-[clamp(1.9rem,7vw,3.2rem)] font-extrabold leading-[1.05] tracking-tight text-white">
               Your <span className="bg-gradient-to-r from-[#8b93ff] to-orchid bg-clip-text text-transparent">work</span>
             </h1>
           </motion.div>
 
-          <div className="mb-7 grid grid-cols-3 gap-1 rounded-2xl border border-white/10 bg-white/[0.04] p-1">
+          {/* Narrow screens tab between the two; wide ones show both at once. */}
+          <div className="mb-7 grid grid-cols-3 gap-1 rounded-2xl border border-white/10 bg-white/[0.04] p-1 xl:hidden">
             {([["jobs", "Jobs"], ["earnings", "Earnings"]] as const).map(([k, label]) => (
               <button key={k} onClick={() => { setTab(k); if (k === "earnings") setRefreshKey((n) => n + 1); }}
                 className={`rounded-xl py-2.5 text-sm font-bold transition ${
@@ -101,11 +102,29 @@ export default function PortalPage() {
             </a>
           </div>
 
-          {tab === "jobs" ? (
-            <JobMarket workerName={fullName || ""} />
-          ) : (
-            <MyEarnings key={refreshKey} />
-          )}
+          <div className="xl:hidden">
+            {tab === "jobs" ? <JobMarket workerName={fullName || ""} /> : <MyEarnings key={refreshKey} />}
+          </div>
+
+          {/* Side by side, each column scrolling on its own. */}
+          <div className="hidden gap-5 xl:grid xl:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]">
+            <section className="min-w-0">
+              <h2 className="mb-3 text-[13px] font-bold uppercase tracking-[0.14em] text-white/40">Jobs</h2>
+              <div className="max-h-[calc(100vh-14rem)] overflow-y-auto pr-2">
+                <JobMarket workerName={fullName || ""} />
+              </div>
+            </section>
+            <section className="min-w-0">
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="text-[13px] font-bold uppercase tracking-[0.14em] text-white/40">Earnings</h2>
+                <a href="https://infinitemelb.au/merch" target="_blank" rel="noreferrer"
+                  className="text-[13px] font-bold text-white/45 transition hover:text-white">Merch ↗</a>
+              </div>
+              <div className="max-h-[calc(100vh-14rem)] overflow-y-auto pr-2">
+                <MyEarnings key={refreshKey} />
+              </div>
+            </section>
+          </div>
         </div>
       )}
     </main>

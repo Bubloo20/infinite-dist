@@ -2,10 +2,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { GlassCard } from "./PortalShell";
+import { GlassCard, Loading } from "./PortalShell";
 import BoundaryMap, { parseSpec, specHasDrawing } from "./BoundaryMap";
 import JobContract from "./JobContract";
-import WorkLogForm from "./WorkLogForm";
+import WorkLogForm, { type EditableLog } from "./WorkLogForm";
 import type { ClientJob, JobAssignment } from "@/lib/portal/db";
 import { submitForm } from "@/lib/forms";
 
@@ -20,6 +20,8 @@ type MyLog = {
   startedAt: string; endedAt: string; timeSpent: string | null;
   leaflets: number | null; amount: string | null;
   paidOn: string | null; paidAt: string | null;
+  areaWorked: string | null; notes: string | null;
+  stravaUrls: string | null; mapmyUrls: string | null;
 };
 
 const stamp = (l: MyLog) =>
@@ -123,9 +125,9 @@ function Brief({ job, mine }: { job: ClientJob; mine?: JobAssignment | null }) {
         ["Minimum hours", job.min_hours || "—"],
       ];
   return (
-    <div className="grid gap-3 sm:grid-cols-3">
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3">
       {items.map(([k, v]) => (
-        <div key={k} className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3">
+        <div key={k} className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5 sm:px-4 sm:py-3">
           <p className="text-[11px] font-bold uppercase tracking-wide text-white/35">{k}</p>
           <p className="mt-0.5 font-semibold text-white">{v}</p>
         </div>
@@ -155,7 +157,21 @@ export default function JobMarket({ workerName }: { workerName: string }) {
   const [busyId, setBusyId] = useState<number | null>(null);
   const [expanded, setExpanded] = useState<number | null>(null);
   const [logging, setLogging] = useState<number | null>(null);
+  const [editingLog, setEditingLog] = useState<EditableLog | null>(null);
+  // Phones get a shorter map so the rest of the card isn't pushed off-screen.
+  const [phone, setPhone] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 640px)");
+    const sync = () => setPhone(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
   const [viewing, setViewing] = useState<number | null>(null);
+  const [shut, setShut] = useState<number[]>([]);
+  const isShut = (id: number) => shut.includes(id);
+  const toggleShut = (id: number) =>
+    setShut((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]));
 
   /** Reveal the contract for this job, then slide down to it. */
   const viewJob = (jobId: number) => {
@@ -235,17 +251,17 @@ export default function JobMarket({ workerName }: { workerName: string }) {
   };
 
   const askQuestion = (jobId: number) => {
-    const q = window.prompt("What would you like to ask the office about this job?");
+    const q = window.prompt("What would you like to ask about this job?");
     if (q && q.trim()) act(jobId, "interest", q.trim());
   };
 
   const decline = (jobId: number) => {
-    const why = window.prompt("Let the office know why you're passing (optional):") ?? "";
+    const why = window.prompt("Why are you passing on this one? (optional)") ?? "";
     act(jobId, "interest", `[declined] ${why}`.trim());
   };
 
   if (loading) {
-    return <div className="grid place-items-center py-20"><span className="h-8 w-8 animate-spin rounded-full border-2 border-white/15 border-t-orchid" /></div>;
+    return <Loading label="Your jobs" />;
   }
 
   const signedFor = (id: number) => contracts.find((c) => c.jobId === id)?.signedDate ?? null;
@@ -268,7 +284,7 @@ export default function JobMarket({ workerName }: { workerName: string }) {
         !open.length ? (
           <GlassCard className="p-14 text-center">
             <p className="font-display text-lg font-bold text-white">No jobs posted right now</p>
-            <p className="mt-2 text-white/50">When the office publishes a job it&apos;ll appear here to put your hand up for.</p>
+            <p className="mt-2 text-white/50">You can accept listed jobs here — anything available will show up in this list.</p>
           </GlassCard>
         ) : (
           <div className="space-y-3">
@@ -304,7 +320,7 @@ export default function JobMarket({ workerName }: { workerName: string }) {
                       <button
                         onClick={() => act(j.id, keen ? "withdraw" : "interest")}
                         disabled={busyId === j.id}
-                        className={`rounded-2xl px-6 py-3 font-display text-[15px] font-bold transition hover:-translate-y-0.5 disabled:opacity-50 ${
+                        className={`rounded-2xl px-6 py-3 font-display text-[15px] font-bold transition hover:-translate-y-0.5 disabled:opacity-50 ${busyId === j.id ? "idp-loading" : ""} ${
                           keen ? "border border-white/15 bg-white/[0.06] text-white/70"
                                : "bg-gradient-to-r from-electric to-orchid text-white shadow-[0_14px_34px_-14px_rgba(182,109,199,0.9)]"}`}>
                         {busyId === j.id ? "…" : keen ? "Interested ✓ — withdraw" : "I'm interested"}
@@ -318,7 +334,7 @@ export default function JobMarket({ workerName }: { workerName: string }) {
                         Decline
                       </button>
                     </div>
-                    {keen && <p className="mt-2 text-[13px] text-white/40">The office can see your response and will assign it if it&apos;s yours.</p>}
+                    {keen && <p className="mt-2 text-[13px] text-white/40">Your response has been recorded — you&apos;ll be assigned the job if it&apos;s yours.</p>}
                   </GlassCard>
                 </motion.div>
               );
@@ -328,7 +344,7 @@ export default function JobMarket({ workerName }: { workerName: string }) {
       ) : !mine.length ? (
         <GlassCard className="p-14 text-center">
           <p className="font-display text-lg font-bold text-white">Nothing assigned yet</p>
-          <p className="mt-2 text-white/50">Show interest in an available job and the office will assign it to you.</p>
+          <p className="mt-2 text-white/50">Show interest in an available job and it&apos;ll be assigned to you.</p>
         </GlassCard>
       ) : (
         <div className="space-y-4">
@@ -339,7 +355,7 @@ export default function JobMarket({ workerName }: { workerName: string }) {
             const signed = signedFor(j.id);
             const accepted = a?.status === "accepted" || Boolean(signed);
             return (
-              <div key={j.id} className="rounded-[26px] border border-white/10 bg-white/[0.02] p-2 sm:p-3">
+              <div key={j.id} className="rounded-[22px] border border-white/10 bg-white/[0.02] p-1.5 sm:rounded-[26px] sm:p-3">
                 {!accepted && (
                   <div className="mb-2 overflow-hidden rounded-[20px] border border-orchid/40 bg-gradient-to-br from-electric/25 to-orchid/20 p-6 sm:p-7">
                     <p className="text-xs font-bold uppercase tracking-[0.16em] text-orchid">New job for you</p>
@@ -367,18 +383,25 @@ export default function JobMarket({ workerName }: { workerName: string }) {
                         {money(mineFor(j.id)?.pay ?? j.worker_pay)}
                       </p>
                       <PayState logs={logsFor(j.id)} accepted={accepted} />
+                      <button onClick={() => toggleShut(j.id)}
+                        className="mt-2 flex items-center gap-1.5 rounded-lg border border-white/12 bg-white/[0.05] px-3 py-1.5 text-[12px] font-bold text-white/60 transition hover:bg-white/[0.1] hover:text-white">
+                        {isShut(j.id) ? "Expand" : "Collapse"}
+                        <span className={`transition-transform ${isShut(j.id) ? "" : "rotate-180"}`}>▾</span>
+                      </button>
                     </div>
                   </div>
+                  {!isShut(j.id) && (
                   <div className="mt-5"><BriefWithCountdown job={j} mine={mineFor(j.id)} /></div>
-                  {specHasDrawing(spec) && (
+                  )}
+                  {!isShut(j.id) && specHasDrawing(spec) && (
                     <div className="mt-5">
                       <p className="mb-2 text-[13px] font-semibold uppercase tracking-[0.1em] text-white/50">
                         Your delivery area — zoom, pan, and see where you are
                       </p>
-                      <BoundaryMap spec={spec} center={parseCenter(a?.map_center ?? j.map_center)} height={400} locate />
+                      <BoundaryMap spec={spec} center={parseCenter(a?.map_center ?? j.map_center)} height={phone ? 260 : 400} locate />
                     </div>
                   )}
-                  {logsFor(j.id).length > 0 && (
+                  {!isShut(j.id) && logsFor(j.id).length > 0 && (
                     <div className="mt-5">
                       <p className="mb-2 text-[13px] font-semibold uppercase tracking-[0.1em] text-white/50">
                         Your shifts on this job ({logsFor(j.id).length})
@@ -391,16 +414,24 @@ export default function JobMarket({ workerName }: { workerName: string }) {
                               {l.timeSpent ? ` · ${l.timeSpent}` : ""}
                               {l.leaflets ? ` · ${l.leaflets.toLocaleString()} leaflets` : ""}
                             </span>
-                            <span className={`rounded-lg px-2.5 py-1 text-[12px] font-bold ${
-                              l.paidOn ? "bg-emerald-500/15 text-emerald-300" : "bg-amber-500/15 text-amber-300"}`}>
-                              {l.paidOn ? `Paid ${stamp(l)}` : "Awaiting payment"}
+                            <span className="flex items-center gap-2">
+                              <span className={`rounded-lg px-2.5 py-1 text-[12px] font-bold ${
+                                l.paidOn ? "bg-emerald-500/15 text-emerald-300" : "bg-amber-500/15 text-amber-300"}`}>
+                                {l.paidOn ? `Paid ${stamp(l)}` : "Awaiting verification"}
+                              </span>
+                              {!l.paidOn && (
+                                <button onClick={() => { setLogging(null); setEditingLog(l as EditableLog); }}
+                                  className="text-[12px] font-bold text-orchid transition hover:text-white">
+                                  Edit
+                                </button>
+                              )}
                             </span>
                           </div>
                         ))}
                       </div>
                     </div>
                   )}
-                  {mineFor(j.id)?.map_image && (
+                  {!isShut(j.id) && mineFor(j.id)?.map_image && (
                     <div className="mt-5">
                       <p className="mb-2 text-[13px] font-semibold uppercase tracking-[0.1em] text-white/50">Your area diagram</p>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -410,7 +441,7 @@ export default function JobMarket({ workerName }: { workerName: string }) {
                   )}
                 </GlassCard>
 
-                {(accepted || viewing === j.id) && (
+                {!isShut(j.id) && (accepted || viewing === j.id) && (
                   <div id={`contract-${j.id}`} className="mt-2 space-y-2 border-l-2 border-orchid/35 pl-3 sm:pl-4">
                     <p className="pt-1 text-[11px] font-bold uppercase tracking-[0.14em] text-white/30">
                       For {j.title || `Job #${j.id}`}
@@ -424,18 +455,29 @@ export default function JobMarket({ workerName }: { workerName: string }) {
                         <button onClick={() => setLogging(logging === j.id ? null : j.id)}
                           className="flex w-full items-center justify-between gap-3 rounded-2xl border border-white/12 bg-white/[0.05] px-5 py-4 text-left transition hover:bg-white/[0.08]">
                           <span>
-                            <span className="block font-display text-[15px] font-bold text-white">Log your work on this job</span>
+                            <span className="block font-display text-[15px] font-bold text-white">
+                              {logsFor(j.id).length ? "Mark more work as done" : "Mark work as done"}
+                            </span>
                             <span className="mt-0.5 block text-[13px] text-white/45">
                               {logsFor(j.id).length
-                                ? `${logsFor(j.id).length} shift${logsFor(j.id).length === 1 ? "" : "s"} logged — add another`
-                                : "Hours, leaflets and your tracking links"}
+                                ? `${logsFor(j.id).length} submitted — add another run`
+                                : "Upload your hours, leaflets and tracking links"}
                             </span>
                           </span>
                           <span className={`shrink-0 text-white/40 transition-transform ${logging === j.id ? "rotate-180" : ""}`}>▾</span>
                         </button>
                         {logging === j.id && (
                           <div className="mt-2">
-                            <WorkLogForm job={j} mine={a} onDone={load} />
+                            <WorkLogForm job={j} mine={a} signedDate={signed}
+                              onDone={() => { setLogging(null); load(); }}
+                              onCancel={() => setLogging(null)} />
+                          </div>
+                        )}
+                        {editingLog && logsFor(j.id).some((l) => l.id === editingLog.id) && (
+                          <div className="mt-2">
+                            <WorkLogForm job={j} mine={a} editing={editingLog}
+                              onDone={() => { setEditingLog(null); load(); }}
+                              onCancel={() => setEditingLog(null)} />
                           </div>
                         )}
                       </div>

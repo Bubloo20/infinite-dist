@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { GlassCard, PortalMark } from "./PortalShell";
+import { GlassCard, PortalMark, Loading } from "./PortalShell";
 import { unpackLinks, type WorkLog, type Payment, type PortalUser, type FinanceEntry,
   type Agency, type Agent, type ClientJob, type AgencyPayment } from "@/lib/portal/db";
 import ClientsTab, { ClientJobsTab } from "./ClientsTab";
@@ -257,7 +257,7 @@ export default function AdminDashboard({ onSignOut }: { onSignOut: () => void })
       </div>
 
       {loading ? (
-        <div className="grid place-items-center py-20"><span className="h-8 w-8 animate-spin rounded-full border-2 border-white/15 border-t-orchid" /></div>
+        <Loading label="Loading" />
       ) : tab === "clientjobs" ? (
         <ClientJobsTab agencies={agencies} agents={agents} jobs={clientJobs} workLogs={logs} users={users} assignments={assignments} post={postClient} del={delClient} />
       ) : tab === "agencies" ? (

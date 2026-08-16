@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { PortalBackdrop } from "@/components/portal/PortalShell";
+import { PortalBackdrop, Loading } from "@/components/portal/PortalShell";
 import LoginGate from "@/components/portal/LoginGate";
 import AdminDashboard from "@/components/portal/AdminDashboard";
 
@@ -27,7 +27,7 @@ export default function AdminPage() {
       <PortalBackdrop />
       {loading ? (
         <div className="relative z-10 grid min-h-[100svh] place-items-center">
-          <span className="h-8 w-8 animate-spin rounded-full border-2 border-white/15 border-t-orchid" />
+          <Loading label="Loading" />
         </div>
       ) : role !== "admin" ? (
         <LoginGate mode="admin" onSuccess={setRole} />

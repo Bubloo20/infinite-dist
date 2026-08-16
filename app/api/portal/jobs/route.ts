@@ -26,6 +26,8 @@ export async function GET() {
       id: l.id, jobId: l.client_job_id, jobNumber: l.job_number,
       startedAt: l.started_at, endedAt: l.ended_at, timeSpent: l.time_spent,
       leaflets: l.leaflet_count, amount: l.amount, paidOn: l.paid_on, paidAt: l.paid_at,
+      areaWorked: l.area_worked, notes: l.notes,
+      stravaUrls: l.strava_urls, mapmyUrls: l.mapmy_urls,
     }));
     return NextResponse.json({
       ok: true, open, mine, interest, assignments, logs,

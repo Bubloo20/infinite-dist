@@ -101,12 +101,49 @@ export function ActionButton({
       onClick={run}
       disabled={disabled || busy}
       aria-busy={busy}
-      className={`relative overflow-hidden ${className}`}
+      className={`${className} ${busy ? "idp-loading" : ""}`}
     >
-      {busy && (
-        <span aria-hidden className="idp-fill pointer-events-none absolute inset-y-0 left-0 bg-white/25" />
-      )}
       <span className="relative">{busy && busyLabel ? busyLabel : children}</span>
     </button>
+  );
+}
+
+/**
+ * The house loading state — the infinity mark turning under a band of light,
+ * with the word beneath it pulsing letter by letter. Used everywhere the portal
+ * waits on something, so a wait always looks like the same thing.
+ */
+export function Loading({ label = "Loading", className = "" }: { label?: string; className?: string }) {
+  return (
+    <div className={`grid place-items-center py-16 ${className}`} role="status" aria-live="polite">
+      <div className="idp-load-mark w-[110px]">
+        <svg viewBox="0 0 200 104" className="w-full overflow-visible" aria-hidden="true">
+          <defs>
+            <linearGradient id="idp-load-trace" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stopColor="#8b93ff" />
+              <stop offset="55%" stopColor="#b66dc7" />
+              <stop offset="100%" stopColor="#8b93ff" />
+            </linearGradient>
+          </defs>
+          <path
+            d="M100 52c-12-19-24-28-38-28a28 28 0 1 0 0 56c14 0 26-9 38-28zm0 0c12 19 24 28 38 28a28 28 0 1 0 0-56c-14 0-26 9-38 28z"
+            fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="11" strokeLinecap="round"
+          />
+          <path
+            className="idp-load-trace" pathLength={100}
+            d="M100 52c-12-19-24-28-38-28a28 28 0 1 0 0 56c14 0 26-9 38-28zm0 0c12 19 24 28 38 28a28 28 0 1 0 0-56c-14 0-26 9-38 28z"
+            fill="none" stroke="url(#idp-load-trace)" strokeWidth="11" strokeLinecap="round"
+          />
+        </svg>
+      </div>
+      <p className="mt-4 flex gap-[1px] font-display text-[11px] font-bold uppercase tracking-[0.3em] text-white/45">
+        {label.split("").map((ch, i) => (
+          <span key={i} className="idp-load-letter" style={{ animationDelay: `${i * 70}ms` }}>
+            {ch === " " ? "\u00a0" : ch}
+          </span>
+        ))}
+      </p>
+      <span className="sr-only">{label}</span>
+    </div>
   );
 }

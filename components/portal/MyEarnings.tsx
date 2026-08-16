@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { GlassCard } from "./PortalShell";
+import { GlassCard, Loading } from "./PortalShell";
 import type { WorkLog, Payment } from "@/lib/portal/db";
 import { unpackLinks } from "@/lib/portal/db";
 
@@ -186,7 +186,7 @@ export default function MyEarnings() {
   }, [reloadKey]);
 
   if (loading) {
-    return <div className="grid place-items-center py-20"><span className="h-8 w-8 animate-spin rounded-full border-2 border-white/15 border-t-orchid" /></div>;
+    return <Loading label="Earnings" />;
   }
 
   const unpaid = jobs.filter((j) => !j.paid_on);

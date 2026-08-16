@@ -54,8 +54,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: `Please fill in: ${missing.join(", ")}.` }, { status: 400 });
   }
 
-  if (new Date(endedAt).getTime() <= new Date(startedAt).getTime()) {
-    return NextResponse.json({ ok: false, error: "Finish time must be after the start time." }, { status: 400 });
+  // Dates only, so finishing on the same day is normal.
+  if (new Date(endedAt).getTime() < new Date(startedAt).getTime()) {
+    return NextResponse.json({ ok: false, error: "The finish date can't be before the start date." }, { status: 400 });
   }
 
   let leafletCount: number | null = null;

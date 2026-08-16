@@ -142,12 +142,47 @@ select optgroup {
   .animate-sheen, .animate-orbit { animation: none; }
 }
 
-/* The fill that runs across a button while its action is in flight. */
-@keyframes idp-fill {
-  0%   { width: 0; opacity: 0.9; }
-  70%  { width: 88%; opacity: 0.55; }
-  100% { width: 96%; opacity: 0.35; }
+/* A band of light sliding across a button while its action is in flight. */
+@keyframes idp-slide {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(200%); }
 }
-.idp-fill {
-  animation: idp-fill 1.6s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+.idp-loading {
+  position: relative;
+  overflow: hidden;
+  cursor: progress;
+}
+.idp-loading::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 45%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.35), transparent);
+  animation: idp-slide 1.1s ease-in-out infinite;
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .idp-loading::after { animation-duration: 2.4s; }
+}
+
+/* The portal's loading mark: the loop turns while a band of light runs it. */
+.idp-load-mark {
+  animation: idp-turn 5s linear infinite;
+  filter: drop-shadow(0 0 14px rgba(182, 109, 199, 0.45));
+}
+.idp-load-trace {
+  stroke-dasharray: 20 80;
+  animation: idp-run 1.7s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+}
+/* Letters lift through the word, one after another. */
+@keyframes idp-letter {
+  0%, 70%, 100% { opacity: 0.35; transform: translateY(0); }
+  35%           { opacity: 1;    transform: translateY(-2px); }
+}
+.idp-load-letter {
+  display: inline-block;
+  animation: idp-letter 1.5s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .idp-load-mark, .idp-load-trace, .idp-load-letter { animation-duration: 4s; }
 }

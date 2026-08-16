@@ -1,6 +1,13 @@
 export type StravaStatus =
   | "valid" | "invalid-format" | "not-found" | "private"
-  | "ambiguous-name" | "date-mismatch" | "unverified";
+  | "named-account" | "date-mismatch" | "unverified";
+
+/** How-to videos we point workers at when their Strava setup needs changing. */
+export const STRAVA_HELP = {
+  hideName: "https://www.youtube.com/watch?v=Ij_nAFpj8JU",
+  privacy: "https://www.youtube.com/watch?v=jtUTTsiKH4w",
+  hiddenParts: "https://www.youtube.com/watch?v=eAUvZYUVOOQ",
+} as const;
 
 export type StravaCheck = {
   /** Safe to accept. */
@@ -11,12 +18,17 @@ export type StravaCheck = {
   message: string;
   activityId?: string;
   normalisedUrl?: string;
+  /** A walkthrough to fix whatever's wrong with their Strava setup. */
+  helpUrl?: string;
+  helpLabel?: string;
   athlete?: string | null;
   activityType?: string | null;
   activityDate?: string | null;
 };
 
 const ACTIVITY_RE = /^(?:https?:\/\/)?(?:www\.)?strava\.com\/activities\/(\d{6,20})(?:[/?#].*)?$/i;
+/** The share links the Strava app produces — they redirect to the activity. */
+const APP_LINK_RE = /^(?:https?:\/\/)?strava\.app\.link\/[A-Za-z0-9]{6,}(?:[/?#].*)?$/i;
 
 /** Link-preview agent: Strava serves full OpenGraph tags to crawlers. */
 const CRAWLER_UA = "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)";
@@ -26,10 +38,19 @@ export function parseStravaUrl(raw: string): StravaCheck {
   const url = (raw || "").trim();
   if (!url) return { ok: false, verified: false, status: "invalid-format", message: "Paste your Strava activity link." };
 
+  // A share link from the app is fine — it resolves to the activity when checked.
+  if (APP_LINK_RE.test(url)) {
+    return {
+      ok: true, verified: false, status: "unverified",
+      message: "Share link looks right — checking with Strava…",
+      normalisedUrl: url.startsWith("http") ? url : `https://${url}`,
+    };
+  }
+
   const m = url.match(ACTIVITY_RE);
   if (!m) {
-    if (/strava\.app\.link|strava\.com\/athlete|strava\.com\/routes/i.test(url)) {
-      return { ok: false, verified: false, status: "invalid-format", message: "That's not an activity link. Open the activity and copy its URL (strava.com/activities/…)." };
+    if (/strava\.com\/athlete|strava\.com\/routes/i.test(url)) {
+      return { ok: false, verified: false, status: "invalid-format", message: "That's not an activity link. Open the activity and copy its URL, or share it from the app." };
     }
     return { ok: false, verified: false, status: "invalid-format", message: "Must be a Strava activity link, e.g. https://www.strava.com/activities/1234567890" };
   }
@@ -83,7 +104,7 @@ export async function verifyStravaActivity(
   window?: { startedAt?: string | null; endedAt?: string | null },
 ): Promise<StravaCheck> {
   const parsed = parseStravaUrl(raw);
-  if (!parsed.ok || !parsed.normalisedUrl || !parsed.activityId) return parsed;
+  if (!parsed.ok || !parsed.normalisedUrl) return parsed;
 
   try {
     const controller = new AbortController();
@@ -101,15 +122,51 @@ export async function verifyStravaActivity(
       return { ...parsed, ok: true, verified: false, status: "unverified", message: "Link is valid — Strava rate-limited our check, the office will confirm." };
     }
 
-    const landed = res.url || "";
-    const html = (await res.text()).slice(0, 250000);
+    let landed = res.url || "";
+    let html = (await res.text()).slice(0, 250000);
+
+    // A share link serves an interstitial, not the activity: its own card says
+    // "… …" for the athlete. The real activity id is in the page, so pull it
+    // out and check the actual activity instead.
+    if (!parsed.activityId) {
+      const found =
+        landed.match(/strava\.com\/activities\/(\d{6,20})/i) ||
+        // The id also appears JSON-escaped ("strava.com\/activities\/…") in the page.
+        html.match(/strava\.com\\?\/activities\\?\/(\d{6,20})/i);
+      if (!found) {
+        return {
+          ...parsed, ok: false, verified: false, status: "not-found",
+          message: "That share link doesn't lead to an activity. Open it and copy the activity's own link.",
+        };
+      }
+      parsed.activityId = found[1];
+      parsed.normalisedUrl = `https://www.strava.com/activities/${found[1]}`;
+
+      const again = await fetch(parsed.normalisedUrl, {
+        redirect: "follow", cache: "no-store",
+        headers: { "User-Agent": CRAWLER_UA, Accept: "text/html", "Accept-Language": "en-AU,en;q=0.9" },
+      });
+      if (again.status === 404) {
+        return { ...parsed, ok: false, verified: false, status: "not-found", message: "Strava says this activity doesn't exist." };
+      }
+      if (again.status === 403 || again.status === 429) {
+        return { ...parsed, ok: true, verified: false, status: "unverified", message: "Link is valid — Strava rate-limited our check, we'll confirm it here." };
+      }
+      landed = again.url || parsed.normalisedUrl;
+      html = (await again.text()).slice(0, 250000);
+    }
 
     const og: Record<string, string> = {};
     for (const m of html.matchAll(/<meta[^>]+property="og:([a-z:]+)"[^>]*content="([^"]*)"/g)) og[m[1]] = m[2];
 
     // No activity card and bounced to signup => the activity isn't there.
     if (!og.description && /\/register|\/login|\/onboarding/i.test(landed)) {
-      return { ...parsed, ok: false, verified: false, status: "not-found", message: "Strava couldn't open this activity — it either doesn't exist or isn't public." };
+      return {
+        ...parsed, ok: false, verified: false, status: "private",
+        message: "Strava won't show this activity — it's set to followers-only or private. Make it public so the tracking can be checked.",
+        helpUrl: STRAVA_HELP.privacy,
+        helpLabel: "How to change your activity's privacy",
+      };
     }
     if (!og.description) {
       return { ...parsed, ok: true, verified: false, status: "unverified", message: "Link is valid but Strava didn't return activity details." };
@@ -118,9 +175,15 @@ export async function verifyStravaActivity(
     const { athlete, type, date } = parseOgDescription(og.description);
     const base = { ...parsed, athlete, activityType: type, activityDate: date };
 
-    if (athlete && isAmbiguousName(athlete)) {
-      return { ...base, ok: false, verified: false, status: "ambiguous-name",
-        message: `The Strava account tracking this ("${athlete}") isn't a recognisable name. Use an account with your real name.` };
+    // The activity must not carry a real name — an anonymous handle is the
+    // whole point, so a recognisable one has to be changed before we take it.
+    if (athlete && !isAmbiguousName(athlete)) {
+      return {
+        ...base, ok: false, verified: false, status: "named-account",
+        message: `This activity shows a real name on Strava ("${athlete}"). Change your Strava display name so it doesn't identify you, then paste the link again.`,
+        helpUrl: STRAVA_HELP.hideName,
+        helpLabel: "How to hide your name on Strava",
+      };
     }
 
     // Activity date must fall inside the shift.

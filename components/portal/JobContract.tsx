@@ -287,7 +287,7 @@ export default function JobContract({
         <p className="font-display text-lg font-bold text-emerald-200">Agreement signed</p>
         <div className="mt-1.5 flex flex-wrap items-end justify-between gap-4">
           <p className="text-sm text-emerald-100/70">
-            You signed this contract on {new Date(signedDate).toLocaleDateString("en-AU", { day: "2-digit", month: "long", year: "numeric" })}. A copy is with the office.
+            You signed this contract on {new Date(signedDate).toLocaleDateString("en-AU", { day: "2-digit", month: "long", year: "numeric" })}. A signed copy has been saved.
           </p>
           <a href={`/portal/contract/${job.id}`} target="_blank" rel="noreferrer"
             className="shrink-0 rounded-2xl border border-emerald-400/35 bg-emerald-500/10 px-5 py-2.5 font-display text-[14px] font-bold text-emerald-200 transition hover:bg-emerald-500/20 hover:text-white">
@@ -480,7 +480,7 @@ export default function JobContract({
 
       {/* Accept stays dim until it's been read, signed and the hours add up. */}
       <button onClick={submit} disabled={!ready}
-        className={`mt-6 w-full rounded-2xl px-6 py-4 font-display text-[15px] font-bold transition ${
+        className={`mt-6 w-full rounded-2xl px-6 py-4 font-display text-[15px] font-bold transition ${busy ? "idp-loading" : ""} ${
           ready
             ? "bg-gradient-to-r from-electric to-orchid text-white shadow-[0_16px_40px_-14px_rgba(182,109,199,0.85)] hover:-translate-y-0.5"
             : "cursor-not-allowed border border-white/10 bg-white/[0.06] text-white/35"}`}>
