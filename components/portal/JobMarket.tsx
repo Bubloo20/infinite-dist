@@ -311,6 +311,9 @@ export default function JobMarket({ workerName, only }: {
     return out.sort((x, y) => rank(x) - rank(y) || (y.a?.id ?? 0) - (x.a?.id ?? 0));
   })();
 
+  const logsFor = (jobId: number, assignmentId?: number | null) =>
+    logs.filter((l) => (assignmentId ? l.assignmentId === assignmentId : l.jobId === jobId && !l.assignmentId));
+
   /** Paid, or on a job the office has closed off — done with, but still readable. */
   const isFinished = (j: ClientJob, a: JobAssignment | null) => {
     const shifts = logsFor(j.id, a?.id);
@@ -318,8 +321,6 @@ export default function JobMarket({ workerName, only }: {
   };
   const live = entries.filter((e) => !isFinished(e.job, e.a));
   const history = entries.filter((e) => isFinished(e.job, e.a));
-  const logsFor = (jobId: number, assignmentId?: number | null) =>
-    logs.filter((l) => (assignmentId ? l.assignmentId === assignmentId : l.jobId === jobId && !l.assignmentId));
 
   return (
     <div>
