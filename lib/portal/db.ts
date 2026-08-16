@@ -73,11 +73,27 @@ export function unpackLinks(v: string | null): string[] {
   }
 }
 
-let ready = false;
+let schemaReady: Promise<void> | null = null;
 
-export async function ensureSchema() {
-  if (ready) return;
+/**
+ * Bring the schema up to date, once per process.
+ *
+ * The promise is cached rather than a "done" flag: a page load fires several
+ * queries at once, and with a flag that only flips at the end they each saw
+ * "not ready" and re-ran all forty-odd statements in parallel. Sharing the
+ * promise means the first caller migrates and the rest simply wait for it.
+ */
+export function ensureSchema(): Promise<void> {
+  if (!schemaReady) {
+    schemaReady = migrateSchema().catch((e) => {
+      schemaReady = null; // a failed migration shouldn't poison every later call
+      throw e;
+    });
+  }
+  return schemaReady;
+}
 
+async function migrateSchema(): Promise<void> {
   await sql`
     CREATE TABLE IF NOT EXISTS portal_users (
       id SERIAL PRIMARY KEY,
@@ -292,7 +308,6 @@ export async function ensureSchema() {
     );
   `;
 
-  ready = true;
 }
 
 /* -------------------------- agencies, agents, jobs ------------------------- */

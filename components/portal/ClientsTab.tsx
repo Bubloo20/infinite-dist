@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { GlassCard } from "./PortalShell";
+import { GlassCard, ActionButton } from "./PortalShell";
 import type { Agency, Agent, ClientJob, AgencyPayment, JobStatus, InvoiceStatus } from "@/lib/portal/db";
 import { SubContracts } from "./PublishToWorkers";
 import type { PortalUser, JobAssignment } from "@/lib/portal/db";
@@ -58,10 +58,10 @@ export default function ClientsTab({
           <input className={input} placeholder="Price / leaflet" inputMode="decimal" value={newAgency.pricePerLeaflet} onChange={(e) => setNewAgency({ ...newAgency, pricePerLeaflet: e.target.value })} />
           <input className={input} placeholder="Email" value={newAgency.email} onChange={(e) => setNewAgency({ ...newAgency, email: e.target.value })} />
           <input className={input} placeholder="Phone" value={newAgency.phone} onChange={(e) => setNewAgency({ ...newAgency, phone: e.target.value })} />
-          <button className={btn} disabled={!newAgency.name}
+          <ActionButton className={btn} disabled={!newAgency.name} busyLabel="Adding…"
             onClick={async () => { if (await post({ entity: "agency", ...newAgency })) setNewAgency({ name: "", pricePerLeaflet: "", email: "", phone: "" }); }}>
             Add agency
-          </button>
+          </ActionButton>
         </div>
       </GlassCard>
 
@@ -242,7 +242,7 @@ function AgencyDetail({ agency, agents, jobs, payments, post, del }: {
             </span>
           </label>
           <div className="flex gap-2 sm:col-span-2">
-            <button className={btn} onClick={() => post({ entity: "agency", id: agency.id, ...d })}>Save details</button>
+            <ActionButton className={btn} busyLabel="Saving…" onClick={() => post({ entity: "agency", id: agency.id, ...d })}>Save details</ActionButton>
             <button className="rounded-xl border border-rose-400/30 px-4 py-2.5 text-sm font-semibold text-rose-300 transition hover:bg-rose-500/10"
               onClick={() => del("agency", agency.id)}>Delete agency</button>
           </div>
@@ -334,10 +334,10 @@ export function ClientJobsTab({ agencies, agents, jobs, workLogs, users, assignm
           </label>
 
           <div className="sm:col-span-3">
-            <button className={btn} disabled={!f.agencyId && !f.title}
+            <ActionButton className={btn} disabled={!f.agencyId && !f.title} busyLabel="Adding…"
               onClick={async () => { if (await post({ entity: "job", ...f })) setF(blank); }}>
               Add job
-            </button>
+            </ActionButton>
           </div>
         </div>
       </GlassCard>
@@ -446,9 +446,12 @@ function ClientJobRow({ job, agencyName, agentName, agencies, agents, expenses, 
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-2">
             <p className="text-[15px] font-semibold text-white/75">{job.title || `Job #${job.id}`}</p>
-            <span className="rounded-md bg-white/[0.08] px-2 py-0.5 font-mono text-[11px] text-white/60">
-              {job.job_number || `#${job.id}`}
-            </span>
+            {/* Only jobs the office has numbered carry one in the heading. */}
+            {job.job_number && (
+              <span className="rounded-md bg-white/[0.08] px-2 py-0.5 font-mono text-[11px] text-white/60">
+                {job.job_number}
+              </span>
+            )}
           </div>
           <p className="mt-1.5 text-sm text-white/45">
             {job.quantity ? `${job.quantity.toLocaleString()} leaflets` : "—"}
@@ -507,24 +510,12 @@ function ClientJobRow({ job, agencyName, agentName, agencies, agents, expenses, 
             {inv === "received" && job.invoice_date ? ` ${day(job.invoice_date)}` : ""}
           </span>
           <div className="flex flex-wrap items-center justify-end gap-2">
-            <label className="flex items-center gap-1.5 rounded-lg border border-white/12 bg-white/[0.04] px-2.5 py-1.5"
-              title="Leave the invoice number off this one">
-              <input type="checkbox" className="h-3.5 w-3.5 accent-[#7c3aed]"
-                checked={Boolean(job.invoice_no_hidden)}
-                onChange={(e) => post({
-                  entity: "job", id: job.id, ...jobPayload(job),
-                  invoiceNoHidden: e.target.checked,
-                  invoiceNo: e.target.checked ? null : job.invoice_no,
-                })} />
-              <span className="text-[11px] font-semibold text-white/50">No number</span>
-            </label>
-            {!job.invoice_no_hidden && (
-              <input className={`${input} !w-28 !py-1.5 !text-[12px]`}
-                placeholder={nextInvoiceNo ? `no. ${nextInvoiceNo}` : "Invoice no."}
-                defaultValue={job.invoice_no || ""} aria-label="Invoice number" key={job.invoice_no || "blank"}
-                onBlur={(e) => { if (e.target.value !== (job.invoice_no || "")) post({ entity: "job", id: job.id, ...jobPayload(job), invoiceNo: e.target.value }); }} />
-            )}
-            {!job.invoice_no_hidden && !job.invoice_no && nextInvoiceNo && (
+            <input className={`${input} !w-28 !py-1.5 !text-[12px]`}
+              placeholder={nextInvoiceNo ? `no. ${nextInvoiceNo}` : "Invoice no."}
+              defaultValue={job.invoice_no || ""} aria-label="Invoice number (optional)"
+              key={job.invoice_no || "blank"}
+              onBlur={(e) => { if (e.target.value !== (job.invoice_no || "")) post({ entity: "job", id: job.id, ...jobPayload(job), invoiceNo: e.target.value }); }} />
+            {!job.invoice_no && nextInvoiceNo && (
               <button
                 onClick={() => post({
                   entity: "job", id: job.id, ...jobPayload(job), invoiceNo: nextInvoiceNo,
@@ -609,7 +600,7 @@ function ClientJobRow({ job, agencyName, agentName, agencies, agents, expenses, 
                 </label>
               </div>
               <div className="mt-3 flex flex-wrap items-center gap-2">
-                <button className={btn}
+                <ActionButton className={btn} busyLabel="Saving…"
                   onClick={async () => {
                     const ok = await post({
                       entity: "job", id: job.id, ...jobPayload(job),
@@ -626,7 +617,7 @@ function ClientJobRow({ job, agencyName, agentName, agencies, agents, expenses, 
                     if (ok) setEditing(false);
                   }}>
                   Save job
-                </button>
+                </ActionButton>
                 <button onClick={() => { setE(seed(job)); setEditing(false); }}
                   className="text-[13px] font-semibold text-white/40 transition hover:text-white">Cancel</button>
                 {e.quantity && e.ratePerLeaflet && (

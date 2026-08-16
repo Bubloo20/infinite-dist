@@ -141,3 +141,13 @@ select optgroup {
   .animate-aurora-a, .animate-aurora-b, .animate-aurora-c,
   .animate-sheen, .animate-orbit { animation: none; }
 }
+
+/* The fill that runs across a button while its action is in flight. */
+@keyframes idp-fill {
+  0%   { width: 0; opacity: 0.9; }
+  70%  { width: 88%; opacity: 0.55; }
+  100% { width: 96%; opacity: 0.35; }
+}
+.idp-fill {
+  animation: idp-fill 1.6s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}

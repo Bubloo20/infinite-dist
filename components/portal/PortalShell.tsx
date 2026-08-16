@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { motion } from "framer-motion";
 import Link from "next/link";
 
@@ -63,5 +64,49 @@ export function GlassCard({
     >
       {children}
     </motion.div>
+  );
+}
+
+/**
+ * A button that shows its own progress.
+ *
+ * Saving hits the database and then reloads the dashboard, which takes a beat.
+ * Rather than leave the button looking untouched, it fills left-to-right while
+ * the work runs so the press obviously landed.
+ */
+export function ActionButton({
+  onClick, children, className = "", disabled = false, busyLabel,
+}: {
+  onClick: () => void | Promise<unknown>;
+  children: React.ReactNode;
+  className?: string;
+  disabled?: boolean;
+  busyLabel?: string;
+}) {
+  const [busy, setBusy] = useState(false);
+
+  const run = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await onClick();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={run}
+      disabled={disabled || busy}
+      aria-busy={busy}
+      className={`relative overflow-hidden ${className}`}
+    >
+      {busy && (
+        <span aria-hidden className="idp-fill pointer-events-none absolute inset-y-0 left-0 bg-white/25" />
+      )}
+      <span className="relative">{busy && busyLabel ? busyLabel : children}</span>
+    </button>
   );
 }

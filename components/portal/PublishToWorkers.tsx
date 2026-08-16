@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { GlassCard } from "./PortalShell";
+import { GlassCard, ActionButton } from "./PortalShell";
 import BoundaryMap, { type AreaSpec, EMPTY_SPEC, parseSpec, specHasDrawing, countPoints } from "./BoundaryMap";
 import ImageDrop from "./ImageDrop";
 import type { Agency, ClientJob, PortalUser, JobInterest, JobAssignment } from "@/lib/portal/db";
@@ -152,9 +152,9 @@ export default function PublishToWorkers({
               )}
 
               <div className="sm:col-span-3">
-                <button className={btn} onClick={publish} disabled={mode === "assign" && !assignTo}>
+                <ActionButton className={btn} onClick={publish} disabled={mode === "assign" && !assignTo} busyLabel="Sending…">
                   {mode === "assign" ? "Assign to worker" : "Publish to marketplace"}
-                </button>
+                </ActionButton>
                 <p className="mt-2 text-[13px] text-white/35">
                   The contractor agreement fills in from these details for the worker to read and sign.
                 </p>
@@ -449,10 +449,10 @@ export function SubContracts({ job, users, rows, post, del }: {
 
 
         <div className="sm:col-span-6">
-          <button className={btn} disabled={!f.userId}
+          <ActionButton className={btn} disabled={!f.userId} busyLabel="Adding…"
             onClick={async () => { if (await post({ entity: "assignment", jobId: job.id, ...f, allocatedTime: spanOf(f.startDate, f.dueDate) })) { setF(blank); setAdding(false); setTracing(false); } }}>
             Add sub-contract
-          </button>
+          </ActionButton>
         </div>
       </div>
     </div>
