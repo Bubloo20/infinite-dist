@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { currentSession } from "@/lib/portal/auth";
 import { verifyStravaActivity, isMapMyActivityUrl } from "@/lib/portal/strava";
-import { insertWorkLog, dbConfigured, findUserById, syncJobOutCount } from "@/lib/portal/db";
+import { insertWorkLog, dbConfigured, findUserById, syncJobOutCount, listAssignmentsForUser, setWorkLogAmount } from "@/lib/portal/db";
 
 export const dynamic = "force-dynamic";
 
@@ -110,9 +110,14 @@ export async function POST(req: Request) {
       mapmyUrls,
       notes: (b.notes || "").trim() || null,
     });
-    // Move the job's counters on now that leaflets have been logged against it.
+    // Marking work done puts what the job pays into what they're owed. The
+    // figure comes from their sub-contract, never from the browser.
     const linked = Number(b.clientJobId) || null;
-    if (linked) await syncJobOutCount(linked);
+    if (linked && logId && session.userId) {
+      const mine = (await listAssignmentsForUser(session.userId)).find((a) => a.job_id === linked);
+      if (mine?.pay != null) await setWorkLogAmount(logId, Number(mine.pay));
+      await syncJobOutCount(linked);
+    }
   } catch (e) {
     dbError = e instanceof Error ? e.message : "Database write failed.";
   }

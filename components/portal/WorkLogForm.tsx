@@ -24,6 +24,25 @@ function Field({ label, hint, required, children }: { label: string; hint?: stri
   );
 }
 
+/** "3", "3h", "2h 30m", "1.5 hours", "90m" -> hours as a number. */
+export function hoursFrom(v: string | null | undefined): number {
+  const t = String(v ?? "").trim().toLowerCase();
+  if (!t) return 0;
+  const hm = t.match(/(\d+(?:\.\d+)?)\s*h(?:rs?|ours?)?(?:\s*(\d+)\s*m)?/);
+  if (hm) return Number(hm[1]) + (hm[2] ? Number(hm[2]) / 60 : 0);
+  const mins = t.match(/^(\d+(?:\.\d+)?)\s*m(?:ins?|inutes?)?$/);
+  if (mins) return Number(mins[1]) / 60;
+  const plain = t.match(/^(\d+(?:\.\d+)?)$/);
+  return plain ? Number(plain[1]) : 0;
+}
+
+const prettyHours = (h: number) => {
+  const m = Math.round(h * 60);
+  const hh = Math.floor(m / 60);
+  const mm = m % 60;
+  return hh ? (mm ? `${hh}h ${mm}m` : `${hh}h`) : `${mm}m`;
+};
+
 function duration(start: string, end: string): string {
   if (!start || !end) return "";
   const ms = new Date(end).getTime() - new Date(start).getTime();
@@ -93,6 +112,12 @@ export default function WorkLogForm({ onDone, job, mine, editing, onCancel, sign
   const autoTime = useMemo(() => duration(startedAt, endedAt), [startedAt, endedAt]);
   const timeSpent = manualTime || autoTime;
 
+  // The contract sets a floor on hours; a shift under it can't be submitted.
+  const minHours = hoursFrom(mine?.min_hours || job?.min_hours);
+  const workedHours = hoursFrom(timeSpent);
+  const shortOfMin = minHours > 0 && workedHours > 0 && workedHours + 1e-9 < minHours;
+  const noTime = minHours > 0 && workedHours === 0;
+
   // Debounced live Strava check per link.
   useEffect(() => {
     const timers: NodeJS.Timeout[] = [];
@@ -131,6 +156,17 @@ export default function WorkLogForm({ onDone, job, mine, editing, onCancel, sign
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
+    if (noTime) {
+      setError(`This job needs at least ${prettyHours(minHours)} of work. Enter how long you spent — e.g. "${prettyHours(minHours)}".`);
+      return;
+    }
+    if (shortOfMin) {
+      setError(
+        `You've put down ${prettyHours(workedHours)}, but this job requires a minimum of ${prettyHours(minHours)}. ` +
+        `That's ${prettyHours(minHours - workedHours)} short. If you really did work less, tell us why in the notes before submitting.`,
+      );
+      return;
+    }
     setBusy(true);
     setError("");
     try {
@@ -265,9 +301,14 @@ export default function WorkLogForm({ onDone, job, mine, editing, onCancel, sign
               onChange={(e) => setEndedAt(e.target.value)} required />
           </Field>
 
-          <Field label="Time spent working">
+          <Field label="Time spent working"
+            hint={minHours > 0 ? `This job's minimum is ${prettyHours(minHours)}.` : undefined}>
             <div className="relative">
-              <input className={inputCls} value={manualTime || autoTime} onChange={(e) => setManualTime(e.target.value)} placeholder="e.g. 2h 30m" />
+              <input
+                className={`${inputCls} ${shortOfMin ? "border-amber-400/60 focus:border-amber-400" : ""}`}
+                value={manualTime || autoTime}
+                onChange={(e) => setManualTime(e.target.value)}
+                placeholder="e.g. 2h 30m" />
               {autoTime && !manualTime && (
                 <span className="pointer-events-none absolute right-5 top-1/2 -translate-y-1/2 rounded-lg bg-emerald-400/15 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-emerald-300">Auto</span>
               )}

@@ -163,6 +163,14 @@ export default function JobMarket({ workerName, only }: {
   const [expanded, setExpanded] = useState<number | null>(null);
   const [logging, setLogging] = useState<number | null>(null);
   const [editingLog, setEditingLog] = useState<EditableLog | null>(null);
+  const [mapOpen, setMapOpen] = useState<number | null>(null);
+
+  /** Take back an unpaid submission so it can be redone. */
+  const unmark = async (logId: number) => {
+    if (!window.confirm("Un-mark this work as done? You can submit it again afterwards.")) return;
+    await fetch(`/api/portal/me/log?id=${logId}`, { method: "DELETE" });
+    load();
+  };
   // Phones get a shorter map so the rest of the card isn't pushed off-screen.
   const [phone, setPhone] = useState(false);
   useEffect(() => {
@@ -400,10 +408,19 @@ export default function JobMarket({ workerName, only }: {
                   )}
                   {!isShut(j.id) && specHasDrawing(spec) && (
                     <div className="mt-5">
-                      <p className="mb-2 text-[13px] font-semibold uppercase tracking-[0.1em] text-white/50">
-                        Your delivery area — zoom, pan, and see where you are
-                      </p>
+                      <button onClick={() => setMapOpen(mapOpen === j.id ? null : j.id)}
+                        className="flex w-full items-center justify-between gap-3 rounded-xl border border-white/12 bg-white/[0.05] px-4 py-3 text-left transition hover:bg-white/[0.08]">
+                        <span>
+                          <span className="block text-[14px] font-bold text-white">Your delivery area</span>
+                          <span className="mt-0.5 block text-[12px] text-white/45">Zoom, pan and see where you are</span>
+                        </span>
+                        <span className={`shrink-0 text-white/40 transition-transform ${mapOpen === j.id ? "rotate-180" : ""}`}>▾</span>
+                      </button>
+                      {mapOpen === j.id && (
+                      <div className="mt-2">
                       <BoundaryMap spec={spec} center={parseCenter(a?.map_center ?? j.map_center)} height={phone ? 260 : 400} locate />
+                      </div>
+                      )}
                     </div>
                   )}
                   {!isShut(j.id) && logsFor(j.id).length > 0 && (
@@ -457,20 +474,39 @@ export default function JobMarket({ workerName, only }: {
                       onSigned={() => { setViewing(null); load(); }} />
                     {signed && (
                       <div>
-                        <button onClick={() => setLogging(logging === j.id ? null : j.id)}
-                          className="flex w-full items-center justify-between gap-3 rounded-2xl border border-white/12 bg-white/[0.05] px-5 py-4 text-left transition hover:bg-white/[0.08]">
-                          <span>
-                            <span className="block font-display text-[15px] font-bold text-white">
-                              {logsFor(j.id).length ? "Mark more work as done" : "Mark work as done"}
+                        {logsFor(j.id).length === 0 ? (
+                          <button onClick={() => setLogging(logging === j.id ? null : j.id)}
+                            className="flex w-full items-center justify-between gap-3 rounded-2xl border border-orchid/40 bg-gradient-to-r from-electric/20 to-orchid/15 px-5 py-4 text-left transition hover:from-electric/30 hover:to-orchid/25">
+                            <span>
+                              <span className="block font-display text-[15px] font-bold text-white">Mark work as done</span>
+                              <span className="mt-0.5 block text-[13px] text-white/55">
+                                Upload your hours, leaflets and tracking links
+                              </span>
                             </span>
-                            <span className="mt-0.5 block text-[13px] text-white/45">
-                              {logsFor(j.id).length
-                                ? `${logsFor(j.id).length} submitted — add another run`
-                                : "Upload your hours, leaflets and tracking links"}
-                            </span>
-                          </span>
-                          <span className={`shrink-0 text-white/40 transition-transform ${logging === j.id ? "rotate-180" : ""}`}>▾</span>
-                        </button>
+                            <span className={`shrink-0 text-white/40 transition-transform ${logging === j.id ? "rotate-180" : ""}`}>▾</span>
+                          </button>
+                        ) : (
+                          <div className="rounded-2xl border border-emerald-400/25 bg-emerald-500/[0.06] px-5 py-4">
+                            <p className="font-display text-[15px] font-bold text-emerald-200">Marked as done</p>
+                            <p className="mt-1 text-[13px] text-emerald-100/65">
+                              {logsFor(j.id).some((l) => l.paidOn)
+                                ? "This has been paid, so it's settled."
+                                : "Waiting on your tracking being checked. You can still change it."}
+                            </p>
+                            {!logsFor(j.id).some((l) => l.paidOn) && (
+                              <div className="mt-3 flex flex-wrap gap-2">
+                                <button onClick={() => { setLogging(null); setEditingLog(logsFor(j.id)[0] as EditableLog); }}
+                                  className="rounded-xl border border-white/15 bg-white/[0.06] px-4 py-2 text-[13px] font-bold text-white/80 transition hover:bg-white/[0.12]">
+                                  Edit or add links
+                                </button>
+                                <button onClick={() => unmark(logsFor(j.id)[0].id)}
+                                  className="rounded-xl border border-rose-400/30 px-4 py-2 text-[13px] font-bold text-rose-300 transition hover:bg-rose-500/10">
+                                  Un-mark as done
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        )}
                         {logging === j.id && (
                           <div className="mt-2">
                             <WorkLogForm job={j} mine={a} signedDate={signed}

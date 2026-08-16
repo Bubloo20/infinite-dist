@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { sql } from "@vercel/postgres";
 import { currentSession } from "@/lib/portal/auth";
 import { verifyStravaActivity, isMapMyActivityUrl } from "@/lib/portal/strava";
-import { packLinks, dbConfigured } from "@/lib/portal/db";
+import { packLinks, dbConfigured, syncJobOutCount } from "@/lib/portal/db";
 
 export const dynamic = "force-dynamic";
 
@@ -76,5 +76,28 @@ export async function POST(req: Request) {
       notes=${String(b.notes || "").trim() || null}
     WHERE id=${id} AND user_id=${s.userId} AND paid_on IS NULL;`;
 
+  return NextResponse.json({ ok: true });
+}
+
+/** Un-marking work as done — allowed until the office has paid for it. */
+export async function DELETE(req: Request) {
+  const s = currentSession();
+  if (!s || !s.userId) return NextResponse.json({ ok: false, error: "Not signed in." }, { status: 401 });
+  if (!dbConfigured()) return NextResponse.json({ ok: false, error: "Database not connected." }, { status: 503 });
+
+  const id = Number(new URL(req.url).searchParams.get("id"));
+  if (!id) return NextResponse.json({ ok: false, error: "Missing shift." }, { status: 400 });
+
+  const existing = await sql<{ user_id: number; paid_on: string | null; client_job_id: number | null }>`
+    SELECT user_id, paid_on, client_job_id FROM work_logs WHERE id=${id} LIMIT 1;`;
+  const row = existing.rows[0];
+  if (!row) return NextResponse.json({ ok: false, error: "Shift not found." }, { status: 404 });
+  if (row.user_id !== s.userId) return NextResponse.json({ ok: false, error: "That isn't your shift." }, { status: 403 });
+  if (row.paid_on) {
+    return NextResponse.json({ ok: false, error: "This shift has been paid and can't be taken back." }, { status: 409 });
+  }
+
+  await sql`DELETE FROM work_logs WHERE id=${id};`;
+  if (row.client_job_id) await syncJobOutCount(row.client_job_id);
   return NextResponse.json({ ok: true });
 }
