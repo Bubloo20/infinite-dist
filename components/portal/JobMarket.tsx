@@ -278,11 +278,15 @@ export default function JobMarket({ workerName, only }: {
     return <Loading label="Your jobs" />;
   }
 
+  /**
+   * A sub-contract is signed only when it was signed for itself. No falling
+   * back to another agreement on the same job — a new piece of work always
+   * goes through view, accept, sign and timesheet from scratch, even when the
+   * same worker is already on that job.
+   */
   const signedFor = (jobId: number, assignmentId?: number | null) =>
     contracts.find((c) => (assignmentId ? c.assignmentId === assignmentId : c.jobId === jobId && !c.assignmentId))
-      ?.signedDate
-    // Agreements signed before sub-contracts were separated carry no id.
-    ?? (assignmentId ? contracts.find((c) => c.jobId === jobId && !c.assignmentId)?.signedDate ?? null : null);
+      ?.signedDate ?? null;
   const mineFor = (id: number) => assignments.find((a) => a.job_id === id) ?? null;
 
   /**
