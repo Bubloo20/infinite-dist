@@ -7,8 +7,11 @@ export type Session = { role: Role; userId: number | null };
 
 export const COOKIE_NAME = "idp_session";
 const MAX_AGE = 60 * 60 * 24 * 14;   // 14 days
-/** Thirty days when they ask to be remembered on this device. */
-const REMEMBER_AGE = 60 * 60 * 24 * 30;
+/**
+ * "Stay signed in" means stay signed in — ten years, which is as close to
+ * forever as a cookie gets. Signing out still ends it immediately.
+ */
+const REMEMBER_AGE = 60 * 60 * 24 * 365 * 10;
 
 /**
  * Admin password, stored as a SHA-256 hash so no plaintext lives in the repo.

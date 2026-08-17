@@ -244,7 +244,7 @@ export default function LoginGate({
             <label className="flex cursor-pointer items-center gap-2.5 text-[13px] text-white/55">
               <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)}
                 className="h-4 w-4 accent-[#7c3aed]" />
-              Stay signed in on this device
+              Stay signed in on this device — until you sign out
             </label>
 
             <button type="submit" disabled={busy}
