@@ -67,6 +67,38 @@ function metresBetween(a: LatLng, b: LatLng): number {
   return 2 * R * Math.asin(Math.sqrt(h));
 }
 
+/**
+ * Metres from a point to the nearest edge of a polygon — 0 if inside.
+ *
+ * Distance to the nearest corner isn't good enough: a boundary can run a long
+ * way between corners, and someone standing beside that stretch would read as
+ * far outside when they're right on the line.
+ */
+export function distanceToArea(pt: LatLng, poly: LatLng[]): number {
+  if (poly.length < 2) return Infinity;
+  if (insideBoundary(pt, poly)) return 0;
+
+  // Work in metres locally so segment maths is straightforward.
+  const latToM = 111_320;
+  const lngToM = 111_320 * Math.cos((pt[0] * Math.PI) / 180);
+  const toXY = (p: LatLng) => [(p[1] - pt[1]) * lngToM, (p[0] - pt[0]) * latToM];
+
+  let best = Infinity;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [ax, ay] = toXY(poly[j]);
+    const [bx, by] = toXY(poly[i]);
+    const dx = bx - ax;
+    const dy = by - ay;
+    const len2 = dx * dx + dy * dy;
+    // How far along the segment the closest point sits, clamped to its ends.
+    const t = len2 === 0 ? 0 : Math.max(0, Math.min(1, -(ax * dx + ay * dy) / len2));
+    const cx = ax + t * dx;
+    const cy = ay + t * dy;
+    best = Math.min(best, Math.hypot(cx, cy));
+  }
+  return best;
+}
+
 function nearestDistance(pt: LatLng, shapes: Shape[]): number | null {
   let best: number | null = null;
   for (const shape of shapes) {

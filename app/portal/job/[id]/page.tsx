@@ -7,6 +7,7 @@ import { PortalBackdrop, PortalMark, GlassCard, Loading } from "@/components/por
 import BoundaryMap, { parseSpec, specHasDrawing } from "@/components/portal/BoundaryMap";
 import JobContract from "@/components/portal/JobContract";
 import WorkLogForm, { type EditableLog } from "@/components/portal/WorkLogForm";
+import JobTracker from "@/components/portal/JobTracker";
 import type { ClientJob, JobAssignment } from "@/lib/portal/db";
 
 type MyLog = {
@@ -196,6 +197,14 @@ export default function JobPage() {
         <div className="mt-4">
           <JobContract job={job} workerName={workerName} signedDate={signedDate} mine={mine} onSigned={load} />
         </div>
+
+        {/* Once they've signed, they can start the shift and be checked against
+            the area as they walk. */}
+        {signedDate && !paid && (
+          <div className="mt-4">
+            <JobTracker assignmentId={assignmentId} spec={spec} onFinished={load} />
+          </div>
+        )}
 
         {signedDate && (
           <div className="mt-4">

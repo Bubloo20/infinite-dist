@@ -9,13 +9,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "Accounts are unavailable — the database isn't connected yet." }, { status: 503 });
   }
 
-  let b: { fullName?: string; password?: string; teamPassword?: string };
+  let b: { fullName?: string; password?: string; teamPassword?: string; remember?: boolean };
   try {
     b = await req.json();
   } catch {
     return NextResponse.json({ ok: false, error: "Bad request." }, { status: 400 });
   }
 
+  const remember = Boolean(b.remember);
   const fullName = (b.fullName || "").trim();
   const password = b.password || "";
 
@@ -36,7 +37,8 @@ export async function POST(req: Request) {
     }
     const id = await createUser(fullName, hashPassword(password));
     const res = NextResponse.json({ ok: true, role: "worker", fullName, userId: id });
-    res.cookies.set(sessionCookie(createToken("worker", id)));
+    // Creating an account honours "stay signed in" the same as signing in does.
+    res.cookies.set(sessionCookie(createToken("worker", id, remember), remember));
     return res;
   } catch (e) {
     return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "Could not create the account." }, { status: 500 });

@@ -145,6 +145,39 @@ async function migrateSchema(): Promise<void> {
   // on its own, even when one worker holds several on the same job.
   await sql`ALTER TABLE work_logs ADD COLUMN IF NOT EXISTS assignment_id INTEGER;`;
   await sql`ALTER TABLE job_contracts ADD COLUMN IF NOT EXISTS assignment_id INTEGER;`;
+
+  // A tracked walk: one row per session, its trail in session_points.
+  await sql`
+    CREATE TABLE IF NOT EXISTS work_sessions (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL,
+      job_id INTEGER,
+      assignment_id INTEGER,
+      started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      ended_at TIMESTAMPTZ,
+      status TEXT NOT NULL DEFAULT 'running',
+      distance_m INTEGER NOT NULL DEFAULT 0,
+      moving_ms BIGINT NOT NULL DEFAULT 0,
+      inside_count INTEGER NOT NULL DEFAULT 0,
+      outside_count INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `;
+  await sql`
+    CREATE TABLE IF NOT EXISTS session_points (
+      id BIGSERIAL PRIMARY KEY,
+      session_id INTEGER NOT NULL,
+      lat DOUBLE PRECISION NOT NULL,
+      lng DOUBLE PRECISION NOT NULL,
+      accuracy REAL,
+      speed REAL,
+      at TIMESTAMPTZ NOT NULL,
+      -- True when the phone went quiet before this point: the line is broken
+      -- here rather than drawn straight across the gap.
+      gap BOOLEAN NOT NULL DEFAULT FALSE
+    );
+  `;
+  await sql`CREATE INDEX IF NOT EXISTS session_points_session ON session_points (session_id, at);`;
   await sql`ALTER TABLE job_contracts DROP CONSTRAINT IF EXISTS job_contracts_job_id_user_id_key;`;
   await sql`
     CREATE UNIQUE INDEX IF NOT EXISTS job_contracts_assignment_key
@@ -988,6 +1021,89 @@ export async function setWorkLogPaid(id: number, paidOn: string | null) {
   } else {
     await sql`UPDATE work_logs SET paid_on = NULL, paid_at = NULL WHERE id = ${id};`;
   }
+}
+
+/* ------------------------------- tracking --------------------------------- */
+
+export type WorkSession = {
+  id: number; user_id: number; job_id: number | null; assignment_id: number | null;
+  started_at: string; ended_at: string | null; status: string;
+  distance_m: number; moving_ms: number;
+  inside_count: number; outside_count: number; created_at: string;
+};
+
+export type SessionPoint = {
+  lat: number; lng: number; accuracy: number | null; speed: number | null;
+  at: string; gap: boolean;
+};
+
+export async function startSession(a: { userId: number; jobId: number | null; assignmentId: number | null }) {
+  await ensureSchema();
+  // Anything left running from a previous walk is closed off first.
+  await sql`
+    UPDATE work_sessions SET status = 'finished', ended_at = COALESCE(ended_at, NOW())
+     WHERE user_id = ${a.userId} AND status <> 'finished';`;
+  const r = await sql<{ id: number }>`
+    INSERT INTO work_sessions (user_id, job_id, assignment_id)
+    VALUES (${a.userId}, ${a.jobId}, ${a.assignmentId})
+    RETURNING id;`;
+  return r.rows[0].id;
+}
+
+export async function setSessionStatus(id: number, userId: number, status: "running" | "paused" | "finished") {
+  await ensureSchema();
+  if (status === "finished") {
+    await sql`
+      UPDATE work_sessions SET status = 'finished', ended_at = COALESCE(ended_at, NOW())
+       WHERE id = ${id} AND user_id = ${userId};`;
+    return;
+  }
+  await sql`UPDATE work_sessions SET status = ${status} WHERE id = ${id} AND user_id = ${userId};`;
+}
+
+/** Append a batch of fixes and move the running totals along. */
+export async function addSessionPoints(
+  sessionId: number, userId: number,
+  points: SessionPoint[],
+  totals: { distanceM: number; movingMs: number; inside: number; outside: number },
+) {
+  await ensureSchema();
+  const owns = await sql<{ id: number }>`
+    SELECT id FROM work_sessions WHERE id = ${sessionId} AND user_id = ${userId} LIMIT 1;`;
+  if (!owns.rows[0]) throw new Error("That session isn't yours.");
+
+  for (const p of points) {
+    await sql`
+      INSERT INTO session_points (session_id, lat, lng, accuracy, speed, at, gap)
+      VALUES (${sessionId}, ${p.lat}, ${p.lng}, ${p.accuracy}, ${p.speed}, ${p.at}, ${p.gap});`;
+  }
+  await sql`
+    UPDATE work_sessions
+       SET distance_m = ${Math.round(totals.distanceM)}, moving_ms = ${Math.round(totals.movingMs)},
+           inside_count = ${totals.inside}, outside_count = ${totals.outside}
+     WHERE id = ${sessionId};`;
+}
+
+export async function getSessionForAssignment(userId: number, assignmentId: number) {
+  await ensureSchema();
+  return (await sql<WorkSession>`
+    SELECT * FROM work_sessions
+     WHERE user_id = ${userId} AND assignment_id = ${assignmentId}
+     ORDER BY id DESC LIMIT 1;`).rows[0] || null;
+}
+
+export async function listSessionPoints(sessionId: number): Promise<SessionPoint[]> {
+  await ensureSchema();
+  return (await sql<SessionPoint>`
+    SELECT lat, lng, accuracy, speed, at, gap FROM session_points
+     WHERE session_id = ${sessionId} ORDER BY at LIMIT 20000;`).rows;
+}
+
+/** Every tracked walk on a job, for the office. */
+export async function listSessionsForJob(jobId: number): Promise<WorkSession[]> {
+  await ensureSchema();
+  return (await sql<WorkSession>`
+    SELECT * FROM work_sessions WHERE job_id = ${jobId} ORDER BY started_at;`).rows;
 }
 
 /* -------------------------------- payments -------------------------------- */
