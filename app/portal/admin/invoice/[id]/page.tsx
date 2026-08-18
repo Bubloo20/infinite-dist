@@ -4,6 +4,20 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import type { Agency, Agent, ClientJob } from "@/lib/portal/db";
+import { buildInvoicePdf, invoiceFileName, type InvoiceData } from "@/lib/invoicePdf";
+
+/** Where the draft lands, and the wording that goes with it. */
+const DRAFT_TO = "bubloo.mohanrajh@gmail.com";
+const DRAFT_BODY = `Hi,
+
+Hope you're doing well.
+
+Please find attached invoice.
+
+Let me know if you have any questions.
+
+Thanks,
+Bubloo`;
 
 const money = (v: number) => v.toLocaleString("en-AU", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const dateAu = (d: string | null) =>
@@ -18,6 +32,7 @@ export default function InvoicePage() {
   const [denied, setDenied] = useState(false);
   const [agencyAgents, setAgencyAgents] = useState<Agent[]>([]);
   const [sendTo, setSendTo] = useState("");
+  const [drafting, setDrafting] = useState(false);
 
   useEffect(() => {
     fetch("/api/portal/admin/clients")
@@ -57,6 +72,62 @@ export default function InvoicePage() {
         >
           Save as PDF / Print
         </button>
+      </div>
+
+      {/* The invoice as a file, plus a draft waiting in Gmail to attach it to. */}
+      <div className="mx-auto mb-4 max-w-[820px] rounded-2xl border border-slate-200 bg-white px-6 py-5 shadow-sm print:hidden">
+        <p className="font-display text-base font-bold text-ink">Email this to yourself</p>
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          <button
+            disabled={drafting}
+            onClick={async () => {
+              setDrafting(true);
+              try {
+                const data: InvoiceData = {
+                  invoiceNo: job.invoice_no, invoiceDate: job.invoice_date,
+                  jobTitle: job.title, area: job.area,
+                  agencyName: agency?.name ?? null, agencyAddress: agency?.address ?? null,
+                  agentName: agent?.name ?? null,
+                  quantity: qty, rate, total,
+                };
+                // Download the file first so it's sitting there to attach.
+                const blob = await buildInvoicePdf(data);
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = invoiceFileName(data);
+                a.click();
+                setTimeout(() => URL.revokeObjectURL(url), 10_000);
+
+                const subject = job.invoice_no
+                  ? `Letterbox invoice ${job.invoice_no}`
+                  : "Letterbox invoice";
+                window.open(
+                  `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(DRAFT_TO)}` +
+                    `&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(DRAFT_BODY)}`,
+                  "_blank", "noopener",
+                );
+              } finally {
+                setDrafting(false);
+              }
+            }}
+            className="rounded-xl bg-ink px-6 py-2.5 text-sm font-bold text-white transition hover:-translate-y-0.5 disabled:opacity-40"
+          >
+            {drafting ? "Preparing…" : "Download PDF & open draft"}
+          </button>
+          <span className="text-[13px] text-ink/50">
+            Subject: <span className="font-semibold text-ink/70">
+              Letterbox invoice{job.invoice_no ? ` ${job.invoice_no}` : ""}
+            </span>
+          </span>
+        </div>
+        <p className="mt-2.5 text-[13px] text-ink/50">
+          Saves <span className="font-semibold text-ink/70">{invoiceFileName({
+            invoiceNo: job.invoice_no, invoiceDate: null, jobTitle: null, area: null,
+            agencyName: null, agencyAddress: null, agentName: null, quantity: 0, rate: 0, total: 0,
+          })}</span> and opens a Gmail compose to {DRAFT_TO} with the subject and message filled in —
+          drag the downloaded file in to attach it, then send it to yourself or forward it on.
+        </p>
       </div>
 
       {/* Send to an agent — opens Gmail composing from your account. */}
