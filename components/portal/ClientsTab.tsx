@@ -428,6 +428,7 @@ function ClientJobRow({ job, agencyName, agentName, agencies, agents, expenses, 
   const out = Math.max(0, Math.min(job.out_count ?? (job.status === "out_for_delivery" && !job.delivered_count ? qty : 0), qty - delivered));
   const remaining = Math.max(0, qty - delivered - out);
   const revenue = num(job.amount);
+  const nameOf = (w: WorkLogLite) => users.find((u) => u.id === w.user_id)?.full_name || w.worker_name;
 
   /**
    * What this job costs in labour is what was agreed in the sub-contracts —
@@ -452,7 +453,6 @@ function ClientJobRow({ job, agencyName, agentName, agencies, agents, expenses, 
   const costs = [...committed, ...loose];
   const labour = costs.reduce((t, c) => t + c.amount, 0);
   const profit = revenue - labour;
-  const nameOf = (w: WorkLogLite) => users.find((u) => u.id === w.user_id)?.full_name || w.worker_name;
 
   return (
     <GlassCard className={`border-l-4 p-5 ${
