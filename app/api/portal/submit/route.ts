@@ -14,6 +14,7 @@ type Payload = {
   areaWorked?: string;
   clientJobId?: number | string | null;
   assignmentId?: number | string | null;
+  photos?: string[];
   stravaUrls?: string[];
   mapmyUrls?: string[];
   notes?: string;
@@ -106,6 +107,10 @@ export async function POST(req: Request) {
       areaWorked: areaWorked || null,
       clientJobId: Number(b.clientJobId) || null,
       assignmentId: Number(b.assignmentId) || null,
+      // Capped and already shrunk in the browser; re-checked here all the same.
+      photos: Array.isArray(b.photos) && b.photos.length
+        ? JSON.stringify(b.photos.filter((x) => typeof x === "string" && x.startsWith("data:image/")).slice(0, 12))
+        : null,
       stravaUrls: normalised,
       stravaStatus: strava.status,
       stravaVerified: strava.verified,

@@ -499,11 +499,22 @@ export default function BoundaryMap({
         */}
         {fullHref && (
           <a href={fullHref}
-            className="absolute right-3 top-3 z-[5] rounded-lg border border-white/15 bg-[#141024]/85 px-3 py-1.5 text-[12px] font-bold text-white/85 shadow-lg backdrop-blur transition hover:bg-[#141024]">
-            Full screen
+            className="absolute right-3 top-3 z-[500] flex items-center gap-1.5 rounded-xl border border-white/20 bg-[#141024]/95 px-3.5 py-2 text-[12px] font-bold text-white shadow-[0_8px_24px_-6px_rgba(0,0,0,0.9)] backdrop-blur transition hover:bg-[#1e1836]">
+            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
+            </svg>
+            Expand
           </a>
         )}
       </div>
+
+      {/* Spelled out under the map too — the corner control is easy to miss. */}
+      {fullHref && (
+        <a href={fullHref}
+          className="mt-2 flex items-center justify-center gap-2 rounded-xl border border-white/12 bg-white/[0.05] px-4 py-2.5 text-[13px] font-bold text-white/75 transition hover:bg-white/[0.1] hover:text-white">
+          Open full screen map
+        </a>
+      )}
 
       {locate && (
         <>

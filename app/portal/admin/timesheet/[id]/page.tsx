@@ -8,7 +8,7 @@ type Log = {
   id: number; worker_name: string; started_at: string; ended_at: string;
   time_spent: string | null; leaflet_count: number | null; area_worked: string | null;
   amount: string | null; paid_on: string | null; paid_at: string | null;
-  strava_urls: string | null; mapmy_urls: string | null;
+  strava_urls: string | null; mapmy_urls: string | null; photos: string | null;
   strava_verified: boolean | null; notes: string | null;
 };
 
@@ -194,6 +194,17 @@ export default function TimesheetPage() {
                             <a key={u} href={u} target="_blank" rel="noreferrer" className="mr-3 underline">{u}</a>
                           ))}
                         </p>
+                      )}
+                      {links(l.photos).length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {links(l.photos).map((src, i) => (
+                            <a key={i} href={src} target="_blank" rel="noreferrer" className="block">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={src} alt={`Photo ${i + 1}`}
+                                className="h-20 w-20 rounded-lg border border-slate-300 object-cover" />
+                            </a>
+                          ))}
+                        </div>
                       )}
                       {l.notes && <p className="mt-1 text-[13px] italic text-ink/55">“{l.notes}”</p>}
                     </div>

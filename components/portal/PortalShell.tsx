@@ -109,37 +109,33 @@ export function ActionButton({
 }
 
 /**
- * The house loading state — the infinity mark turning under a band of light,
- * with the word beneath it pulsing letter by letter. Used everywhere the portal
- * waits on something, so a wait always looks like the same thing.
+ * The house loading state — the logo's infinity mark, breathing, with a band of
+ * light running across it and the word pulsing letter by letter underneath.
+ *
+ * The mark is cropped out of the full lockup: measuring the file's alpha, the
+ * symbol occupies the leftmost 28.4% (x 5-284 of 1000), so a box of that aspect
+ * with the image scaled to its height and overflow hidden leaves the mark alone,
+ * with no second asset to keep in sync.
  */
 export function Loading({ label = "Loading", className = "" }: { label?: string; className?: string }) {
   return (
     <div className={`grid place-items-center py-16 ${className}`} role="status" aria-live="polite">
-      <div className="idp-load-mark w-[110px]">
-        <svg viewBox="0 0 200 104" className="w-full overflow-visible" aria-hidden="true">
-          <defs>
-            <linearGradient id="idp-load-trace" x1="0" y1="0" x2="1" y2="0">
-              <stop offset="0%" stopColor="#8b93ff" />
-              <stop offset="55%" stopColor="#b66dc7" />
-              <stop offset="100%" stopColor="#8b93ff" />
-            </linearGradient>
-          </defs>
-          <path
-            d="M100 52c-12-19-24-28-38-28a28 28 0 1 0 0 56c14 0 26-9 38-28zm0 0c12 19 24 28 38 28a28 28 0 1 0 0-56c-14 0-26 9-38 28z"
-            fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="11" strokeLinecap="round"
-          />
-          <path
-            className="idp-load-trace" pathLength={100}
-            d="M100 52c-12-19-24-28-38-28a28 28 0 1 0 0 56c14 0 26-9 38-28zm0 0c12 19 24 28 38 28a28 28 0 1 0 0-56c-14 0-26 9-38 28z"
-            fill="none" stroke="url(#idp-load-trace)" strokeWidth="11" strokeLinecap="round"
-          />
-        </svg>
+      <div className="idp-load-mark relative w-[104px] overflow-hidden" style={{ aspectRatio: "284 / 120" }}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/images/logo.png"
+          alt=""
+          aria-hidden="true"
+          className="h-full max-w-none"
+          style={{ width: `${(1000 / 284) * 100}%` }}
+        />
+        <span aria-hidden className="idp-load-sweep pointer-events-none absolute inset-y-0 w-1/2" />
       </div>
+
       <p className="mt-4 flex gap-[1px] font-display text-[11px] font-bold uppercase tracking-[0.3em] text-white/45">
         {label.split("").map((ch, i) => (
           <span key={i} className="idp-load-letter" style={{ animationDelay: `${i * 70}ms` }}>
-            {ch === " " ? "\u00a0" : ch}
+            {ch === " " ? " " : ch}
           </span>
         ))}
       </p>

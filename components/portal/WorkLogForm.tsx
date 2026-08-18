@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { GlassCard } from "./PortalShell";
 import { parseStravaUrl, type StravaStatus } from "@/lib/portal/strava";
 import { submitForm } from "@/lib/forms";
+import PhotoUpload from "./PhotoUpload";
 import type { ClientJob, JobAssignment } from "@/lib/portal/db";
 
 type Check = { status: StravaStatus | "checking" | "idle"; message: string; helpUrl?: string; helpLabel?: string };
@@ -61,6 +62,7 @@ export type EditableLog = {
   id: number; startedAt: string; endedAt: string; timeSpent: string | null;
   leaflets: number | null; areaWorked: string | null; notes: string | null;
   stravaUrls: string | null; mapmyUrls: string | null; paidOn: string | null;
+  photos?: string | null;
 };
 
 /** Stored links are packed as JSON; unpack whichever shape came back. */
@@ -103,6 +105,7 @@ export default function WorkLogForm({ onDone, job, mine, editing, onCancel, sign
   const [stravaUrls, setStravaUrls] = useState<string[]>(unpack(editing?.stravaUrls).length ? unpack(editing?.stravaUrls) : [""]);
   const [mapmyUrls, setMapmyUrls] = useState<string[]>(unpack(editing?.mapmyUrls).length ? unpack(editing?.mapmyUrls) : [""]);
   const [notes, setNotes] = useState(editing?.notes || "");
+  const [photos, setPhotos] = useState<string[]>(unpack(editing?.photos));
 
   const [checks, setChecks] = useState<Record<number, Check>>({});
   const [busy, setBusy] = useState(false);
@@ -180,7 +183,7 @@ export default function WorkLogForm({ onDone, job, mine, editing, onCancel, sign
           ...(editing ? { id: editing.id } : {}),
           jobNumber, startedAt, endedAt, timeSpent,
           leafletCount, areaWorked, clientJobId: job?.id ?? null,
-          assignmentId: mine?.id ?? null,
+          assignmentId: mine?.id ?? null, photos,
           stravaUrls: cleanStrava, mapmyUrls: cleanMapmy, notes,
         }),
       });
@@ -221,7 +224,7 @@ export default function WorkLogForm({ onDone, job, mine, editing, onCancel, sign
     setJobNumber(jobRef); setStartedAt(""); setEndedAt(""); setManualTime("");
     setLeafletCount(""); setAreaWorked(job ? mine?.area_note || job.area || "" : "");
     setStravaUrls([""]); setMapmyUrls([""]);
-    setNotes(""); setChecks({}); setDone(null);
+    setNotes(""); setPhotos([]); setChecks({}); setDone(null);
   };
 
   if (done && job) {
@@ -392,6 +395,10 @@ export default function WorkLogForm({ onDone, job, mine, editing, onCancel, sign
             </div>
             <button type="button" onClick={() => setMapmyUrls((a) => [...a, ""])}
               className="mt-3 text-sm font-semibold text-orchid transition hover:text-white">+ Add another Map My link</button>
+          </div>
+
+          <div className="sm:col-span-2">
+            <PhotoUpload photos={photos} onChange={setPhotos} />
           </div>
 
           <div className="sm:col-span-2">

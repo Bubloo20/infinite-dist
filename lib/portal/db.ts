@@ -43,6 +43,7 @@ export type WorkLog = {
   paid_at: string | null;
   verified_at: string | null;
   assignment_id: number | null;
+  photos: string | null;
   client_job_id: number | null;
   strava_urls: string | null;
   mapmy_urls: string | null;
@@ -139,6 +140,8 @@ async function migrateSchema(): Promise<void> {
   // Each sub-contract is its own piece of work: signed on its own, marked done
   // on its own, even when one worker holds several on the same job.
   await sql`ALTER TABLE work_logs ADD COLUMN IF NOT EXISTS assignment_id INTEGER;`;
+  // Optional photos on a shift, stored as a JSON array of small data URLs.
+  await sql`ALTER TABLE work_logs ADD COLUMN IF NOT EXISTS photos TEXT;`;
   await sql`ALTER TABLE job_contracts ADD COLUMN IF NOT EXISTS assignment_id INTEGER;`;
 
   // A tracked walk: one row per session, its trail in session_points.
@@ -939,6 +942,7 @@ export type NewWorkLog = {
   areaWorked?: string | null;
   clientJobId?: number | null;
   assignmentId?: number | null;
+  photos?: string | null;
   stravaUrls: string[];
   stravaStatus?: string | null;
   stravaVerified?: boolean;
@@ -952,12 +956,12 @@ export async function insertWorkLog(e: NewWorkLog): Promise<number | null> {
   const r = await sql<{ id: number }>`
     INSERT INTO work_logs
       (user_id, worker_name, job_number, started_at, ended_at, time_spent,
-       leaflet_count, area_worked, client_job_id, assignment_id, strava_url, strava_urls, strava_status,
+       leaflet_count, area_worked, client_job_id, assignment_id, photos, strava_url, strava_urls, strava_status,
        strava_verified, mapmy_urls, notes)
     VALUES
       (${e.userId}, ${e.workerName}, ${e.jobNumber}, ${e.startedAt}, ${e.endedAt},
        ${e.timeSpent || null}, ${e.leafletCount ?? null}, ${e.areaWorked || null},
-       ${e.clientJobId ?? null}, ${e.assignmentId ?? null}, ${e.stravaUrls[0] || null}, ${packLinks(e.stravaUrls)}, ${e.stravaStatus || null},
+       ${e.clientJobId ?? null}, ${e.assignmentId ?? null}, ${e.photos ?? null}, ${e.stravaUrls[0] || null}, ${packLinks(e.stravaUrls)}, ${e.stravaStatus || null},
        ${e.stravaVerified ?? false}, ${packLinks(e.mapmyUrls || [])}, ${e.notes || null})
     RETURNING id;
   `;
