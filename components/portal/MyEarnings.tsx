@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { GlassCard, Loading } from "./PortalShell";
 import type { WorkLog, Payment } from "@/lib/portal/db";
-import { unpackLinks } from "@/lib/portal/db";
+import { unpackLinks } from "@/lib/portal/text";
 
 const money = (v: number) => `$${v.toFixed(2)}`;
 const num = (v: string | null) => (v === null ? 0 : Number(v) || 0);

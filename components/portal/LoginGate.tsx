@@ -187,7 +187,7 @@ export default function LoginGate({
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
                     onFocus={() => suggestions.length && setShowList(true)}
-                    placeholder="Start typing your name…"
+                    placeholder={tab === "signup" ? "Start typing to find your name…" : "Start typing your name…"}
                     autoComplete="off"
                     required
                   />
@@ -218,8 +218,8 @@ export default function LoginGate({
                 </div>
                 <p className="mt-2 text-[13px] text-white/35">
                   {tab === "signin"
-                    ? "First time? Set your password on the Create account tab."
-                    : "Type your name as the office has it, then choose a password."}
+                    ? "Start typing and pick your name, then enter your password."
+                    : "Start typing your name and pick it from the list, then choose a password. Not there? Ask to be added."}
                 </p>
               </div>
             )}

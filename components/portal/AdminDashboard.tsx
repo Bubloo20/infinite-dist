@@ -10,7 +10,7 @@ import ClientsTab, { ClientJobsTab } from "./ClientsTab";
 import TrendChart, { type TrendPoint } from "./TrendChart";
 import PublishToWorkers from "./PublishToWorkers";
 import type { JobInterest, JobAssignment } from "@/lib/portal/db";
-import { isTestName } from "@/lib/portal/db";
+import { isTestName } from "@/lib/portal/text";
 
 const money = (v: number) => `$${v.toFixed(2)}`;
 const num = (v: string | null) => (v === null ? 0 : Number(v) || 0);

@@ -1,5 +1,8 @@
 import { sql } from "@vercel/postgres";
 import { types } from "@neondatabase/serverless";
+import { isTestName, unpackLinks } from "./text";
+
+export { isTestName, unpackLinks };
 
 /**
  * Return DATE columns as plain "YYYY-MM-DD" strings.
@@ -65,15 +68,7 @@ export function dbConfigured(): boolean {
 
 /** Links are stored as a JSON array in a text column. */
 export const packLinks = (urls: string[]) => JSON.stringify(urls.filter(Boolean));
-export function unpackLinks(v: string | null): string[] {
-  if (!v) return [];
-  try {
-    const parsed = JSON.parse(v);
-    return Array.isArray(parsed) ? parsed.filter(Boolean) : [];
-  } catch {
-    return v ? [v] : [];
-  }
-}
+
 
 let schemaReady: Promise<void> | null = null;
 
@@ -403,14 +398,6 @@ export type Agency = {
   email: string | null; phone: string | null; address: string | null;
   notes: string | null; created_at: string;
 };
-/**
- * Anything named "test" is a sandbox record — it's kept and shown, but never
- * counted in revenue, profit, what's owed, or the finance chart.
- */
-export function isTestName(name: string | null | undefined): boolean {
-  return /^\s*test\s*$/i.test(String(name ?? ""));
-}
-
 export type Agent = {
   id: number; agency_id: number; name: string;
   email: string | null; phone: string | null; notes: string | null; created_at: string;
