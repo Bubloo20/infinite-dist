@@ -491,7 +491,8 @@ export default function JobMarket({ workerName, only }: {
                       </button>
                       {mapOpen === cardId && (
                       <div className="mt-2">
-                      <BoundaryMap spec={spec} center={parseCenter(a?.map_center ?? j.map_center)} height={phone ? 260 : 400} locate />
+                      <BoundaryMap spec={spec} center={parseCenter(a?.map_center ?? j.map_center)} height={phone ? 260 : 400} locate
+                        fullHref={a ? `/portal/job/${a.id}/map` : undefined} />
                       </div>
                       )}
                     </div>

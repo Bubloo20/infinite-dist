@@ -116,6 +116,16 @@ type Hit = {
   box: [[number, number], [number, number]] | null;
 };
 
+/**
+ * How far outside the job we tolerate before warning. GPS in a suburb is
+ * routinely tens of metres out, so the device's own accuracy is taken as the
+ * floor — otherwise a bad fix cries wolf while someone is standing on the spot.
+ */
+const OUT_OF_ZONE_M = 20;
+
+/** "80 m" / "1.4 km" — a distance a person can read at a glance. */
+const readable = (m: number) => (m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${Math.round(m)} m`);
+
 const ROAD_COLOURS = ["#7c3aed", "#0ea5e9", "#f59e0b", "#ec4899", "#10b981", "#f43f5e"];
 
 export default function BoundaryMap({
@@ -124,6 +134,7 @@ export default function BoundaryMap({
   editable = false,
   height = 380,
   locate = false,
+  fullHref,
   onChange,
 }: {
   spec: AreaSpec;
@@ -132,6 +143,8 @@ export default function BoundaryMap({
   height?: number;
   /** Track and plot the viewer's own position against what was drawn. */
   locate?: boolean;
+  /** Where the "Full screen" link goes. Omitted, no link is shown. */
+  fullHref?: string;
   onChange?: (spec: AreaSpec, center: [number, number, number]) => void;
 }) {
   const holder = useRef<HTMLDivElement>(null);
@@ -354,6 +367,7 @@ export default function BoundaryMap({
 
   useEffect(() => { redraw(); }, [spec, redraw]);
 
+
   const go = (h: Hit) => {
     const L = LRef.current;
     const map = mapRef.current;
@@ -408,8 +422,23 @@ export default function BoundaryMap({
   const drawnArea = spec.mode === "area" ? spec.shapes[0] || [] : [];
   const nearest = me && spec.mode === "roads" ? nearestDistance([me.lat, me.lng], spec.shapes) : null;
 
+  /**
+   * Metres outside the job, or null when they're near enough. The tolerance is
+   * whichever is larger of the fixed margin and the fix's own accuracy.
+   */
+  const outOfZone = (() => {
+    if (!me) return null;
+    const tolerance = Math.max(OUT_OF_ZONE_M, me.accuracy || 0);
+    const away = drawnArea.length >= 3
+      ? distanceToArea([me.lat, me.lng], drawnArea)
+      : nearest;
+    if (away === null || away <= tolerance) return null;
+    return away;
+  })();
+  const inZone = me !== null && outOfZone === null && (drawnArea.length >= 3 || nearest !== null);
+
   return (
-    <div>
+    <div className="relative">
       {editable && (
         <div className="mb-2 flex flex-wrap items-center gap-2">
           <div className="flex min-w-[240px] flex-1 gap-2">
@@ -451,38 +480,79 @@ export default function BoundaryMap({
       )}
       {editable && searchMsg && <p className="mb-2 text-[12px] text-amber-300/80">{searchMsg}</p>}
 
+      {/*
+        The size lives on the wrapper, never on the map element itself: Leaflet
+        writes its own classes onto that node, and re-rendering it with a
+        different className would strip them and break the map.
+      */}
       <div
-        ref={holder}
         style={{ height }}
         className="relative z-0 w-full overflow-hidden rounded-2xl border border-white/12"
-      />
+      >
+        <div ref={holder} className="h-full w-full" />
+
+        {/*
+          Full screen is its own page rather than a CSS overlay. Moving this
+          element — into a portal or under a different parent — detaches
+          Leaflet from it, and a card above uses backdrop-blur, which traps
+          "fixed" inside itself. A fresh page sidesteps both.
+        */}
+        {fullHref && (
+          <a href={fullHref}
+            className="absolute right-3 top-3 z-[5] rounded-lg border border-white/15 bg-[#141024]/85 px-3 py-1.5 text-[12px] font-bold text-white/85 shadow-lg backdrop-blur transition hover:bg-[#141024]">
+            Full screen
+          </a>
+        )}
+      </div>
 
       {locate && (
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          {me ? (
-            <>
-              <span className={`rounded-lg border px-3 py-1.5 text-[12px] font-bold ${
-                drawnArea.length >= 3
-                  ? insideBoundary([me.lat, me.lng], drawnArea)
-                    ? "border-emerald-400/35 bg-emerald-500/10 text-emerald-300"
-                    : "border-amber-400/35 bg-amber-500/10 text-amber-300"
-                  : "border-sky-400/35 bg-sky-500/10 text-sky-300"}`}>
-                {drawnArea.length >= 3
-                  ? insideBoundary([me.lat, me.lng], drawnArea) ? "You're inside the area" : "You're outside the area"
-                  : nearest !== null
-                    ? nearest < 60 ? "You're on one of your roads" : `${Math.round(nearest)} m from your nearest road`
-                    : "Your location"}
+        <>
+          {/* Far enough out that it needs saying loudly, not as a quiet chip. */}
+          {outOfZone !== null && (
+            <div className="mt-2 flex flex-wrap items-center gap-3 rounded-xl border border-rose-400/50 bg-rose-500/15 px-4 py-3">
+              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-rose-500/25 text-[15px]">⚠</span>
+              <span className="min-w-0 flex-1">
+                <span className="block font-display text-[15px] font-bold text-rose-100">
+                  You&apos;re not in the right area
+                </span>
+                <span className="mt-0.5 block text-[13px] text-rose-200/80">
+                  {readable(outOfZone)} from {drawnArea.length >= 3 ? "your delivery area" : "your nearest road"} —
+                  head back before you keep delivering.
+                </span>
               </span>
-              <span className="text-[12px] text-white/35">accurate to about {Math.round(me.accuracy)} m</span>
               <button type="button" onClick={recentre}
-                className="ml-auto rounded-lg border border-white/12 bg-white/[0.05] px-3 py-1.5 text-[12px] font-semibold text-white/70 transition hover:bg-white/[0.1]">
-                Where am I?
+                className="shrink-0 rounded-lg border border-rose-300/40 bg-rose-500/20 px-3 py-1.5 text-[12px] font-bold text-rose-100 transition hover:bg-rose-500/30">
+                Show me
               </button>
-            </>
-          ) : (
-            <span className="text-[12px] text-white/40">{geoErr || "Finding your location…"}</span>
+            </div>
           )}
-        </div>
+
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            {me ? (
+              <>
+                <span className={`rounded-lg border px-3 py-1.5 text-[12px] font-bold ${
+                  outOfZone !== null
+                    ? "border-rose-400/40 bg-rose-500/10 text-rose-200"
+                    : inZone
+                      ? "border-emerald-400/35 bg-emerald-500/10 text-emerald-300"
+                      : "border-sky-400/35 bg-sky-500/10 text-sky-300"}`}>
+                  {outOfZone !== null
+                    ? `${readable(outOfZone)} away`
+                    : inZone
+                      ? drawnArea.length >= 3 ? "You're inside the area" : "You're on one of your roads"
+                      : "Your location"}
+                </span>
+                <span className="text-[12px] text-white/35">accurate to about {Math.round(me.accuracy)} m</span>
+                <button type="button" onClick={recentre}
+                  className="ml-auto rounded-lg border border-white/12 bg-white/[0.05] px-3 py-1.5 text-[12px] font-semibold text-white/70 transition hover:bg-white/[0.1]">
+                  Where am I?
+                </button>
+              </>
+            ) : (
+              <span className="text-[12px] text-white/40">{geoErr || "Finding your location…"}</span>
+            )}
+          </div>
+        </>
       )}
 
       {editable && (

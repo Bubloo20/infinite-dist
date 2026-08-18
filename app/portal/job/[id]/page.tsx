@@ -166,7 +166,8 @@ export default function JobPage() {
               </button>
               {mapOpen && (
                 <div className="mt-2">
-                  <BoundaryMap spec={spec} center={parseCenter(mine.map_center ?? job.map_center)} height={420} locate />
+                  <BoundaryMap spec={spec} center={parseCenter(mine.map_center ?? job.map_center)} height={420} locate
+                    fullHref={`/portal/job/${assignmentId}/map`} />
                 </div>
               )}
             </div>
