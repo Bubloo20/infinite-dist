@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import type { Agency, Agent, ClientJob } from "@/lib/portal/db";
-import { buildInvoicePdf, invoiceFileName, type InvoiceData } from "@/lib/invoicePdf";
+import { elementToPdf, invoiceFileName } from "@/lib/invoicePdf";
 
 /** Where the draft lands, and the wording that goes with it. */
 const DRAFT_TO = "bubloo.mohanrajh@gmail.com";
@@ -30,8 +30,13 @@ const leafletLine = (area: string | null, title: string | null) => {
   return (title || "").trim() || "Leaflet distribution";
 };
 
+/**
+ * An invoice is dated the day it's raised. Only a date deliberately recorded on
+ * the job overrides today — it used to fall back to the completion date, which
+ * made every invoice look weeks old.
+ */
 const dateAu = (d: string | null) =>
-  d ? new Date(d).toLocaleDateString("en-AU", { day: "2-digit", month: "long", year: "numeric" }) : "—";
+  (d ? new Date(d) : new Date()).toLocaleDateString("en-AU", { day: "2-digit", month: "long", year: "numeric" });
 
 export default function InvoicePage() {
   const { id } = useParams<{ id: string }>();
@@ -93,19 +98,14 @@ export default function InvoicePage() {
             onClick={async () => {
               setDrafting(true);
               try {
-                const data: InvoiceData = {
-                  invoiceNo: job.invoice_no, invoiceDate: job.invoice_date,
-                  jobTitle: job.title, area: job.area,
-                  agencyName: agency?.name ?? null, agencyAddress: agency?.address ?? null,
-                  agentName: agent?.name ?? null,
-                  quantity: qty, rate, total,
-                };
-                // Download the file first so it's sitting there to attach.
-                const blob = await buildInvoicePdf(data);
+                const sheet = document.getElementById("invoice-sheet");
+                if (!sheet) return;
+                // What you download is the sheet above, captured as it appears.
+                const blob = await elementToPdf(sheet);
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement("a");
                 a.href = url;
-                a.download = invoiceFileName(data);
+                a.download = invoiceFileName(job.invoice_no);
                 a.click();
                 setTimeout(() => URL.revokeObjectURL(url), 10_000);
 
@@ -132,10 +132,7 @@ export default function InvoicePage() {
           </span>
         </div>
         <p className="mt-2.5 text-[13px] text-ink/50">
-          Saves <span className="font-semibold text-ink/70">{invoiceFileName({
-            invoiceNo: job.invoice_no, invoiceDate: null, jobTitle: null, area: null,
-            agencyName: null, agencyAddress: null, agentName: null, quantity: 0, rate: 0, total: 0,
-          })}</span> and opens a Gmail compose to {DRAFT_TO} with the subject and message filled in —
+          Saves <span className="font-semibold text-ink/70">{invoiceFileName(job.invoice_no)}</span> and opens a Gmail compose to {DRAFT_TO} with the subject and message filled in —
           drag the downloaded file in to attach it, then send it to yourself or forward it on.
         </p>
       </div>
@@ -184,7 +181,8 @@ export default function InvoicePage() {
         </p>
       </div>
 
-      <div className="mx-auto max-w-[820px] bg-white px-12 py-12 shadow-xl print:max-w-none print:px-0 print:py-0 print:shadow-none">
+      {/* The sheet itself — also what the PDF download captures. */}
+      <div id="invoice-sheet" className="mx-auto max-w-[820px] bg-white px-12 py-12 shadow-xl print:max-w-none print:px-0 print:py-0 print:shadow-none">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/images/logo-dark.png" alt="Infinite Distribution" className="mb-8 h-16 w-auto" />
 
@@ -210,7 +208,7 @@ export default function InvoicePage() {
             {job.invoice_no && (
               <p>Invoice No: <span className="font-semibold">{job.invoice_no}</span></p>
             )}
-            <p>Invoice Date: <span className="font-semibold">{dateAu(job.invoice_date || job.completed_on)}</span></p>
+            <p>Invoice Date: <span className="font-semibold">{dateAu(job.invoice_date) }</span></p>
           </div>
         </div>
 

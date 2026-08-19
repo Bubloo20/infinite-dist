@@ -1,120 +1,73 @@
 /**
- * The invoice as a real PDF file.
+ * The invoice as a PDF that matches the page.
  *
- * The printable page is fine for reading, but an email needs an actual file to
- * attach, so this draws the same invoice with jsPDF. Loaded on demand — it only
- * reaches the browser when someone asks for a PDF.
+ * It used to be drawn by hand with jsPDF, which meant the download never quite
+ * looked like the invoice on screen and the two designs drifted apart. Instead
+ * the printed sheet itself is captured, so what you download is what you saw.
+ *
+ * Both libraries are imported on demand — they only reach the browser when
+ * someone actually asks for a PDF.
  */
-export type InvoiceData = {
-  invoiceNo: string | null;
-  invoiceDate: string | null;
-  jobTitle: string | null;
-  area: string | null;
-  agencyName: string | null;
-  agencyAddress: string | null;
-  agentName: string | null;
-  quantity: number;
-  rate: number;
-  total: number;
-};
 
-const money = (v: number) =>
-  v.toLocaleString("en-AU", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-const dateAu = (d: string | null) =>
-  d ? new Date(d).toLocaleDateString("en-AU", { day: "2-digit", month: "long", year: "numeric" })
-    : new Date().toLocaleDateString("en-AU", { day: "2-digit", month: "long", year: "numeric" });
+/** The width the sheet is designed at, whatever the screen is doing. */
+const SHEET_WIDTH = 820;
 
 /** A file name that reads well in an inbox. */
-export const invoiceFileName = (d: InvoiceData) =>
-  d.invoiceNo ? `Letterbox invoice ${d.invoiceNo}.pdf` : "Letterbox invoice.pdf";
+export const invoiceFileName = (invoiceNo: string | null) =>
+  invoiceNo ? `Letterbox invoice ${invoiceNo}.pdf` : "Letterbox invoice.pdf";
 
-export async function buildInvoicePdf(d: InvoiceData): Promise<Blob> {
-  const { jsPDF } = await import("jspdf");
+/**
+ * Render an element to a PDF page.
+ *
+ * The capture is laid out at the sheet's full width rather than the width of
+ * whatever screen it was triggered from — otherwise downloading on a phone
+ * would bake the squashed mobile layout into the file. It's taken at twice
+ * size so the text stays sharp in print, then scaled to fit the page.
+ */
+export async function elementToPdf(el: HTMLElement): Promise<Blob> {
+  const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
+    import("html2canvas"),
+    import("jspdf"),
+  ]);
+
+  const canvas = await html2canvas(el, {
+    scale: 2,
+    backgroundColor: "#ffffff",
+    useCORS: true,
+    logging: false,
+    // Lay the clone out on a desktop-sized window so the design holds.
+    windowWidth: Math.max(SHEET_WIDTH + 260, window.innerWidth),
+    windowHeight: Math.max(1200, window.innerHeight),
+    onclone: (doc: Document) => {
+      const clone = (el.id ? doc.getElementById(el.id) : null) as HTMLElement | null;
+      if (clone) {
+        clone.style.width = `${SHEET_WIDTH}px`;
+        clone.style.maxWidth = "none";
+      }
+    },
+    // Anything that only exists for the screen stays off the page.
+    ignoreElements: (node) => node.classList?.contains("print:hidden"),
+  });
+
   const doc = new jsPDF({ unit: "pt", format: "a4" });
-  const left = 56;
-  let y = 64;
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
 
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(22);
-  doc.text("Infinite Distribution", left, y);
+  const w = pageW;
+  const h = (canvas.height / canvas.width) * w;
+  const img = canvas.toDataURL("image/jpeg", 0.92);
 
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(10);
-  doc.setTextColor(90);
-  y += 18;
-  doc.text("Sarvesh Mohanrajh · ABN 66 177 274 211", left, y);
-  y += 14;
-  doc.text("infinitedistributionsmelb@gmail.com · 0421 042 007", left, y);
-
-  doc.setTextColor(0);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(26);
-  y += 46;
-  doc.text("TAX INVOICE", left, y);
-
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(11);
-  y += 22;
-  if (d.invoiceNo) { doc.text(`Invoice No: ${d.invoiceNo}`, left, y); y += 16; }
-  doc.text(`Date: ${dateAu(d.invoiceDate)}`, left, y);
-
-  // Who it's for.
-  y += 34;
-  doc.setFont("helvetica", "bold");
-  doc.text("Bill to", left, y);
-  doc.setFont("helvetica", "normal");
-  y += 16;
-  doc.text(d.agencyName || "—", left, y);
-  if (d.agentName) { y += 15; doc.text(`Attn: ${d.agentName}`, left, y); }
-  if (d.agencyAddress) {
-    for (const line of doc.splitTextToSize(d.agencyAddress, 300) as string[]) {
-      y += 15;
-      doc.text(line, left, y);
+  if (h <= pageH) {
+    doc.addImage(img, "JPEG", 0, 0, w, h);
+  } else {
+    // Taller than a page: slice it across as many pages as it needs.
+    let offset = 0;
+    while (offset < h) {
+      if (offset > 0) doc.addPage();
+      doc.addImage(img, "JPEG", 0, -offset, w, h);
+      offset += pageH;
     }
   }
-
-  // The work.
-  y += 38;
-  const right = 539;
-  doc.setDrawColor(210);
-  doc.line(left, y, right, y);
-  y += 18;
-  doc.setFont("helvetica", "bold");
-  doc.text("Description", left, y);
-  doc.text("Qty", 330, y, { align: "right" });
-  doc.text("Rate", 420, y, { align: "right" });
-  doc.text("Amount", right, y, { align: "right" });
-  y += 8;
-  doc.line(left, y, right, y);
-
-  doc.setFont("helvetica", "normal");
-  y += 20;
-  // Same line as the printed invoice: the suburb covered, not the paper stock.
-  const where = (d.area || "").trim();
-  const desc = where
-    ? (/leaflet/i.test(where) ? where : `${where} leaflets`)
-    : (d.jobTitle || "").trim() || "Leaflet distribution";
-  doc.text(doc.splitTextToSize(desc, 250) as string[], left, y);
-  doc.text(d.quantity ? d.quantity.toLocaleString() : "—", 330, y, { align: "right" });
-  doc.text(d.rate ? `$${d.rate.toFixed(3).replace(/0$/, "")}` : "—", 420, y, { align: "right" });
-  doc.text(`$${money(d.total)}`, right, y, { align: "right" });
-
-  y += 26;
-  doc.line(left, y, right, y);
-  y += 24;
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(13);
-  doc.text("Total due", 420, y, { align: "right" });
-  doc.text(`$${money(d.total)}`, right, y, { align: "right" });
-
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(10);
-  doc.setTextColor(90);
-  y += 44;
-  doc.text("Payment: PayID / bank transfer. Please quote the invoice number.", left, y);
-  y += 14;
-  doc.text("Thank you for your business.", left, y);
 
   return doc.output("blob");
 }
