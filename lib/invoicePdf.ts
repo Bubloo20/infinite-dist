@@ -90,8 +90,11 @@ export async function buildInvoicePdf(d: InvoiceData): Promise<Blob> {
 
   doc.setFont("helvetica", "normal");
   y += 20;
-  const desc = [d.jobTitle || "Letterbox distribution", d.area ? `— ${d.area}` : ""]
-    .filter(Boolean).join(" ");
+  // Same line as the printed invoice: the suburb covered, not the paper stock.
+  const where = (d.area || "").trim();
+  const desc = where
+    ? (/leaflet/i.test(where) ? where : `${where} leaflets`)
+    : (d.jobTitle || "").trim() || "Leaflet distribution";
   doc.text(doc.splitTextToSize(desc, 250) as string[], left, y);
   doc.text(d.quantity ? d.quantity.toLocaleString() : "—", 330, y, { align: "right" });
   doc.text(d.rate ? `$${d.rate.toFixed(3).replace(/0$/, "")}` : "—", 420, y, { align: "right" });

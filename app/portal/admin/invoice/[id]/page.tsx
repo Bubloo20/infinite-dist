@@ -20,6 +20,16 @@ Thanks,
 Bubloo`;
 
 const money = (v: number) => v.toLocaleString("en-AU", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+/**
+ * What the agency reads on the invoice line: the suburb the drop covered, not
+ * the paper stock. "Pascoe Vale leaflets" says what they paid for.
+ */
+const leafletLine = (area: string | null, title: string | null) => {
+  const where = (area || "").trim();
+  if (where) return /leaflet/i.test(where) ? where : `${where} leaflets`;
+  return (title || "").trim() || "Leaflet distribution";
+};
+
 const dateAu = (d: string | null) =>
   d ? new Date(d).toLocaleDateString("en-AU", { day: "2-digit", month: "long", year: "numeric" }) : "—";
 
@@ -214,7 +224,7 @@ export default function InvoicePage() {
           </thead>
           <tbody>
             <tr>
-              <td className="border border-slate-300 px-3 py-3">{job.leaflet_type || job.title || "Leaflet distribution"}</td>
+              <td className="border border-slate-300 px-3 py-3">{leafletLine(job.area, job.title)}</td>
               <td className="border border-slate-300 px-3 py-3">{dateAu(job.completed_on)}</td>
               <td className="border border-slate-300 px-3 py-3">{qty ? qty.toLocaleString("en-AU") : "—"}</td>
               <td className="border border-slate-300 px-3 py-3">{rate ? rate.toFixed(2) : "—"}</td>
