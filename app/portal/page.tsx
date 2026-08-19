@@ -58,7 +58,6 @@ export default function PortalPage() {
   return (
     <main className="relative min-h-[100svh]">
       <PortalBackdrop />
-      <LoginFlourish />
 
       {loading ? (
         <div className="relative z-10 grid min-h-[100svh] place-items-center">
@@ -68,6 +67,9 @@ export default function PortalPage() {
         <LoginGate mode="worker" onSuccess={() => { setLoading(true); loadSession(); }} />
       ) : (
         <div className="relative z-10 mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 sm:py-16 xl:max-w-[1600px]">
+          {/* Only once this really is where they've landed — admins get sent on
+              to their own dashboard, and the welcome belongs there instead. */}
+          <LoginFlourish />
           {impersonating && (
             <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-400/30 bg-amber-500/10 px-5 py-3.5">
               <p className="text-sm text-amber-100">

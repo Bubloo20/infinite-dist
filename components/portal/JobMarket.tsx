@@ -195,6 +195,8 @@ export default function JobMarket({ workerName, only }: {
   }, []);
   const [viewing, setViewing] = useState<number | null>(null);
   const [shut, setShut] = useState<number[]>([]);
+  // New work is offered in two steps: read it, then take it.
+  const [opened, setOpened] = useState<number[]>([]);
   const [collapsedOnce, setCollapsedOnce] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const isShut = (id: number) => shut.includes(id);
@@ -453,13 +455,31 @@ export default function JobMarket({ workerName, only }: {
                       Have a look at the agreement — the pay, hours and dates are already filled in. You can
                       accept it once you&apos;ve read it through and signed.
                     </p>
-                    <button onClick={() => viewJob(a?.id ?? null, j.id)}
+                    {/*
+                      One press opens the detail below so they can actually read
+                      what they're taking on; the next takes them to the
+                      agreement. Going straight to signing skipped the reading.
+                    */}
+                    <button
+                      onClick={() => {
+                        if (opened.includes(cardId)) { viewJob(a?.id ?? null, j.id); return; }
+                        setOpened((cur) => [...cur, cardId]);
+                        setShut((cur) => cur.filter((x) => x !== cardId));
+                        // Let it unfold, then bring it into view.
+                        setTimeout(() => {
+                          document.getElementById(`job-detail-${cardId}`)
+                            ?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+                        }, 120);
+                      }}
                       className="mt-5 w-full rounded-2xl bg-white px-8 py-4 font-display text-[16px] font-extrabold text-ink shadow-[0_18px_44px_-14px_rgba(255,255,255,0.5)] transition hover:-translate-y-0.5 sm:w-auto">
-                      View job →
+                      {opened.includes(cardId) ? "Accept job →" : "View job →"}
                     </button>
                   </div>
                 )}
-                <GlassCard className="p-6">
+                <GlassCard
+                  id={`job-detail-${cardId}`}
+                  className={`p-6 ${opened.includes(cardId) ? "idp-slide-down" : ""}`}
+                >
                   <div className="flex flex-wrap items-start justify-between gap-4">
                     <div className="min-w-0">
                       <h3 className="font-display text-xl font-bold text-white">

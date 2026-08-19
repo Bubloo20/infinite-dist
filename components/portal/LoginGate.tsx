@@ -115,11 +115,11 @@ export default function LoginGate({
       });
       const data = await res.json();
       if (data.ok) {
-        // The portal plays a welcome on the other side of this.
+        // The welcome on the other side is the confirmation, so there's no
+        // reason to sit on the sign-in screen for another second first.
         armWelcome(data.fullName || fullName);
-        // Let the confirmation play before the portal swaps in.
         setSuccess(true);
-        setTimeout(() => onSuccess(data.role), 900);
+        onSuccess(data.role);
         return;
       } else {
         setError(data.error || "Something went wrong.");

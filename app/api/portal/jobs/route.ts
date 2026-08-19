@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { currentSession } from "@/lib/portal/auth";
 import {
   listOpenJobs, listJobsForWorkerAll, listInterest, addInterest, removeInterest,
-  getContract, saveContract, findUserById, dbConfigured, listAssignmentsForUser,
+  getContract, saveContract, findUserById, dbConfigured, listAssignmentsForUser, renameUserTo,
   upsertAssignment, listWorkLogsForUser, syncJobOutCount, acceptAssignment, listContractsForUser,
 } from "@/lib/portal/db";
 
@@ -114,7 +114,10 @@ export async function POST(req: Request) {
         signedName: signedName || user?.full_name || "",
         signaturePng, signedDate, schedule: (b.schedule as string) || null,
       });
-      return NextResponse.json({ ok: true });
+      // However they wrote their name on the agreement is how they're known
+      // from here on — the register was only ever the office's best guess.
+      const renamed = signedName ? await renameUserTo(s.userId, signedName) : false;
+      return NextResponse.json({ ok: true, renamedTo: renamed ? signedName.trim() : null });
     }
     return NextResponse.json({ ok: false, error: "Unknown action." }, { status: 400 });
   } catch (e) {

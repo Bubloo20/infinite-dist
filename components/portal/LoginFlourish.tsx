@@ -14,9 +14,10 @@ export function armWelcome(name: string) {
   }
 }
 
-const DRAW_MS = 1500;
-const HOLD_MS = 2300;
-const FADE_MS = 600;
+// Long enough to land, short enough that it never feels like waiting.
+const DRAW_MS = 1000;
+const HOLD_MS = 1500;
+const FADE_MS = 420;
 
 /**
  * The way in.
@@ -67,49 +68,39 @@ export default function LoginFlourish() {
 
   return (
     <div
-      className={`idp-welcome fixed inset-0 z-[4000] grid place-items-center overflow-hidden bg-[#07040f] transition-opacity duration-[600ms] ${
+      className={`idp-welcome fixed inset-0 z-[4000] grid place-items-center overflow-hidden bg-[#07040f] transition-opacity duration-[420ms] ${
         leaving ? "pointer-events-none opacity-0" : "opacity-100"
       }`}
     >
       <div className="idp-welcome-bloom pointer-events-none absolute aspect-square w-[min(120vw,44rem)] rounded-full" />
 
       <div className="relative flex flex-col items-center px-6">
-        <svg viewBox="0 0 200 100" className="w-[min(78vw,30rem)]" fill="none" aria-hidden="true">
-          <defs>
-            <linearGradient id="idp-inf" x1="0" y1="0" x2="1" y2="0">
-              <stop offset="0%" stopColor="#8b93ff" />
-              <stop offset="50%" stopColor="#b66dc7" />
-              <stop offset="100%" stopColor="#8b93ff" />
-            </linearGradient>
-            <filter id="idp-inf-glow" x="-50%" y="-50%" width="200%" height="200%">
-              <feGaussianBlur stdDeviation="3.2" result="b" />
-              <feMerge>
-                <feMergeNode in="b" />
-                <feMergeNode in="SourceGraphic" />
-              </feMerge>
-            </filter>
-          </defs>
+        {/*
+          The real mark, cropped out of the logo the same way the loader does —
+          the leftmost 28.4% of a 1000x120 file is the infinity on its own. A
+          ring draws itself around it and a light sweeps across it.
+        */}
+        <div className="relative grid place-items-center">
+          <svg className="idp-welcome-ring pointer-events-none absolute h-[min(74vw,22rem)] w-[min(74vw,22rem)]"
+            viewBox="0 0 200 200" fill="none" aria-hidden="true">
+            <defs>
+              <linearGradient id="idp-welcome-grad" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stopColor="#8b93ff" />
+                <stop offset="100%" stopColor="#b66dc7" />
+              </linearGradient>
+            </defs>
+            <circle cx="100" cy="100" r="94" pathLength={100}
+              stroke="url(#idp-welcome-grad)" strokeWidth="1.6" strokeLinecap="round" />
+          </svg>
 
-          {/* The loop, faint, so the drawing has something to run along. */}
-          <path
-            d="M50,50 C50,22 76,22 100,50 C124,78 150,78 150,50 C150,22 124,22 100,50 C76,78 50,78 50,50 Z"
-            stroke="#ffffff" strokeOpacity="0.09" strokeWidth="5" strokeLinecap="round"
-          />
-          {/* The same loop drawing itself. */}
-          <path
-            className="idp-inf-draw"
-            d="M50,50 C50,22 76,22 100,50 C124,78 150,78 150,50 C150,22 124,22 100,50 C76,78 50,78 50,50 Z"
-            stroke="url(#idp-inf)" strokeWidth="5" strokeLinecap="round"
-            pathLength={100} filter="url(#idp-inf-glow)"
-          />
-          {/* A light running round it once it's drawn. */}
-          <circle className="idp-inf-spark" r="4.2" fill="#fff" filter="url(#idp-inf-glow)">
-            <animateMotion
-              dur="2.6s" repeatCount="indefinite" begin="0.55s"
-              path="M50,50 C50,22 76,22 100,50 C124,78 150,78 150,50 C150,22 124,22 100,50 C76,78 50,78 50,50 Z"
-            />
-          </circle>
-        </svg>
+          <div className="idp-welcome-mark relative w-[min(52vw,15rem)] overflow-hidden"
+            style={{ aspectRatio: "284 / 120" }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/images/logo.png" alt="" aria-hidden="true"
+              className="h-full max-w-none" style={{ width: `${(1000 / 284) * 100}%` }} />
+            <span aria-hidden className="idp-welcome-sweep pointer-events-none absolute inset-y-0 w-1/2" />
+          </div>
+        </div>
 
         <p className="idp-welcome-name mt-7 text-center font-display text-[clamp(1.3rem,5vw,2rem)] font-extrabold tracking-tight text-white">
           {name ? `Welcome back, ${name}` : "Welcome back"}
@@ -125,16 +116,32 @@ export default function LoginFlourish() {
           filter: blur(60px);
           animation: idp-welcome-breathe 2.6s ease-out both;
         }
-        .idp-inf-draw {
+        .idp-welcome-mark {
+          animation: idp-welcome-mark 0.8s cubic-bezier(0.22, 1, 0.36, 1) both;
+          filter: drop-shadow(0 0 30px rgba(182, 109, 199, 0.55));
+        }
+        .idp-welcome-ring {
           stroke-dasharray: 100;
           stroke-dashoffset: 100;
-          animation: idp-inf-draw ${DRAW_MS}ms cubic-bezier(0.65, 0, 0.35, 1) forwards;
+          opacity: 0.55;
+          animation: idp-welcome-draw ${DRAW_MS}ms cubic-bezier(0.22, 1, 0.36, 1) forwards,
+                     idp-welcome-turn 12s linear infinite;
         }
-        .idp-inf-spark { opacity: 0; animation: idp-inf-spark 0.5s ease-out 0.55s forwards; }
-        .idp-welcome-name { animation: idp-welcome-rise 0.75s cubic-bezier(0.22, 1, 0.36, 1) 0.85s both; }
-        .idp-welcome-sub  { animation: idp-welcome-rise 0.75s cubic-bezier(0.22, 1, 0.36, 1) 1.05s both; }
-        @keyframes idp-inf-draw { to { stroke-dashoffset: 0; } }
-        @keyframes idp-inf-spark { to { opacity: 1; } }
+        .idp-welcome-sweep {
+          left: -55%;
+          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.55), transparent);
+          filter: blur(9px);
+          animation: idp-welcome-sweep 1.1s ease-in-out 0.25s;
+        }
+        .idp-welcome-name { animation: idp-welcome-rise 0.6s cubic-bezier(0.22, 1, 0.36, 1) 0.6s both; }
+        .idp-welcome-sub  { animation: idp-welcome-rise 0.6s cubic-bezier(0.22, 1, 0.36, 1) 0.78s both; }
+        @keyframes idp-welcome-draw { to { stroke-dashoffset: 0; } }
+        @keyframes idp-welcome-turn { to { transform: rotate(360deg); } }
+        @keyframes idp-welcome-sweep { from { transform: translateX(0); } to { transform: translateX(320%); } }
+        @keyframes idp-welcome-mark {
+          from { opacity: 0; transform: scale(0.82); }
+          to   { opacity: 1; transform: none; }
+        }
         @keyframes idp-welcome-rise {
           from { opacity: 0; transform: translateY(12px); }
           to   { opacity: 1; transform: none; }
@@ -145,10 +152,9 @@ export default function LoginFlourish() {
           100% { opacity: 0.7; transform: scale(1); }
         }
         @media (prefers-reduced-motion: reduce) {
-          .idp-welcome-bloom, .idp-inf-draw, .idp-inf-spark,
-          .idp-welcome-name, .idp-welcome-sub { animation: none; }
-          .idp-inf-draw { stroke-dashoffset: 0; }
-          .idp-inf-spark { opacity: 1; }
+          .idp-welcome-bloom, .idp-welcome-mark, .idp-welcome-ring,
+          .idp-welcome-sweep, .idp-welcome-name, .idp-welcome-sub { animation: none; }
+          .idp-welcome-ring { stroke-dashoffset: 0; }
         }
       `}</style>
     </div>

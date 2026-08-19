@@ -75,21 +75,54 @@ export const packLinks = (urls: string[]) => JSON.stringify(urls.filter(Boolean)
 let schemaReady: Promise<void> | null = null;
 
 /**
+ * Bump this whenever migrateSchema() changes — a new table, column or index.
+ *
+ * The number is what tells a fresh server that the database is already up to
+ * date. Forget to raise it and your new column never gets added in production,
+ * because the migration will be skipped.
+ */
+const SCHEMA_VERSION = 1;
+
+/**
  * Bring the schema up to date, once per process.
  *
  * The promise is cached rather than a "done" flag: a page load fires several
  * queries at once, and with a flag that only flips at the end they each saw
- * "not ready" and re-ran all forty-odd statements in parallel. Sharing the
- * promise means the first caller migrates and the rest simply wait for it.
+ * "not ready" and re-ran all the statements in parallel. Sharing the promise
+ * means the first caller migrates and the rest simply wait for it.
  */
 export function ensureSchema(): Promise<void> {
   if (!schemaReady) {
-    schemaReady = migrateSchema().catch((e) => {
+    schemaReady = upToDate().catch((e) => {
       schemaReady = null; // a failed migration shouldn't poison every later call
       throw e;
     });
   }
   return schemaReady;
+}
+
+/**
+ * The migration is ~150 statements run one after another, and every cold server
+ * used to run the lot before it would answer anything — seconds of waiting on a
+ * database that was already correct, most visibly on the sign-in screen. A
+ * version written down at the end turns that into a single question on all but
+ * the first start after a deploy.
+ */
+async function upToDate(): Promise<void> {
+  try {
+    const r = await sql<{ value: number }>`SELECT value FROM portal_schema WHERE id = 1;`;
+    if (Number(r.rows[0]?.value) >= SCHEMA_VERSION) return;
+  } catch {
+    // No marker table yet — this database has never been migrated.
+  }
+
+  await migrateSchema();
+
+  // Recorded only once everything above has actually succeeded.
+  await sql`CREATE TABLE IF NOT EXISTS portal_schema (id INT PRIMARY KEY, value INT NOT NULL);`;
+  await sql`
+    INSERT INTO portal_schema (id, value) VALUES (1, ${SCHEMA_VERSION})
+    ON CONFLICT (id) DO UPDATE SET value = EXCLUDED.value;`;
 }
 
 async function migrateSchema(): Promise<void> {
@@ -935,6 +968,29 @@ export async function deleteUser(id: number) {
   await sql`DELETE FROM job_interest WHERE user_id = ${id};`;
   await sql`UPDATE client_jobs SET assigned_user_id = NULL WHERE assigned_user_id = ${id};`;
   await sql`DELETE FROM portal_users WHERE id = ${id};`;
+}
+
+/**
+ * Put the register's name in step with what someone signed.
+ *
+ * They sign in by name, so the key moves with it. Returns false and changes
+ * nothing when the name is blank, unchanged, or already taken by somebody
+ * else — a signature shouldn't be able to lock anyone out of their account.
+ */
+export async function renameUserTo(id: number, fullName: string): Promise<boolean> {
+  await ensureSchema();
+  const name = (fullName || "").trim();
+  if (name.length < 2) return false;
+
+  const key = nameKey(name);
+  const rows = await sql<{ id: number; name_key: string }>`
+    SELECT id, name_key FROM portal_users WHERE id = ${id} OR name_key = ${key};`;
+  const me = rows.rows.find((r) => r.id === id);
+  if (!me || me.name_key === key) return false;              // nothing to change
+  if (rows.rows.some((r) => r.id !== id)) return false;      // that name is taken
+
+  await sql`UPDATE portal_users SET full_name = ${name}, name_key = ${key} WHERE id = ${id};`;
+  return true;
 }
 
 export async function updateUserNotes(

@@ -26,7 +26,6 @@ export default function AdminPage() {
   return (
     <main className="relative min-h-[100svh]">
       <PortalBackdrop />
-      <LoginFlourish />
       {loading ? (
         <div className="relative z-10 grid min-h-[100svh] place-items-center">
           <Loading label="Loading" />
@@ -34,7 +33,10 @@ export default function AdminPage() {
       ) : role !== "admin" ? (
         <LoginGate mode="admin" onSuccess={setRole} />
       ) : (
-        <AdminDashboard onSignOut={signOut} />
+        <>
+          <LoginFlourish />
+          <AdminDashboard onSignOut={signOut} />
+        </>
       )}
     </main>
   );

@@ -203,3 +203,11 @@ select optgroup {
   from { opacity: 0; transform: rotate(-45deg) translateY(-14px) scale(0.7); }
   to   { opacity: 1; transform: rotate(-45deg) translateY(0) scale(1); }
 }
+
+/* A job's detail unfolding after "View job". */
+@keyframes idp-slide-down {
+  from { opacity: 0; transform: translateY(-10px); }
+  to   { opacity: 1; transform: none; }
+}
+.idp-slide-down { animation: idp-slide-down 0.42s cubic-bezier(0.22, 1, 0.36, 1) both; }
+@media (prefers-reduced-motion: reduce) { .idp-slide-down { animation: none; } }

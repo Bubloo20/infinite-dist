@@ -3,8 +3,10 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 
-const HOLD_MS = 2200;
-const FADE_MS = 700;
+// The intro sits in front of the whole site, so it earns its keep in about a
+// second rather than holding people up for three.
+const HOLD_MS = 1100;
+const FADE_MS = 450;
 
 /**
  * The intro the site opens on.
@@ -56,7 +58,7 @@ export default function LoadingScreen() {
 
   return (
     <div
-      className={`idp-intro fixed inset-0 z-[200] grid place-items-center overflow-hidden bg-[#070707] transition-opacity duration-700 ${
+      className={`idp-intro fixed inset-0 z-[200] grid place-items-center overflow-hidden bg-[#070707] transition-opacity duration-[450ms] ${
         phase === "fading" ? "pointer-events-none opacity-0" : "opacity-100"
       }`}
     >
