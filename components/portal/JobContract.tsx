@@ -403,7 +403,7 @@ export default function JobContract({
                   <span className="shrink-0 text-[12px] font-semibold text-white/45">
                     {hrs ? fmtHours(hrs) : ""}
                   </span>
-                  <span className={`shrink-0 text-white/35 transition-transform ${isOpen ? "rotate-180" : ""}`}>\▾</span>
+                  <span className={`shrink-0 text-white/35 transition-transform ${isOpen ? "rotate-180" : ""}`}>▾</span>
                 </button>
 
                 {isOpen && (

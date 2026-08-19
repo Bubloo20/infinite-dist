@@ -238,14 +238,14 @@ export default function JobMarket({ workerName, only }: {
           {
             Worker: workerName || "A worker",
             Job: job?.title || `Job #${jobId}`,
-            Area: a?.area_note || job?.area || "\—",
-            Leaflets: a?.leaflet_share ? a.leaflet_share.toLocaleString() : (job?.quantity?.toLocaleString() ?? "\—"),
+            Area: a?.area_note || job?.area || "—",
+            Leaflets: a?.leaflet_share ? a.leaflet_share.toLocaleString() : (job?.quantity?.toLocaleString() ?? "—"),
             Pay: money(a?.pay ?? job?.worker_pay ?? null),
-            Start: a?.start_date || "\—",
-            Due: a?.due_date || "\—",
-            Status: "Accepted \— contract drawn up, awaiting their signature",
+            Start: a?.start_date || "—",
+            Due: a?.due_date || "—",
+            Status: "Accepted — contract drawn up, awaiting their signature",
           },
-          { subject: `Job accepted \— ${workerName || "worker"} \— ${job?.title || `#${jobId}`}`, from_name: "Infinite Distribution Portal" },
+          { subject: `Job accepted — ${workerName || "worker"} — ${job?.title || `#${jobId}`}`, from_name: "Infinite Distribution Portal" },
         ).catch(() => {});
       }
       load();

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { GlassCard, PortalMark, Loading } from "./PortalShell";
@@ -56,24 +56,38 @@ export default function AdminDashboard({ onSignOut }: { onSignOut: () => void })
   const [msg, setMsg] = useState("");
   const [period, setPeriod] = useState<"week" | "fortnight" | "month" | "year" | "all">("week");
 
+  // Two saves in quick succession put two refreshes in flight, and they don't
+  // necessarily come back in order. Without this counter an older response can
+  // land last and paint stale rows over fresh ones — which reads as "my edit
+  // didn't save" until the page is reloaded by hand.
+  const refreshSeq = useRef(0);
+
   // `silent` refreshes keep the screen up: saving shouldn't wipe the dashboard
   // back to a spinner and lose whatever drawer or half-typed field was open.
-  const load = useCallback((silent = false) => {
+  // Returns the promise so a save can wait for the fresh data before it
+  // reports itself as done.
+  const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
-    Promise.all([
-      fetch("/api/portal/logs").then((r) => r.json()),
-      fetch("/api/portal/admin/finance").then((r) => r.json()).catch(() => ({ entries: [] })),
-      fetch("/api/portal/admin/clients").then((r) => r.json()).catch(() => ({})),
-      fetch("/api/portal/admin/contract").then((r) => r.json()).catch(() => ({ contracts: [] })),
-    ])
-      .then(([d, f, c, ct]) => {
-        setLogs(d.logs || []); setUsers(d.users || []); setPayments(d.payments || []);
-        setDbOn(Boolean(d.dbConfigured)); setFinance(f.entries || []);
-        setAgencies(c.agencies || []); setAgents(c.agents || []);
-        setClientJobs(c.jobs || []); setAgencyPayments(c.agencyPayments || []); setInterest(c.interest || []); setAssignments(c.assignments || []); setContracts(ct.contracts || []);
-      })
-      .catch(() => setMsg("Couldn't load data."))
-      .finally(() => setLoading(false));
+    const mine = ++refreshSeq.current;
+    // Never let the browser answer these from its own cache.
+    const get = (url: string) => fetch(url, { cache: "no-store" }).then((r) => r.json());
+    try {
+      const [d, f, c, ct] = await Promise.all([
+        get("/api/portal/logs"),
+        get("/api/portal/admin/finance").catch(() => ({ entries: [] })),
+        get("/api/portal/admin/clients").catch(() => ({})),
+        get("/api/portal/admin/contract").catch(() => ({ contracts: [] })),
+      ]);
+      if (mine !== refreshSeq.current) return;   // a newer refresh already won
+      setLogs(d.logs || []); setUsers(d.users || []); setPayments(d.payments || []);
+      setDbOn(Boolean(d.dbConfigured)); setFinance(f.entries || []);
+      setAgencies(c.agencies || []); setAgents(c.agents || []);
+      setClientJobs(c.jobs || []); setAgencyPayments(c.agencyPayments || []); setInterest(c.interest || []); setAssignments(c.assignments || []); setContracts(ct.contracts || []);
+    } catch {
+      if (mine === refreshSeq.current) setMsg("Couldn't load data.");
+    } finally {
+      if (mine === refreshSeq.current) setLoading(false);
+    }
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -82,7 +96,9 @@ export default function AdminDashboard({ onSignOut }: { onSignOut: () => void })
     const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     const d = await r.json();
     if (!d.ok) { setMsg(d.error || "Action failed."); return false; }
-    setMsg(""); load(true); return true;
+    setMsg("");
+    await load(true);
+    return true;
   };
 
   // Period window: the week runs Sunday -> Saturday.
@@ -171,12 +187,14 @@ export default function AdminDashboard({ onSignOut }: { onSignOut: () => void })
     });
     const d = await r.json();
     if (!d.ok) { setMsg(d.error || "Save failed."); return false; }
-    setMsg(""); load(true); return true;
+    setMsg("");
+    await load(true);          // don't report done until the new data is on screen
+    return true;
   };
   const delClient = async (entity: string, id: number) => {
     const r = await fetch(`/api/portal/admin/clients?entity=${entity}&id=${id}`, { method: "DELETE" });
     const d = await r.json();
-    if (!d.ok) setMsg(d.error || "Delete failed."); else load(true);
+    if (!d.ok) setMsg(d.error || "Delete failed."); else await load(true);
   };
 
   const filtered = useMemo(() => {
@@ -544,8 +562,8 @@ function WorkerRow({ user, t, post, contracts, jobs, mine, onDelete }: {
 
   const STATE: Record<string, { label: string; cls: string }> = {
     waiting: { label: "Awaiting acceptance", cls: "border-amber-400/35 bg-amber-500/10 text-amber-300" },
-    accepted: { label: "Accepted \— not signed", cls: "border-sky-400/35 bg-sky-500/10 text-sky-300" },
-    signed: { label: "Signed \— on the job", cls: "border-emerald-400/35 bg-emerald-500/10 text-emerald-300" },
+    accepted: { label: "Accepted — not signed", cls: "border-sky-400/35 bg-sky-500/10 text-sky-300" },
+    signed: { label: "Signed — on the job", cls: "border-emerald-400/35 bg-emerald-500/10 text-emerald-300" },
     done: { label: "Completed", cls: "border-white/15 bg-white/[0.06] text-white/55" },
   };
   const [f, setF] = useState({

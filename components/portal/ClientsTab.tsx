@@ -570,10 +570,10 @@ function ClientJobRow({ job, agencyName, agentName, agencies, agents, expenses, 
             <span>
               <span className="block text-[14px] font-bold text-white">Edit job details</span>
               <span className="mt-0.5 block text-[12px] text-white/45">
-                Leaflets, rate, area, agency and dates \— changeable at any time.
+                Leaflets, rate, area, agency and dates — changeable at any time.
               </span>
             </span>
-            <span className={`shrink-0 text-white/40 transition-transform ${editing ? "rotate-180" : ""}`}>\▾</span>
+            <span className={`shrink-0 text-white/40 transition-transform ${editing ? "rotate-180" : ""}`}>▾</span>
           </button>
 
           {editing && (
@@ -607,7 +607,7 @@ function ClientJobRow({ job, agencyName, agentName, agencies, agents, expenses, 
                   <input className={input} inputMode="numeric" value={e.quantity} onChange={(ev) => setE({ ...e, quantity: ev.target.value })} />
                 </label>
                 <label className="block">
-                  <span className="mb-1 block text-[12px] font-semibold text-orchid">Leaflet rate \— what the agency pays you</span>
+                  <span className="mb-1 block text-[12px] font-semibold text-orchid">Leaflet rate — what the agency pays you</span>
                   <input className={input} inputMode="decimal" value={e.ratePerLeaflet} onChange={(ev) => setE({ ...e, ratePerLeaflet: ev.target.value })} />
                 </label>
                 <label className="block">
@@ -653,20 +653,25 @@ function ClientJobRow({ job, agencyName, agentName, agencies, agents, expenses, 
             </div>
           )}
 
+          {/* These three are uncontrolled so they don't fight you mid-type. The
+              server recalculates out/completed whenever sub-contracts or shifts
+              change, so each is keyed on the saved value: when the number moves
+              underneath us the box remounts and shows it, instead of sitting on
+              a stale figure until the page is reloaded. */}
           <div className="mb-5 grid gap-3 sm:grid-cols-3">
             <label className="block">
               <span className="mb-1 block text-[12px] font-semibold text-white/40">Job number</span>
-              <input className={input} defaultValue={job.job_number || ""} placeholder={`#${job.id}`}
+              <input key={`n${job.job_number ?? ""}`} className={input} defaultValue={job.job_number || ""} placeholder={`#${job.id}`}
                 onBlur={(e) => { if (e.target.value !== (job.job_number || "")) post({ entity: "job", id: job.id, ...jobPayload(job), jobNumber: e.target.value, deliveredCount: job.delivered_count }); }} />
             </label>
             <label className="block">
               <span className="mb-1 block text-[12px] font-semibold text-amber-300">Out for delivery</span>
-              <input className={input} inputMode="numeric" defaultValue={job.out_count ?? ""} placeholder="e.g. 200"
+              <input key={`o${job.out_count ?? ""}`} className={input} inputMode="numeric" defaultValue={job.out_count ?? ""} placeholder="e.g. 200"
                 onBlur={(e) => { if (String(e.target.value) !== String(job.out_count ?? "")) post({ entity: "job", id: job.id, ...jobPayload(job), outCount: e.target.value }); }} />
             </label>
             <label className="block">
               <span className="mb-1 block text-[12px] font-semibold text-emerald-300">Completed delivery</span>
-              <input className={input} inputMode="numeric" defaultValue={job.delivered_count ?? ""} placeholder={job.status === "completed" ? `all ${job.quantity ?? 0}` : "e.g. 300"}
+              <input key={`d${job.delivered_count ?? ""}`} className={input} inputMode="numeric" defaultValue={job.delivered_count ?? ""} placeholder={job.status === "completed" ? `all ${job.quantity ?? 0}` : "e.g. 300"}
                 onBlur={(e) => { if (String(e.target.value) !== String(job.delivered_count ?? "")) post({ entity: "job", id: job.id, ...jobPayload(job), jobNumber: job.job_number, deliveredCount: e.target.value }); }} />
             </label>
             <label className="block">
