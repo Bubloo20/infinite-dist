@@ -6,6 +6,7 @@ import { GlassCard, ActionButton } from "./PortalShell";
 import type { Agency, Agent, ClientJob, AgencyPayment, JobStatus, InvoiceStatus } from "@/lib/portal/db";
 import { SubContracts } from "./PublishToWorkers";
 import type { PortalUser, JobAssignment } from "@/lib/portal/db";
+import DateInput from "./DateInput";
 
 const money = (v: number) => `$${v.toFixed(2)}`;
 const num = (v: string | null) => (v === null ? 0 : Number(v) || 0);
@@ -200,7 +201,7 @@ function AgencyDetail({ agency, agents, jobs, payments, post, del }: {
         <div className="mt-4 space-y-3">
           <div className="grid gap-2 sm:grid-cols-5">
             <input className={input} placeholder="Amount" inputMode="decimal" value={pay.amount} onChange={(e) => setPay({ ...pay, amount: e.target.value })} />
-            <input className={input} type="date" value={pay.paidOn} onChange={(e) => setPay({ ...pay, paidOn: e.target.value })} />
+            <DateInput className={input} value={pay.paidOn} onChange={(v) => setPay({ ...pay, paidOn: v })} />
             <input className={input} placeholder="Method" value={pay.method} onChange={(e) => setPay({ ...pay, method: e.target.value })} />
             <input className={input} placeholder="Note" value={pay.note} onChange={(e) => setPay({ ...pay, note: e.target.value })} />
             <button className={btn} disabled={!pay.amount}
@@ -326,11 +327,11 @@ export function ClientJobsTab({ agencies, agents, jobs, workLogs, users, assignm
           </select>
           <label className="block">
             <span className="mb-1 block text-[12px] font-semibold text-white/40">Pick-up date (optional)</span>
-            <input className={input} type="date" value={f.pickedOn} onChange={(e) => setF({ ...f, pickedOn: e.target.value })} />
+            <DateInput className={input} value={f.pickedOn} onChange={(v) => setF({ ...f, pickedOn: v })} />
           </label>
           <label className="block">
             <span className="mb-1 block text-[12px] font-semibold text-white/40">Completion date (optional)</span>
-            <input className={input} type="date" value={f.completedOn} onChange={(e) => setF({ ...f, completedOn: e.target.value })} />
+            <DateInput className={input} value={f.completedOn} onChange={(v) => setF({ ...f, completedOn: v })} />
           </label>
 
           <div className="sm:col-span-3">
@@ -402,7 +403,53 @@ const seed = (j: ClientJob) => ({
   quantity: j.quantity != null ? String(j.quantity) : "",
   ratePerLeaflet: j.rate_per_leaflet != null ? String(j.rate_per_leaflet) : "",
   pickedOn: j.picked_on || "", completedOn: j.completed_on || "", notes: j.notes || "",
+  jobNumber: j.job_number || "",
 });
+
+
+/**
+ * One of the job's running totals.
+ *
+ * Normally it's whatever the workers' own progress says. Double-click it to
+ * type a figure over the top; clear the box and it goes back to following the
+ * workers again. A pinned number is underlined so you can see it's been set
+ * by hand.
+ */
+function CountNumber({ value, pinned, tone, onSet }: {
+  value: number; pinned: boolean; tone: string;
+  onSet: (v: number | null) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+
+  if (editing) {
+    return (
+      <input
+        autoFocus
+        inputMode="numeric"
+        value={draft}
+        onChange={(ev) => setDraft(ev.target.value.replace(/[^0-9]/g, ""))}
+        onBlur={() => { onSet(draft === "" ? null : Number(draft)); setEditing(false); }}
+        onKeyDown={(ev) => {
+          if (ev.key === "Enter") ev.currentTarget.blur();
+          if (ev.key === "Escape") { setDraft(""); setEditing(false); }
+        }}
+        className={`w-16 rounded border border-white/25 bg-night/80 px-1 py-0 text-center text-[12px] font-semibold ${tone} outline-none`}
+      />
+    );
+  }
+  return (
+    <span
+      role="button"
+      tabIndex={0}
+      title={pinned ? "Set by hand — double-click to change, clear it to go back to automatic" : "Worked out from the workers — double-click to override"}
+      onDoubleClick={() => { setDraft(String(value)); setEditing(true); }}
+      className={`cursor-pointer font-semibold ${tone} ${pinned ? "underline decoration-dotted underline-offset-2" : ""}`}
+    >
+      {value.toLocaleString()}
+    </span>
+  );
+}
 
 function ClientJobRow({ job, agencyName, agentName, agencies, agents, expenses, users, assignments, post, del }: {
   job: ClientJob; agencyName: string; agentName: string | null;
@@ -423,10 +470,16 @@ function ClientJobRow({ job, agencyName, agentName, agencies, agents, expenses, 
   // Three buckets across the job's quantity: completed, out with a worker, and
   // still waiting to be dispatched. A completed job counts as fully delivered
   // unless a partial figure was entered.
+  // Both numbers come from what the workers have actually done — accepted work
+  // is out for delivery, approved work is completed — unless someone has typed
+  // a figure over the top.
   const qty = job.quantity ?? 0;
-  const delivered = job.delivered_count ?? (job.status === "completed" ? qty : 0);
-  const out = Math.max(0, Math.min(job.out_count ?? (job.status === "out_for_delivery" && !job.delivered_count ? qty : 0), qty - delivered));
+  const delivered = job.delivered_override ?? job.delivered_count ?? 0;
+  const out = Math.max(0, Math.min(job.out_override ?? job.out_count ?? 0, qty - delivered));
   const remaining = Math.max(0, qty - delivered - out);
+  const setCount = (which: "out" | "delivered", v: number | null) =>
+    post({ entity: "job", id: job.id, ...jobPayload(job),
+           [which === "out" ? "outOverride" : "deliveredOverride"]: v == null ? "" : v });
   const revenue = num(job.amount);
   const nameOf = (w: WorkLogLite) => users.find((u) => u.id === w.user_id)?.full_name || w.worker_name;
 
@@ -488,8 +541,11 @@ function ClientJobRow({ job, agencyName, agentName, agencies, agents, expenses, 
             <div className="mt-3 max-w-sm">
               <div className="flex items-center justify-between text-[12px]">
                 <span className="text-white/55">
-                  <span className="font-semibold text-emerald-300">{delivered.toLocaleString()}</span> completed
-                  {out > 0 && (<>{" · "}<span className="font-semibold text-amber-300">{out.toLocaleString()}</span> out</>)}
+                  <CountNumber value={delivered} pinned={job.delivered_override != null}
+                    tone="text-emerald-300" onSet={(v) => setCount("delivered", v)} /> completed
+                  {" · "}
+                  <CountNumber value={out} pinned={job.out_override != null}
+                    tone="text-amber-300" onSet={(v) => setCount("out", v)} /> out
                   {remaining > 0 && (<>{" · "}<span className="font-semibold text-rose-300">{remaining.toLocaleString()}</span> to dispatch</>)}
                 </span>
                 <span className="text-white/35">of {job.quantity.toLocaleString()}</span>
@@ -547,9 +603,9 @@ function ClientJobRow({ job, agencyName, agentName, agencies, agents, expenses, 
                 Use {nextInvoiceNo}
               </button>
             )}
-            <input type="date" className={`${input} !w-auto !py-1.5 !text-[12px]`}
+            <DateInput className={`${input} !w-auto !py-1.5 !text-[12px]`}
               value={job.invoice_date || ""} aria-label="Invoice / paid date"
-              onChange={(e) => post({ entity: "job", id: job.id, ...jobPayload(job), invoiceDate: e.target.value })} />
+              onChange={(v) => post({ entity: "job", id: job.id, ...jobPayload(job), invoiceDate: v })} />
             <Link href={`/portal/admin/invoice/${job.id}`} className={btnGhost}>Invoice PDF ↗</Link>
           </div>
           <div className="flex gap-3">
@@ -599,6 +655,11 @@ function ClientJobRow({ job, agencyName, agentName, agencies, agents, expenses, 
                   <input className={input} value={e.title} onChange={(ev) => setE({ ...e, title: ev.target.value })} />
                 </label>
                 <label className="block">
+                  <span className="mb-1 block text-[12px] font-semibold text-white/40">Job number (optional)</span>
+                  <input className={input} value={e.jobNumber} placeholder={`#${job.id}`}
+                    onChange={(ev) => setE({ ...e, jobNumber: ev.target.value })} />
+                </label>
+                <label className="block">
                   <span className="mb-1 block text-[12px] font-semibold text-white/40">Area</span>
                   <input className={input} value={e.area} onChange={(ev) => setE({ ...e, area: ev.target.value })} />
                 </label>
@@ -612,11 +673,11 @@ function ClientJobRow({ job, agencyName, agentName, agencies, agents, expenses, 
                 </label>
                 <label className="block">
                   <span className="mb-1 block text-[12px] font-semibold text-white/40">Pick-up date</span>
-                  <input type="date" className={input} value={e.pickedOn} onChange={(ev) => setE({ ...e, pickedOn: ev.target.value })} />
+                  <DateInput className={input} value={e.pickedOn} onChange={(v) => setE({ ...e, pickedOn: v })} />
                 </label>
                 <label className="block">
                   <span className="mb-1 block text-[12px] font-semibold text-white/40">Completion date</span>
-                  <input type="date" className={input} value={e.completedOn} onChange={(ev) => setE({ ...e, completedOn: ev.target.value })} />
+                  <DateInput className={input} value={e.completedOn} onChange={(v) => setE({ ...e, completedOn: v })} />
                 </label>
                 <label className="block sm:col-span-3">
                   <span className="mb-1 block text-[12px] font-semibold text-white/40">Notes</span>
@@ -636,7 +697,7 @@ function ClientJobRow({ job, agencyName, agentName, agencies, agents, expenses, 
                         ? (Number(e.quantity) * Number(e.ratePerLeaflet)).toFixed(2)
                         : job.amount,
                       pickedOn: e.pickedOn || null, completedOn: e.completedOn || null,
-                      notes: e.notes || null,
+                      notes: e.notes || null, jobNumber: e.jobNumber,
                     });
                     if (ok) setEditing(false);
                   }}>
@@ -653,38 +714,6 @@ function ClientJobRow({ job, agencyName, agentName, agencies, agents, expenses, 
             </div>
           )}
 
-          {/* These three are uncontrolled so they don't fight you mid-type. The
-              server recalculates out/completed whenever sub-contracts or shifts
-              change, so each is keyed on the saved value: when the number moves
-              underneath us the box remounts and shows it, instead of sitting on
-              a stale figure until the page is reloaded. */}
-          <div className="mb-5 grid gap-3 sm:grid-cols-3">
-            <label className="block">
-              <span className="mb-1 block text-[12px] font-semibold text-white/40">Job number</span>
-              <input key={`n${job.job_number ?? ""}`} className={input} defaultValue={job.job_number || ""} placeholder={`#${job.id}`}
-                onBlur={(e) => { if (e.target.value !== (job.job_number || "")) post({ entity: "job", id: job.id, ...jobPayload(job), jobNumber: e.target.value, deliveredCount: job.delivered_count }); }} />
-            </label>
-            <label className="block">
-              <span className="mb-1 block text-[12px] font-semibold text-amber-300">Out for delivery</span>
-              <input key={`o${job.out_count ?? ""}`} className={input} inputMode="numeric" defaultValue={job.out_count ?? ""} placeholder="e.g. 200"
-                onBlur={(e) => { if (String(e.target.value) !== String(job.out_count ?? "")) post({ entity: "job", id: job.id, ...jobPayload(job), outCount: e.target.value }); }} />
-            </label>
-            <label className="block">
-              <span className="mb-1 block text-[12px] font-semibold text-emerald-300">Completed delivery</span>
-              <input key={`d${job.delivered_count ?? ""}`} className={input} inputMode="numeric" defaultValue={job.delivered_count ?? ""} placeholder={job.status === "completed" ? `all ${job.quantity ?? 0}` : "e.g. 300"}
-                onBlur={(e) => { if (String(e.target.value) !== String(job.delivered_count ?? "")) post({ entity: "job", id: job.id, ...jobPayload(job), jobNumber: job.job_number, deliveredCount: e.target.value }); }} />
-            </label>
-            <label className="block">
-              <span className="mb-1 block text-[12px] font-semibold text-rose-300">Yet to be dispatched</span>
-              <input
-                readOnly
-                value={qty ? remaining.toLocaleString() : ""}
-                placeholder={qty ? "" : "set a quantity"}
-                aria-label="Yet to be dispatched"
-                className={`${input} cursor-default border-rose-400/30 bg-rose-500/10 text-rose-200`}
-              />
-            </label>
-          </div>
           {/* Assign the work: who does what, for how much, by when. */}
           <div className="mb-5">
             <SubContracts job={job} users={users} rows={assignments} post={post} del={del} />

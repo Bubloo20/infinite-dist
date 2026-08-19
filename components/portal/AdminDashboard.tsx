@@ -11,6 +11,7 @@ import TrendChart, { type TrendPoint } from "./TrendChart";
 import PublishToWorkers from "./PublishToWorkers";
 import type { JobInterest, JobAssignment } from "@/lib/portal/db";
 import { isTestName } from "@/lib/portal/text";
+import DateInput from "./DateInput";
 
 const money = (v: number) => `$${v.toFixed(2)}`;
 const num = (v: string | null) => (v === null ? 0 : Number(v) || 0);
@@ -73,7 +74,7 @@ export default function AdminDashboard({ onSignOut }: { onSignOut: () => void })
     const get = (url: string) => fetch(url, { cache: "no-store" }).then((r) => r.json());
     try {
       const [d, f, c, ct] = await Promise.all([
-        get("/api/portal/logs"),
+        get("/api/portal/logs").catch(() => ({ logs: [], users: [], payments: [], dbConfigured: true })),
         get("/api/portal/admin/finance").catch(() => ({ entries: [] })),
         get("/api/portal/admin/clients").catch(() => ({})),
         get("/api/portal/admin/contract").catch(() => ({ contracts: [] })),
@@ -767,7 +768,7 @@ function PaymentsTab({ users, payments, logs, post, reload, setMsg }: {
             <input className={input} placeholder="Amount" inputMode="decimal" value={f.amount} onChange={(e) => setF({ ...f, amount: e.target.value })} />
           </label>
 
-          <input className={input} type="date" value={f.paidOn} onChange={(e) => setF({ ...f, paidOn: e.target.value })} />
+          <DateInput className={input} value={f.paidOn} onChange={(v) => setF({ ...f, paidOn: v })} />
           <input className={input} placeholder="Method (PayID…)" value={f.method} onChange={(e) => setF({ ...f, method: e.target.value })} />
           <button className={btn} disabled={!f.userId || !f.amount}
             onClick={async () => {
@@ -847,7 +848,7 @@ function FinanceTab({ entries, totals, post, reload, trend }: {
           </select>
           <input className={input} placeholder="Amount" inputMode="decimal" value={f.amount} onChange={(e) => setF({ ...f, amount: e.target.value })} />
           <input className={input} placeholder="Category" value={f.category} onChange={(e) => setF({ ...f, category: e.target.value })} />
-          <input className={input} type="date" value={f.entryDate} onChange={(e) => setF({ ...f, entryDate: e.target.value })} />
+          <DateInput className={input} value={f.entryDate} onChange={(v) => setF({ ...f, entryDate: v })} />
           <button className={btn} disabled={!f.amount}
             onClick={async () => { if (await post("/api/portal/admin/finance", f)) setF({ ...f, amount: "", category: "", description: "" }); }}>
             Add entry

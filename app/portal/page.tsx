@@ -7,6 +7,7 @@ import { PortalBackdrop, PortalMark, Loading } from "@/components/portal/PortalS
 import LoginGate from "@/components/portal/LoginGate";
 import MyEarnings from "@/components/portal/MyEarnings";
 import JobMarket from "@/components/portal/JobMarket";
+import AccountSettings from "@/components/portal/AccountSettings";
 
 export default function PortalPage() {
   const [role, setRole] = useState<"worker" | "admin" | null>(null);
@@ -15,6 +16,7 @@ export default function PortalPage() {
   const [tab, setTab] = useState<"jobs" | "earnings">("jobs");
   const [refreshKey, setRefreshKey] = useState(0);
   const [impersonating, setImpersonating] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   // Set by the admin "View as" action so we can offer a way back.
   useEffect(() => {
@@ -84,6 +86,13 @@ export default function PortalPage() {
                   Admin dashboard →
                 </Link>
               )}
+              <button onClick={() => setSettingsOpen((v) => !v)}
+                className={`rounded-full border px-4 py-2 text-[13px] font-semibold transition ${
+                  settingsOpen
+                    ? "border-orchid/50 bg-orchid/15 text-white"
+                    : "border-white/12 bg-white/[0.05] text-white/70 hover:bg-white/[0.09] hover:text-white"}`}>
+                Settings
+              </button>
               <button onClick={signOut} className="text-sm font-semibold text-white/40 transition hover:text-white/80">Sign out</button>
             </div>
           </div>
@@ -96,6 +105,12 @@ export default function PortalPage() {
               Your <span className="bg-gradient-to-r from-[#8b93ff] to-orchid bg-clip-text text-transparent">work</span>
             </h1>
           </motion.div>
+
+          {settingsOpen && (
+            <div className="mb-7">
+              <AccountSettings fullName={fullName || ""} />
+            </div>
+          )}
 
           {/* Narrow screens tab between the two; wide ones show both at once. */}
           <div className="mb-7 grid grid-cols-2 gap-1 rounded-2xl border border-white/10 bg-white/[0.04] p-1 xl:hidden">

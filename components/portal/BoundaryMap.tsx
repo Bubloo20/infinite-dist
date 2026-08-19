@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import "leaflet/dist/leaflet.css";
 
 export type LatLng = [number, number];
@@ -13,7 +14,15 @@ export type Shape = LatLng[];
  * `roads` is a set of separate runs, so a job can be "these four streets" with
  * a few points dropped along each one rather than a blanket area.
  */
-export type AreaSpec = { mode: "area" | "roads"; shapes: Shape[] };
+export type AreaSpec = { mode: "area" | "roads"; shapes: Shape[]; arrows?: Arrow[] };
+
+/**
+ * "Start here, head that way."
+ *
+ * Drawn on top of whatever the area or the runs say, because where someone
+ * begins is a separate question from where they're allowed to walk.
+ */
+export type Arrow = { from: LatLng; to: LatLng };
 
 export const EMPTY_SPEC: AreaSpec = { mode: "area", shapes: [] };
 
@@ -31,7 +40,11 @@ export function parseSpec(raw: string | null | undefined): AreaSpec {
       return { mode: "area", shapes: v as Shape[] };
     }
     if (v && typeof v === "object" && Array.isArray(v.shapes)) {
-      return { mode: v.mode === "roads" ? "roads" : "area", shapes: v.shapes as Shape[] };
+      return {
+        mode: v.mode === "roads" ? "roads" : "area",
+        shapes: v.shapes as Shape[],
+        arrows: Array.isArray(v.arrows) ? (v.arrows as Arrow[]) : undefined,
+      };
     }
   } catch {
     /* stored value isn't usable */
@@ -40,7 +53,8 @@ export function parseSpec(raw: string | null | undefined): AreaSpec {
 }
 
 export const specHasDrawing = (s: AreaSpec) =>
-  s.mode === "area" ? (s.shapes[0]?.length ?? 0) >= 3 : s.shapes.some((r) => r.length >= 2);
+  (s.arrows?.length ?? 0) > 0 ||
+  (s.mode === "area" ? (s.shapes[0]?.length ?? 0) >= 3 : s.shapes.some((r) => r.length >= 2));
 
 export const countPoints = (s: AreaSpec) => s.shapes.reduce((t, r) => t + r.length, 0);
 
@@ -114,6 +128,8 @@ type Hit = {
   label: string; short: string; context: string; kind: string;
   lat: number; lng: number;
   box: [[number, number], [number, number]] | null;
+  /** The real outline, when the place has one: a suburb's border or a street's line. */
+  shape?: { kind: "line" | "ring"; parts: LatLng[][] } | null;
 };
 
 /**
@@ -135,6 +151,7 @@ export default function BoundaryMap({
   height = 380,
   locate = false,
   fullHref,
+  expandable = false,
   onChange,
 }: {
   spec: AreaSpec;
@@ -145,14 +162,22 @@ export default function BoundaryMap({
   locate?: boolean;
   /** Where the "Full screen" link goes. Omitted, no link is shown. */
   fullHref?: string;
+  /** Offer a full-window version for drawing in. */
+  expandable?: boolean;
   onChange?: (spec: AreaSpec, center: [number, number, number]) => void;
 }) {
   const holder = useRef<HTMLDivElement>(null);
   const mapRef = useRef<import("leaflet").Map | null>(null);
   const LRef = useRef<typeof import("leaflet") | null>(null);
   const groupRef = useRef<import("leaflet").LayerGroup | null>(null);
+  // The search result sits in its own layer so clearing it never touches the
+  // boundary being drawn.
+  const foundRef = useRef<import("leaflet").LayerGroup | null>(null);
+  const glowTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const specRef = useRef<AreaSpec>(specProp);
   const newRunRef = useRef(false);
+  // Half-placed arrow: the tail is down, waiting for the click that aims it.
+  const arrowTail = useRef<LatLng | null>(null);
   const onChangeRef = useRef(onChange);
   const emitRef = useRef<((next: AreaSpec) => void) | null>(null);
 
@@ -160,12 +185,44 @@ export default function BoundaryMap({
   const [me, setMe] = useState<{ lat: number; lng: number; accuracy: number } | null>(null);
   const [geoErr, setGeoErr] = useState("");
 
+  const [placingArrow, setPlacingArrow] = useState(false);
+  const [arrowHint, setArrowHint] = useState("");
+  const [expanded, setExpanded] = useState(false);
+  const [vh, setVh] = useState(800);
   const [q, setQ] = useState("");
   const [hits, setHits] = useState<Hit[]>([]);
   const [searching, setSearching] = useState(false);
   const [searchMsg, setSearchMsg] = useState("");
 
+  const placingRef = useRef(false);
+  useEffect(() => { placingRef.current = placingArrow; }, [placingArrow]);
+
   useEffect(() => { onChangeRef.current = onChange; }, [onChange]);
+
+  // The full-window map is sized in pixels, so it has to follow the window.
+  useEffect(() => {
+    if (!expanded) return;
+    const fit = () => setVh(window.innerHeight);
+    fit();
+    window.addEventListener("resize", fit);
+    window.addEventListener("orientationchange", fit);
+    // Nothing behind it should scroll while it's covering the screen.
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("resize", fit);
+      window.removeEventListener("orientationchange", fit);
+      document.body.style.overflow = prev;
+    };
+  }, [expanded]);
+
+  // Escape closes it, the same as the button.
+  useEffect(() => {
+    if (!expanded) return;
+    const key = (e: KeyboardEvent) => { if (e.key === "Escape") setExpanded(false); };
+    window.addEventListener("keydown", key);
+    return () => window.removeEventListener("keydown", key);
+  }, [expanded]);
   useEffect(() => { specRef.current = specProp; setSpec(specProp); }, [specProp]);
 
   /** Move one point of one shape — used when a node is dragged. */
@@ -220,6 +277,70 @@ export default function BoundaryMap({
     };
 
     const s = specRef.current;
+
+    // Start arrows, over the top of whatever else is drawn.
+    (s.arrows || []).forEach((a, ai) => {
+      const GREEN = "#22c55e";
+      L.polyline([a.from, a.to], { color: "#0b2f18", weight: 9, opacity: 0.55, lineCap: "round", interactive: false }).addTo(group);
+      L.polyline([a.from, a.to], { color: GREEN, weight: 4, opacity: 1, lineCap: "round", interactive: false }).addTo(group);
+
+      // The head: a triangle sitting on the end, turned to face the way it points.
+      const bearing = (Math.atan2(a.to[1] - a.from[1], a.to[0] - a.from[0]) * 180) / Math.PI;
+      L.marker(a.to, {
+        interactive: false,
+        icon: L.divIcon({
+          className: "",
+          iconSize: [20, 20],
+          iconAnchor: [10, 10],
+          html:
+            `<span style="display:block;width:0;height:0;margin:1px 0 0 2px;` +
+            `border-left:8px solid transparent;border-right:8px solid transparent;` +
+            `border-bottom:15px solid ${GREEN};filter:drop-shadow(0 1px 2px rgba(0,0,0,.6));` +
+            `transform:rotate(${bearing}deg);transform-origin:50% 60%"></span>`,
+        }),
+      }).addTo(group);
+
+      // The tail is the bit that says "start", and the bit you grab.
+      const tail = L.marker(a.from, {
+        draggable: editable,
+        keyboard: false,
+        icon: L.divIcon({
+          className: "",
+          iconSize: [16, 16],
+          iconAnchor: [8, 8],
+          html: `<span style="display:block;width:16px;height:16px;border-radius:9999px;background:${GREEN};border:3px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.45)"></span>`,
+        }),
+      }).addTo(group);
+      tail.bindTooltip((s.arrows || []).length > 1 ? `Start ${ai + 1}` : "Start here",
+        { permanent: true, direction: "top", offset: [0, -10], className: "coverage-label" });
+
+      if (!editable) return;
+      tail.on("dragend", (ev: { target: { getLatLng: () => { lat: number; lng: number } } }) => {
+        const ll = ev.target.getLatLng();
+        const cur = specRef.current;
+        const arrows = (cur.arrows || []).map((x, i) => (i === ai ? { ...x, from: [ll.lat, ll.lng] as LatLng } : x));
+        emitRef.current?.({ ...cur, arrows });
+      });
+      tail.on("click", (ev: { originalEvent?: Event }) => {
+        ev.originalEvent?.stopPropagation();
+        if (!window.confirm("Remove this start arrow?")) return;
+        const cur = specRef.current;
+        emitRef.current?.({ ...cur, arrows: (cur.arrows || []).filter((_, i) => i !== ai) });
+      });
+
+      // Dragging the head re-aims it.
+      const head = L.marker(a.to, {
+        draggable: true, keyboard: false,
+        icon: L.divIcon({ className: "", iconSize: [26, 26], iconAnchor: [13, 13], html: "<span style=\"display:block;width:26px;height:26px\"></span>" }),
+      }).addTo(group);
+      head.on("dragend", (ev: { target: { getLatLng: () => { lat: number; lng: number } } }) => {
+        const ll = ev.target.getLatLng();
+        const cur = specRef.current;
+        const arrows = (cur.arrows || []).map((x, i) => (i === ai ? { ...x, to: [ll.lat, ll.lng] as LatLng } : x));
+        emitRef.current?.({ ...cur, arrows });
+      });
+    });
+
     if (s.mode === "area") {
       const pts = s.shapes[0] || [];
       if (pts.length >= 3) {
@@ -284,6 +405,7 @@ export default function BoundaryMap({
       }).addTo(map);
 
       groupRef.current = L.layerGroup().addTo(map);
+      foundRef.current = L.layerGroup().addTo(map);
       redraw();
 
       // Frame whatever exists, else the saved view, else Northcote.
@@ -297,8 +419,25 @@ export default function BoundaryMap({
         map.on("click", (e: { latlng: { lat: number; lng: number } }) => {
           const pt: LatLng = [e.latlng.lat, e.latlng.lng];
           const cur = specRef.current;
+
+          // Placing a start arrow: first click is where they begin, second is
+          // the direction to head off in.
+          if (placingRef.current) {
+            if (!arrowTail.current) {
+              arrowTail.current = pt;
+              setArrowHint("Now click the way they should head.");
+              return;
+            }
+            const from = arrowTail.current;
+            arrowTail.current = null;
+            setPlacingArrow(false);
+            setArrowHint("");
+            emit({ ...cur, arrows: [...(cur.arrows || []), { from, to: pt }] });
+            return;
+          }
+
           if (cur.mode === "area") {
-            emit({ mode: "area", shapes: [[...(cur.shapes[0] || []), pt]] });
+            emit({ ...cur, mode: "area", shapes: [[...(cur.shapes[0] || []), pt]] });
             return;
           }
           const shapes = cur.shapes.map((r) => [...r]);
@@ -308,7 +447,7 @@ export default function BoundaryMap({
           } else {
             shapes[shapes.length - 1].push(pt);
           }
-          emit({ mode: "roads", shapes });
+          emit({ ...cur, mode: "roads", shapes });
         });
       }
 
@@ -368,12 +507,67 @@ export default function BoundaryMap({
   useEffect(() => { redraw(); }, [spec, redraw]);
 
 
+  /**
+   * Move to a search result and show what was found.
+   *
+   * A house gets a pin dropped on it. A suburb is outlined in a dashed border
+   * so you can see where it actually ends. A street lights up along its length
+   * for a moment and then fades, which is enough to pick it out of the grid
+   * without leaving clutter behind.
+   */
   const go = (h: Hit) => {
     const L = LRef.current;
     const map = mapRef.current;
     if (!L || !map) return;
-    if (h.box) map.fitBounds(L.latLngBounds(h.box), { animate: false, maxZoom: 17 });
-    else map.setView([h.lat, h.lng], 17);
+
+    if (glowTimer.current) { clearTimeout(glowTimer.current); glowTimer.current = null; }
+    foundRef.current?.clearLayers();
+    const layer = foundRef.current;
+
+    const ring = h.shape?.kind === "ring" ? h.shape.parts : null;
+    const line = h.shape?.kind === "line" ? h.shape.parts : null;
+
+    if (layer && line?.length) {
+      // Wide soft stroke under a bright one — that reads as a glow.
+      line.forEach((part) => {
+        L.polyline(part, { color: "#b66dc7", weight: 16, opacity: 0.35, lineCap: "round", interactive: false }).addTo(layer);
+        L.polyline(part, { color: "#ffffff", weight: 3, opacity: 0.95, lineCap: "round", interactive: false }).addTo(layer);
+      });
+      glowTimer.current = setTimeout(() => foundRef.current?.clearLayers(), 1600);
+    } else if (layer && ring?.length) {
+      ring.forEach((part) => {
+        L.polygon(part, {
+          color: "#b66dc7", weight: 2.5, opacity: 0.95, dashArray: "7 7",
+          fillColor: "#b66dc7", fillOpacity: 0.06, interactive: false,
+        }).addTo(layer);
+      });
+    } else if (layer && (h.kind === "address" || h.kind === "building" || h.kind === "house")) {
+      L.marker([h.lat, h.lng], {
+        interactive: false,
+        icon: L.divIcon({
+          className: "",
+          html:
+            '<span style="display:block;width:22px;height:22px;border-radius:9999px 9999px 9999px 0;' +
+            'transform:rotate(-45deg);background:#b66dc7;border:3px solid #fff;' +
+            'box-shadow:0 3px 8px rgba(0,0,0,0.5);animation:idp-pin-drop .45s cubic-bezier(.22,1,.36,1)"></span>',
+          iconSize: [22, 30],
+          iconAnchor: [11, 30],
+        }),
+      }).addTo(layer);
+    } else if (layer && h.box) {
+      // No outline came back — dash the extent so there's still something to see.
+      const [[s0, w0], [n0, e0]] = h.box;
+      L.polygon([[s0, w0], [n0, w0], [n0, e0], [s0, e0]], {
+        color: "#b66dc7", weight: 2, opacity: 0.8, dashArray: "7 7",
+        fillColor: "#b66dc7", fillOpacity: 0.05, interactive: false,
+      }).addTo(layer);
+    }
+
+    // Frame the thing itself when we know its shape, otherwise its extent.
+    const pts = (ring || line || []).flat();
+    if (pts.length >= 2) map.fitBounds(L.latLngBounds(pts).pad(0.15), { animate: false, maxZoom: 18 });
+    else if (h.box) map.fitBounds(L.latLngBounds(h.box), { animate: false, maxZoom: 17 });
+    else map.setView([h.lat, h.lng], 18);
   };
 
   const search = async () => {
@@ -394,6 +588,14 @@ export default function BoundaryMap({
     }
   };
 
+  /** Where the small map is looking right now, so the big one opens there. */
+  const liveCenter = (): [number, number, number] | null => {
+    const map = mapRef.current;
+    if (!map) return center ?? null;
+    const c = map.getCenter();
+    return [c.lat, c.lng, map.getZoom()];
+  };
+
   const recentre = () => {
     if (me) mapRef.current?.setView([me.lat, me.lng], 17);
   };
@@ -405,7 +607,7 @@ export default function BoundaryMap({
     const shapes = mode === "area"
       ? [spec.shapes.slice().sort((a, b) => b.length - a.length)[0] || []].filter((r) => r.length > 0)
       : spec.shapes.filter((r) => r.length > 0);
-    emit({ mode, shapes });
+    emit({ ...spec, mode, shapes });
   };
 
   const undo = () => {
@@ -414,7 +616,7 @@ export default function BoundaryMap({
     for (let i = shapes.length - 1; i >= 0; i--) {
       if (shapes[i].length) { shapes[i].pop(); break; }
     }
-    emit({ mode: cur.mode, shapes: shapes.filter((r) => r.length > 0) });
+    emit({ ...cur, shapes: shapes.filter((r) => r.length > 0) });
   };
 
   const points = countPoints(spec);
@@ -463,6 +665,21 @@ export default function BoundaryMap({
               </button>
             ))}
           </div>
+
+          {/* Where to begin is its own thing — it sits over an area or runs alike. */}
+          <button type="button"
+            onClick={() => {
+              arrowTail.current = null;
+              const on = !placingArrow;
+              setPlacingArrow(on);
+              setArrowHint(on ? "Click where they should start." : "");
+            }}
+            className={`shrink-0 rounded-xl border px-3.5 py-2.5 text-[13px] font-bold transition ${
+              placingArrow
+                ? "border-emerald-400/60 bg-emerald-500/20 text-emerald-200"
+                : "border-white/12 bg-white/[0.06] text-white/75 hover:bg-white/[0.1] hover:text-white"}`}>
+            {placingArrow ? "Placing start…" : "Start arrow"}
+          </button>
         </div>
       )}
 
@@ -479,6 +696,7 @@ export default function BoundaryMap({
         </div>
       )}
       {editable && searchMsg && <p className="mb-2 text-[12px] text-amber-300/80">{searchMsg}</p>}
+      {editable && arrowHint && <p className="mb-2 text-[12px] font-semibold text-emerald-300">{arrowHint}</p>}
 
       {/*
         The size lives on the wrapper, never on the map element itself: Leaflet
@@ -497,6 +715,16 @@ export default function BoundaryMap({
           Leaflet from it, and a card above uses backdrop-blur, which traps
           "fixed" inside itself. A fresh page sidesteps both.
         */}
+        {expandable && !expanded && (
+          <button type="button" onClick={() => setExpanded(true)}
+            className="absolute right-3 top-3 z-[500] flex items-center gap-1.5 rounded-xl border border-white/20 bg-[#141024]/95 px-3.5 py-2 text-[12px] font-bold text-white shadow-[0_8px_24px_-6px_rgba(0,0,0,0.9)] backdrop-blur transition hover:bg-[#1e1836]">
+            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
+            </svg>
+            Bigger map
+          </button>
+        )}
+
         {fullHref && (
           <a href={fullHref}
             className="absolute right-3 top-3 z-[500] flex items-center gap-1.5 rounded-xl border border-white/20 bg-[#141024]/95 px-3.5 py-2 text-[12px] font-bold text-white shadow-[0_8px_24px_-6px_rgba(0,0,0,0.9)] backdrop-blur transition hover:bg-[#1e1836]">
@@ -514,6 +742,42 @@ export default function BoundaryMap({
           className="mt-2 flex items-center justify-center gap-2 rounded-xl border border-white/12 bg-white/[0.05] px-4 py-2.5 text-[13px] font-bold text-white/75 transition hover:bg-white/[0.1] hover:text-white">
           Open full screen map
         </a>
+      )}
+
+      {/*
+        The big version is a SECOND map, rendered through a portal onto <body>.
+        The map element itself is never moved — moving it detaches Leaflet —
+        and going out to <body> escapes the card's backdrop-blur, which would
+        otherwise trap "fixed" inside the card. Both maps edit the same spec,
+        so whatever is drawn in here is already saved when it closes.
+      */}
+      {expanded && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 z-[3000] flex flex-col bg-[#0b0713]">
+          <div className="flex shrink-0 items-center justify-between gap-3 px-4 py-3">
+            <div>
+              <p className="font-display text-[15px] font-bold text-white">
+                {spec.mode === "roads" ? "Drawing road runs" : "Drawing the delivery area"}
+              </p>
+              <p className="text-[12px] text-white/45">
+                {points} point{points === 1 ? "" : "s"} — everything you draw here is kept
+              </p>
+            </div>
+            <button type="button" onClick={() => setExpanded(false)}
+              className="rounded-xl bg-gradient-to-r from-electric to-orchid px-5 py-2.5 font-display text-[13px] font-bold text-white">
+              Done
+            </button>
+          </div>
+          <div className="min-h-0 flex-1 px-3 pb-3">
+            <BoundaryMap
+              spec={spec}
+              center={liveCenter()}
+              editable={editable}
+              height={Math.max(320, vh - 72)}
+              onChange={(sp, c) => { setSpec(sp); specRef.current = sp; onChangeRef.current?.(sp, c); }}
+            />
+          </div>
+        </div>,
+        document.body,
       )}
 
       {locate && (
@@ -588,7 +852,7 @@ export default function BoundaryMap({
             className="ml-auto rounded-lg border border-white/12 bg-white/[0.05] px-3 py-1.5 text-[12px] font-semibold text-white/70 transition hover:bg-white/[0.1] disabled:opacity-40">
             Undo point
           </button>
-          <button type="button" onClick={() => { newRunRef.current = false; emit({ mode: spec.mode, shapes: [] }); }}
+          <button type="button" onClick={() => { newRunRef.current = false; emit({ ...spec, shapes: [], arrows: [] }); }}
             disabled={!points}
             className="rounded-lg border border-white/12 bg-white/[0.05] px-3 py-1.5 text-[12px] font-semibold text-white/70 transition hover:bg-white/[0.1] disabled:opacity-40">
             Clear

@@ -32,6 +32,9 @@ export async function GET(req: Request) {
     url.searchParams.set("bounded", "0");
     // Structured address parts — the only way to tell four Porter Roads apart.
     url.searchParams.set("addressdetails", "1");
+    // The real outline: a suburb's border, or the line a street actually runs
+    // along, so a result can be shown on the map rather than just centred on.
+    url.searchParams.set("polygon_geojson", "1");
 
     const res = await fetch(url, {
       headers: { "User-Agent": UA, "Accept-Language": "en-AU" },
@@ -39,11 +42,31 @@ export async function GET(req: Request) {
     });
     if (!res.ok) return NextResponse.json({ ok: false, error: "Search is unavailable right now." }, { status: 502 });
 
+    type Geo =
+      | { type: "Point"; coordinates: [number, number] }
+      | { type: "LineString"; coordinates: [number, number][] }
+      | { type: "MultiLineString"; coordinates: [number, number][][] }
+      | { type: "Polygon"; coordinates: [number, number][][] }
+      | { type: "MultiPolygon"; coordinates: [number, number][][][] };
+
     const rows = (await res.json()) as Array<{
       lat: string; lon: string; display_name?: string; name?: string;
       addresstype?: string; boundingbox?: [string, string, string, string];
-      address?: Record<string, string>;
+      address?: Record<string, string>; geojson?: Geo; category?: string; type?: string;
     }>;
+
+    /** GeoJSON is [lng, lat]; Leaflet wants [lat, lng]. */
+    const flip = (c: [number, number]): [number, number] => [c[1], c[0]];
+
+    /** Reduce any geometry to the lines or rings we can draw. */
+    const outline = (g?: Geo): { kind: "line" | "ring"; parts: [number, number][][] } | null => {
+      if (!g) return null;
+      if (g.type === "LineString") return { kind: "line", parts: [g.coordinates.map(flip)] };
+      if (g.type === "MultiLineString") return { kind: "line", parts: g.coordinates.map((l) => l.map(flip)) };
+      if (g.type === "Polygon") return { kind: "ring", parts: g.coordinates.map((r) => r.map(flip)) };
+      if (g.type === "MultiPolygon") return { kind: "ring", parts: g.coordinates.flat().map((r) => r.map(flip)) };
+      return null;
+    };
 
     const results = rows
       .map((r) => {
@@ -65,7 +88,12 @@ export async function GET(req: Request) {
           label: r.display_name || short || q,
           short,
           context,
-          kind: a.house_number ? "address" : r.addresstype || "",
+          // What it is decides how the map shows it: a pin on the house, a
+          // dotted border round a suburb, a glow along a street.
+          kind: a.house_number ? "address"
+              : r.category === "highway" ? "street"
+              : r.addresstype || "",
+          shape: outline(r.geojson),
           lat,
           lng,
           // [south, north, west, east] -> a box the map can fit to.

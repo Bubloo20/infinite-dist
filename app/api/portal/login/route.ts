@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { checkAdminPassword, verifyPassword, createToken, sessionCookie } from "@/lib/portal/auth";
+import { checkAdminPassword, verifyPassword, isDefaultPassword, createToken, sessionCookie } from "@/lib/portal/auth";
 import { findUserByName, dbConfigured } from "@/lib/portal/db";
 
 export const dynamic = "force-dynamic";
@@ -58,11 +58,21 @@ export async function POST(req: Request) {
 
   try {
     const user = await findUserByName(fullName);
-    if (!user || !verifyPassword(password, user.password_hash)) {
+    // Until someone picks their own password, the one they were given — their
+    // first name — gets them in.
+    const ok = user && (
+      verifyPassword(password, user.password_hash) ||
+      (!user.password_set && isDefaultPassword(user.full_name, password))
+    );
+    if (!user || !ok) {
       return NextResponse.json({ ok: false, error: "Name or password is incorrect." }, { status: 401 });
     }
     attempts.delete(ip);
-    const res = NextResponse.json({ ok: true, role: "worker", fullName: user.full_name, userId: user.id });
+    const res = NextResponse.json({
+      ok: true, role: "worker", fullName: user.full_name, userId: user.id,
+      // The dashboard nudges them to pick their own.
+      usingDefaultPassword: !user.password_set,
+    });
     res.cookies.set(sessionCookie(createToken("worker", user.id, remember), remember));
     return res;
   } catch (e) {

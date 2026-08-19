@@ -1,10 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { GlassCard, ActionButton } from "./PortalShell";
 import BoundaryMap, { type AreaSpec, EMPTY_SPEC, parseSpec, specHasDrawing, countPoints } from "./BoundaryMap";
 import ImageDrop from "./ImageDrop";
 import type { Agency, ClientJob, PortalUser, JobInterest, JobAssignment } from "@/lib/portal/db";
+import DateInput from "./DateInput";
 
 const input =
   "w-full rounded-xl border border-white/12 bg-white/[0.05] px-4 py-2.5 text-sm text-white placeholder-white/25 outline-none transition focus:border-orchid/60 focus:bg-white/[0.08] [color-scheme:dark]";
@@ -118,7 +119,8 @@ export default function PublishToWorkers({
               </label>
               <label className="block">
                 <span className="mb-1 block text-[12px] font-semibold text-white/40">Minimum hours</span>
-                <input className={input} placeholder="e.g. 6" value={f.minHours} onChange={(e) => setF({ ...f, minHours: e.target.value })} />
+                <input className={input} placeholder="e.g. 6" value={f.minHours}
+                  onChange={(e) => setF({ ...f, minHours: e.target.value })} />
               </label>
 
               <div className="sm:col-span-3 flex flex-wrap items-center gap-2">
@@ -147,7 +149,7 @@ export default function PublishToWorkers({
                   <p className="mb-2 text-[13px] text-white/45">
                     Click to trace the boundary. The worker gets this as a map they can zoom to street level.
                   </p>
-                  <BoundaryMap spec={spec} editable height={420} onChange={(sp, c) => { setSpec(sp); setCenter(c); }} />
+                  <BoundaryMap spec={spec} editable expandable height={420} onChange={(sp, c) => { setSpec(sp); setCenter(c); }} />
                 </div>
               )}
 
@@ -245,6 +247,19 @@ export default function PublishToWorkers({
  * its own pay, leaflet share and dates, so three people can run the same job on
  * different schedules.
  */
+/**
+ * What a run is worth, and roughly how long it takes.
+ *
+ * Under 500 leaflets pays 7c each; from 500 up it's 6.5c. A thousand leaflets
+ * is about three and a half hours on foot, so the minimum scales from that.
+ * Both are only ever suggestions — typing your own figure keeps it.
+ */
+const payFor = (leaflets: number) =>
+  leaflets <= 0 ? "" : (leaflets * (leaflets < 500 ? 0.07 : 0.065)).toFixed(2);
+
+const minHoursFor = (leaflets: number) =>
+  leaflets <= 0 ? "" : String(Math.round(leaflets * 3.5 / 1000 * 4) / 4);
+
 export function SubContracts({ job, users, rows, post, del }: {
   job: ClientJob; users: PortalUser[]; rows: JobAssignment[];
   post: (body: Record<string, unknown>) => Promise<boolean>;
@@ -256,6 +271,9 @@ export function SubContracts({ job, users, rows, post, del }: {
     boundary: "", mapCenter: "",
   };
   const [f, setF] = useState(blank);
+  // Once either of these is typed in by hand it stops following the leaflet count.
+  const ownPay = useRef(false);
+  const ownHours = useRef(false);
   const [tracing, setTracing] = useState(false);
   const [editing, setEditing] = useState<number | null>(null);
   const [editSpec, setEditSpec] = useState<AreaSpec>(EMPTY_SPEC);
@@ -335,7 +353,7 @@ export function SubContracts({ job, users, rows, post, del }: {
                       <p className="mb-2 text-[12px] text-white/40">
                         Click to drop boundary points. {nameOf(r.user_id)} gets this as a live map with their own position on it.
                       </p>
-                      <BoundaryMap spec={editSpec} center={parseCenter(r.map_center)} editable height={360}
+                      <BoundaryMap spec={editSpec} center={parseCenter(r.map_center)} editable expandable height={360}
                         onChange={(sp, c) => { setEditSpec(sp); setEditCenter(c); }} />
                     </div>
                   </div>
@@ -398,22 +416,33 @@ export function SubContracts({ job, users, rows, post, del }: {
             </option>
           ))}
         </select>
-        <input className={input} placeholder="Pay $" inputMode="decimal" value={f.pay} onChange={(e) => setF({ ...f, pay: e.target.value })} />
+        <input className={input} placeholder="Pay $" inputMode="decimal" value={f.pay}
+          onChange={(e) => { ownPay.current = true; setF({ ...f, pay: e.target.value }); }} />
         <input className={input} placeholder={left > 0 ? `Leaflets (${left.toLocaleString()} left)` : "Leaflets"} inputMode="numeric"
-          value={f.leafletShare} onChange={(e) => setF({ ...f, leafletShare: e.target.value })} />
+          value={f.leafletShare}
+          onChange={(e) => {
+            const v = e.target.value;
+            const n = Number(v) || 0;
+            setF((p) => ({
+              ...p, leafletShare: v,
+              pay: ownPay.current ? p.pay : payFor(n),
+              minHours: ownHours.current ? p.minHours : minHoursFor(n),
+            }));
+          }} />
         <input className={input} placeholder="Their area" value={f.areaNote} onChange={(e) => setF({ ...f, areaNote: e.target.value })} />
         <label className="block">
           <span className="mb-1 block text-[11px] font-semibold text-white/35">Start</span>
-          <input className={input} type="date" value={f.startDate} onChange={(e) => setF({ ...f, startDate: e.target.value })} />
+          <DateInput className={input} value={f.startDate} onChange={(v) => setF({ ...f, startDate: v })} />
         </label>
         <label className="block">
           <span className="mb-1 block text-[11px] font-semibold text-white/35">Due</span>
-          <input className={input} type="date" value={f.dueDate} onChange={(e) => setF({ ...f, dueDate: e.target.value })} />
+          <DateInput className={input} value={f.dueDate} onChange={(v) => setF({ ...f, dueDate: v })} />
         </label>
 
         <label className="block">
           <span className="mb-1 block text-[11px] font-semibold text-white/35">Min hours</span>
-          <input className={input} placeholder="e.g. 6" value={f.minHours} onChange={(e) => setF({ ...f, minHours: e.target.value })} />
+          <input className={input} placeholder="e.g. 6" value={f.minHours}
+            onChange={(e) => { ownHours.current = true; setF({ ...f, minHours: e.target.value }); }} />
         </label>
         <label className="block">
           <span className="mb-1 block text-[11px] font-semibold text-white/35">Allocated time</span>
@@ -447,7 +476,7 @@ export function SubContracts({ job, users, rows, post, del }: {
               <p className="mb-2 text-[12px] text-white/40">
                 Click to drop boundary points. The worker gets this as a live map they can zoom, with their own position on it.
               </p>
-              <BoundaryMap spec={traceSpec} editable height={380}
+              <BoundaryMap spec={traceSpec} editable expandable height={380}
                 onChange={(sp, c) => setF((prev) => ({ ...prev, boundary: JSON.stringify(sp), mapCenter: JSON.stringify(c) }))} />
             </div>
           </div>

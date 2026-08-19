@@ -57,10 +57,8 @@ export default function LoginGate({
   mode: "worker" | "admin";
   onSuccess: (role: "worker" | "admin") => void;
 }) {
-  const [tab, setTab] = useState<"signin" | "signup">("signin");
   const [fullName, setFullName] = useState("");
   const [password, setPassword] = useState("");
-  const [teamPassword, setTeamPassword] = useState("");
   const [remember, setRemember] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -107,14 +105,11 @@ export default function LoginGate({
     setBusy(true);
     setError("");
     try {
-      const signingUp = !isAdmin && tab === "signup";
-      const res = await fetch(signingUp ? "/api/portal/register" : "/api/portal/login", {
+      const res = await fetch("/api/portal/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(
-          isAdmin ? { password, role: "admin", remember }
-            : signingUp ? { fullName, password, teamPassword, remember }
-            : { fullName, password, remember },
+          isAdmin ? { password, role: "admin", remember } : { fullName, password, remember },
         ),
       });
       const data = await res.json();
@@ -154,25 +149,13 @@ export default function LoginGate({
         <div className="relative overflow-hidden rounded-[28px]">
           <div aria-hidden className="animate-sheen pointer-events-none absolute inset-y-0 -left-1/3 z-10 w-1/3 bg-gradient-to-r from-transparent via-white/[0.07] to-transparent" />
         <GlassCard className="p-8 sm:p-10" delay={0.08}>
-          {!isAdmin && (
-            <div className="mb-7 grid grid-cols-2 gap-1 rounded-2xl border border-white/10 bg-white/[0.04] p-1">
-              {(["signin", "signup"] as const).map((t) => (
-                <button key={t} type="button" onClick={() => { setTab(t); setError(""); setFullName(""); }}
-                  className={`rounded-xl py-2.5 text-sm font-bold transition ${
-                    tab === t ? "bg-gradient-to-r from-electric to-orchid text-white shadow-[0_10px_26px_-12px_rgba(182,109,199,0.9)]" : "text-white/50 hover:text-white/80"}`}>
-                  {t === "signin" ? "Sign in" : "Create account"}
-                </button>
-              ))}
-            </div>
-          )}
-
           <h1 className="text-center font-display text-2xl font-extrabold tracking-tight text-white sm:text-3xl">
-            {isAdmin ? "Admin access" : tab === "signin" ? "Welcome back" : "Join the team portal"}
+            {isAdmin ? "Admin access" : "Welcome back"}
           </h1>
           <p className="mt-3 text-center text-[15px] leading-relaxed text-white/55">
-            {isAdmin ? "Enter the admin password to manage work logs and payments."
-              : tab === "signin" ? "Sign in with your name and password to log a run."
-              : "Create your account with the team password."}
+            {isAdmin
+              ? "Enter the admin password to manage work logs and payments."
+              : "Your account is already set up. Your first password is your first name with a capital letter — change it in Settings once you're in."}
           </p>
 
           <form onSubmit={submit} className="mt-7 space-y-4">
@@ -187,7 +170,7 @@ export default function LoginGate({
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
                     onFocus={() => suggestions.length && setShowList(true)}
-                    placeholder={tab === "signup" ? "Start typing to find your name…" : "Start typing your name…"}
+                    placeholder="Start typing your name…"
                     autoComplete="off"
                     required
                   />
@@ -217,22 +200,16 @@ export default function LoginGate({
                   </AnimatePresence>
                 </div>
                 <p className="mt-2 text-[13px] text-white/35">
-                  {tab === "signin"
-                    ? "Start typing and pick your name, then enter your password."
-                    : "Start typing your name and pick it from the list, then choose a password. Not there? Ask to be added."}
+                  Start typing and pick your name, then enter your password. Not there? Ask the office to add you.
                 </p>
               </div>
             )}
 
-            {!isAdmin && tab === "signup" && (
-              <PasswordField label="Team password" value={teamPassword} onChange={setTeamPassword} autoComplete="off" placeholder="Ask the office" />
-            )}
-
             <PasswordField
-              label={isAdmin ? "Admin password" : tab === "signup" ? "Choose a password" : "Your password"}
+              label={isAdmin ? "Admin password" : "Your password"}
               value={password}
               onChange={setPassword}
-              autoComplete={tab === "signup" && !isAdmin ? "new-password" : "current-password"}
+              autoComplete="current-password"
             />
 
             {error && (
@@ -249,7 +226,7 @@ export default function LoginGate({
 
             <button type="submit" disabled={busy}
               className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-electric to-orchid px-6 py-4 font-display text-[15px] font-bold text-white shadow-[0_16px_40px_-14px_rgba(182,109,199,0.85)] transition hover:-translate-y-0.5 disabled:opacity-45 disabled:hover:translate-y-0">
-              {busy ? "Please wait…" : isAdmin ? "Sign in" : tab === "signin" ? "Sign in" : "Create account"}
+              {busy ? "Please wait…" : "Sign in"}
             </button>
           </form>
 

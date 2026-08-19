@@ -44,6 +44,24 @@ export function checkTeamPassword(password: string): boolean {
   return safeEqual(sha256(password), expected);
 }
 
+/**
+ * The password everyone starts on: their first name, capitalised.
+ *
+ * Accounts are made for people rather than signed up for, so there has to be
+ * something to tell them. It only works until they pick their own in settings,
+ * and it's deliberately easy to say out loud — treat it as a way in, not as
+ * security. Compared without case so "dilan" gets them in as well as "Dilan".
+ */
+export function defaultPasswordFor(fullName: string): string {
+  const first = (fullName || "").trim().split(/\s+/)[0] || "";
+  return first ? first[0].toUpperCase() + first.slice(1).toLowerCase() : "";
+}
+
+export function isDefaultPassword(fullName: string, password: string): boolean {
+  const expected = defaultPasswordFor(fullName);
+  return Boolean(expected) && password.trim().toLowerCase() === expected.toLowerCase();
+}
+
 /* ------------------------- per-user password hashing ----------------------- */
 /** scrypt with a random per-user salt. No complexity rules — any password works. */
 export function hashPassword(password: string): string {

@@ -6,7 +6,7 @@ import {
   listClientJobs, upsertClientJob, deleteClientJob,
   assignJob, setJobPublished, setJobBrief, setJobProgress,
   listAgencyPayments, addAgencyPayment, deleteAgencyPayment, listInterest,
-  listAssignments, upsertAssignment, deleteAssignment, syncJobOutCount,
+  listAssignments, upsertAssignment, deleteAssignment, syncJobOutCount, setJobCountOverride,
   dbConfigured,
 } from "@/lib/portal/db";
 
@@ -83,9 +83,13 @@ export async function POST(req: Request) {
           pickedOn: (b.pickedOn as string) || null, completedOn: (b.completedOn as string) || null,
           notes: (b.notes as string) || null,
         });
-        if (b.jobNumber !== undefined || b.deliveredCount !== undefined || b.outCount !== undefined) {
-          await setJobProgress(id, (b.jobNumber as string) || null, n(b.deliveredCount), n(b.outCount));
-        }
+        if (b.jobNumber !== undefined) await setJobProgress(id, (b.jobNumber as string) || null);
+        // Blank clears the override and hands the number back to the workers'
+        // own progress; a figure typed in by hand pins it.
+        if (b.outOverride !== undefined) await setJobCountOverride(id, "out", n(b.outOverride));
+        if (b.deliveredOverride !== undefined) await setJobCountOverride(id, "delivered", n(b.deliveredOverride));
+        // Quantities and sub-contracts may have moved, so recount.
+        await syncJobOutCount(id);
         // Taking the suggested number moves the agency's run along.
         const usedSeq = n(b.agencyInvoiceSeq);
         const forAgency = n(b.agencyId);

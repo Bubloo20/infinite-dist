@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { isAdmin, hashPassword } from "@/lib/portal/auth";
+import { isAdmin, hashPassword, defaultPasswordFor } from "@/lib/portal/auth";
 import { updateUserPayDetails, updateUserNotes, createUser, findUserByName, deleteUser } from "@/lib/portal/db";
 
 export const dynamic = "force-dynamic";
@@ -27,8 +27,8 @@ export async function POST(req: Request) {
       if (await findUserByName(fullName)) {
         return NextResponse.json({ ok: false, error: "A worker with that name already exists." }, { status: 409 });
       }
-      // Defaults to the team password; the worker can be told to change it.
-      const id = await createUser(fullName, hashPassword(b.password?.trim() || "infinite"));
+      // They start on their first name and change it in their own settings.
+      const id = await createUser(fullName, hashPassword(b.password?.trim() || defaultPasswordFor(fullName)));
       if (b.notes || b.area) await updateUserNotes(id, b.notes || null, b.area || null);
       return NextResponse.json({ ok: true, id });
     }

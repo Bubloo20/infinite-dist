@@ -23,6 +23,7 @@ export type PortalUser = {
   bank_bsb: string | null;
   bank_account: string | null;
   payid: string | null;
+  password_set: boolean;
   area: string | null;
   notes: string | null;
   created_at: string;
@@ -126,6 +127,9 @@ async function migrateSchema(): Promise<void> {
   // Areas each worker covers (from the ledger's workforce list).
   await sql`ALTER TABLE portal_users ADD COLUMN IF NOT EXISTS area TEXT;`;
   await sql`ALTER TABLE portal_users ADD COLUMN IF NOT EXISTS notes TEXT;`;
+  // False until they choose their own password, which is what keeps the
+  // name-based starting password working for people who haven't yet.
+  await sql`ALTER TABLE portal_users ADD COLUMN IF NOT EXISTS password_set BOOLEAN NOT NULL DEFAULT FALSE;`;
 
   // Incremental upgrades — all safe to re-run.
   await sql`ALTER TABLE work_logs ALTER COLUMN strava_url DROP NOT NULL;`;
@@ -301,6 +305,9 @@ async function migrateSchema(): Promise<void> {
   await sql`ALTER TABLE client_jobs ADD COLUMN IF NOT EXISTS job_number TEXT;`;
   await sql`ALTER TABLE client_jobs ADD COLUMN IF NOT EXISTS delivered_count INTEGER;`;
   await sql`ALTER TABLE client_jobs ADD COLUMN IF NOT EXISTS out_count INTEGER;`;
+  // Typed in by hand to override what the worker statuses say. NULL = automatic.
+  await sql`ALTER TABLE client_jobs ADD COLUMN IF NOT EXISTS out_override INTEGER;`;
+  await sql`ALTER TABLE client_jobs ADD COLUMN IF NOT EXISTS delivered_override INTEGER;`;
   // Each agency runs its own invoice sequence, and some invoices go out with no
   // number at all.
   await sql`ALTER TABLE agencies ADD COLUMN IF NOT EXISTS invoice_seq INTEGER;`;
@@ -427,6 +434,8 @@ export type ClientJob = {
   job_number: string | null;
   delivered_count: number | null;
   out_count: number | null;
+  out_override: number | null;
+  delivered_override: number | null;
 };
 export type JobAssignment = {
   id: number; job_id: number; user_id: number;
@@ -632,9 +641,12 @@ export async function upsertAssignment(a: {
 /** Accept one sub-contract. Each is taken on its own. */
 export async function acceptAssignment(id: number, userId: number) {
   await ensureSchema();
-  await sql`
+  const r = await sql<{ job_id: number }>`
     UPDATE job_assignments SET status = 'accepted'
-     WHERE id = ${id} AND user_id = ${userId};`;
+     WHERE id = ${id} AND user_id = ${userId}
+    RETURNING job_id;`;
+  // Accepting is what puts those leaflets out for delivery.
+  if (r.rows[0]) await syncJobOutCount(r.rows[0].job_id);
 }
 
 export async function deleteAssignment(id: number) {
@@ -686,31 +698,49 @@ export async function setJobPublished(jobId: number, published: boolean) {
  */
 export async function syncJobOutCount(jobId: number) {
   await ensureSchema();
-  // Delivered is what workers have logged; out for delivery is what's been
-  // handed to them and not yet logged. Both stay editable by hand afterwards —
-  // this only runs when a worker does something.
+  // The worker's own progress decides these two numbers.
+  //
+  //   out for delivery  leaflets on sub-contracts the worker has ACCEPTED and
+  //                     not yet finished. Work merely offered to someone isn't
+  //                     out anywhere — it's still waiting to be dispatched.
+  //   completed         leaflets from work marked done AND approved. Marked
+  //                     done but not yet checked stays out for delivery.
+  //
+  // A number typed in by hand lives in *_override and wins over both.
   await sql`
     UPDATE client_jobs j
-       SET delivered_count = GREATEST(
-             COALESCE((SELECT SUM(w.leaflet_count) FROM work_logs w WHERE w.client_job_id = j.id), 0),
-             0
-           ),
-           out_count = GREATEST(
-             0,
-             COALESCE((SELECT SUM(a.leaflet_share) FROM job_assignments a WHERE a.job_id = j.id), 0)
-               - COALESCE((SELECT SUM(w.leaflet_count) FROM work_logs w WHERE w.client_job_id = j.id), 0)
-           )
+       SET delivered_count = COALESCE((
+             SELECT SUM(w.leaflet_count) FROM work_logs w
+              WHERE w.client_job_id = j.id AND w.verified_at IS NOT NULL), 0),
+           out_count = GREATEST(0,
+             COALESCE((
+               SELECT SUM(a.leaflet_share) FROM job_assignments a
+                WHERE a.job_id = j.id AND a.status = 'accepted'), 0)
+             - COALESCE((
+               SELECT SUM(w.leaflet_count) FROM work_logs w
+                WHERE w.client_job_id = j.id AND w.verified_at IS NOT NULL), 0))
      WHERE j.id = ${jobId};`;
 }
 
-/** Worker-facing job settings: pay, time, boundary and map. */
-export async function setJobProgress(
-  jobId: number, jobNumber: string | null, delivered: number | null, out: number | null,
+/**
+ * Pin one of the counts to a number typed in by hand, or pass null to hand it
+ * back to the automatic calculation.
+ */
+export async function setJobCountOverride(
+  jobId: number, which: "out" | "delivered", value: number | null,
 ) {
   await ensureSchema();
-  await sql`
-    UPDATE client_jobs SET job_number = ${jobNumber}, delivered_count = ${delivered}, out_count = ${out}
-    WHERE id = ${jobId};`;
+  if (which === "out") {
+    await sql`UPDATE client_jobs SET out_override = ${value} WHERE id = ${jobId};`;
+  } else {
+    await sql`UPDATE client_jobs SET delivered_override = ${value} WHERE id = ${jobId};`;
+  }
+}
+
+/** Worker-facing job settings: pay, time, boundary and map. */
+export async function setJobProgress(jobId: number, jobNumber: string | null) {
+  await ensureSchema();
+  await sql`UPDATE client_jobs SET job_number = ${jobNumber} WHERE id = ${jobId};`;
 }
 
 export async function setJobBrief(jobId: number, b: {
@@ -860,6 +890,14 @@ export async function findUserByName(fullName: string) {
   return r.rows[0] || null;
 }
 
+/** Their own password from here on; the starting one stops working. */
+export async function setUserPassword(id: number, passwordHash: string) {
+  await ensureSchema();
+  await sql`
+    UPDATE portal_users SET password_hash = ${passwordHash}, password_set = TRUE
+    WHERE id = ${id};`;
+}
+
 export async function findUserById(id: number) {
   await ensureSchema();
   const r = await sql<PortalUser>`SELECT * FROM portal_users WHERE id = ${id} LIMIT 1;`;
@@ -965,6 +1003,9 @@ export async function insertWorkLog(e: NewWorkLog): Promise<number | null> {
        ${e.stravaVerified ?? false}, ${packLinks(e.mapmyUrls || [])}, ${e.notes || null})
     RETURNING id;
   `;
+  // Marking work done doesn't complete it — approval does — but the job's
+  // figures are recounted now so nothing drifts.
+  if (e.clientJobId) await syncJobOutCount(e.clientJobId);
   return r.rows[0]?.id ?? null;
 }
 
@@ -998,6 +1039,11 @@ export async function setWorkLogVerified(id: number, verified: boolean) {
   } else {
     await sql`UPDATE work_logs SET verified_at = NULL WHERE id = ${id};`;
   }
+  // Approving the tracking is what moves those leaflets to completed.
+  const r = await sql<{ client_job_id: number | null }>`
+    SELECT client_job_id FROM work_logs WHERE id = ${id};`;
+  const jobId = r.rows[0]?.client_job_id;
+  if (jobId) await syncJobOutCount(jobId);
 }
 
 /** Admin marks a job paid (or back to unpaid with null). Stamps the moment it was paid. */

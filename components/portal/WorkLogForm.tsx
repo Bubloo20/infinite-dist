@@ -7,6 +7,7 @@ import { parseStravaUrl, type StravaStatus } from "@/lib/portal/strava";
 import { submitForm } from "@/lib/forms";
 import PhotoUpload from "./PhotoUpload";
 import type { ClientJob, JobAssignment } from "@/lib/portal/db";
+import DateInput from "./DateInput";
 
 type Check = { status: StravaStatus | "checking" | "idle"; message: string; helpUrl?: string; helpLabel?: string };
 
@@ -297,12 +298,12 @@ export default function WorkLogForm({ onDone, job, mine, editing, onCancel, sign
           </Field>
 
           <Field label="Started work" required>
-            <input type="date" className={inputCls} value={startedAt.slice(0, 10)}
-              onChange={(e) => setStartedAt(e.target.value)} required />
+            <DateInput className={inputCls} value={startedAt.slice(0, 10)}
+              onChange={setStartedAt} required />
           </Field>
           <Field label="Finished work" required>
-            <input type="date" className={inputCls} value={endedAt.slice(0, 10)}
-              onChange={(e) => setEndedAt(e.target.value)} required />
+            <DateInput className={inputCls} value={endedAt.slice(0, 10)}
+              onChange={setEndedAt} required />
           </Field>
 
           <Field label="Time spent working"
