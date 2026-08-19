@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
+import { parseHours } from "@/lib/portal/text";
 
 type Log = {
   id: number; worker_name: string; started_at: string; ended_at: string;
@@ -37,10 +38,9 @@ const fmtHours = (h: number) => {
   const mm = mins % 60;
   return hh ? (mm ? `${hh}h ${mm}m` : `${hh}h`) : `${mm}m`;
 };
-const minHoursOf = (v: string | null) => {
-  const m = String(v ?? "").match(/[\d.]+/);
-  return m ? Number(m[0]) || 0 : 0;
-};
+// Minimums are stored the way they're written — "2 hours 50 mins" as often as
+// "2.5" — so read both rather than grabbing the first number.
+const minHoursOf = parseHours;
 const dayLabel = (k: string) => {
   const d = new Date(`${k}T00:00:00`);
   return Number.isNaN(d.getTime()) ? k : d.toLocaleDateString("en-AU", { weekday: "long", day: "numeric", month: "long" });

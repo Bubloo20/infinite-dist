@@ -22,3 +22,45 @@ export function unpackLinks(v: string | null): string[] {
     return v ? [v] : [];
   }
 }
+
+/* --------------------------------- hours ---------------------------------- */
+
+/**
+ * Read a length of time however it was written.
+ *
+ * Accepts "3.5", "3", "3 hours 30 mins", "3h 30m" — decimals and words alike,
+ * because the same field gets filled in by hand and by the pay calculator.
+ * Anything unreadable is nothing.
+ */
+export function parseHours(v: string | number | null | undefined): number {
+  if (typeof v === "number") return Number.isFinite(v) ? v : 0;
+  const s = String(v ?? "").trim();
+  if (!s) return 0;
+
+  const h = s.match(/(\d+(?:\.\d+)?)\s*(?:hours|hour|hrs|hr|h)\b/i);
+  const m = s.match(/(\d+(?:\.\d+)?)\s*(?:minutes|minute|mins|min|m)\b/i);
+  if (h || m) return (h ? Number(h[1]) : 0) + (m ? Number(m[1]) : 0) / 60;
+
+  const n = s.match(/\d+(?:\.\d+)?/);
+  return n ? Number(n[0]) || 0 : 0;
+}
+
+/**
+ * Write it back the way a person would say it.
+ *
+ * "0.75 hours" is a spreadsheet talking; someone about to walk a street wants
+ * to be told 45 minutes.
+ */
+export function formatHours(hours: number): string {
+  const total = Math.round((Number.isFinite(hours) ? hours : 0) * 60);
+  if (total <= 0) return "";
+  const h = Math.floor(total / 60);
+  const m = total % 60;
+  const parts: string[] = [];
+  if (h) parts.push(`${h} hour${h === 1 ? "" : "s"}`);
+  if (m) parts.push(`${m} min${m === 1 ? "" : "s"}`);
+  return parts.join(" ");
+}
+
+/** Whatever was typed, tidied into hours and minutes. Blank stays blank. */
+export const tidyHours = (v: string | number | null | undefined): string => formatHours(parseHours(v));

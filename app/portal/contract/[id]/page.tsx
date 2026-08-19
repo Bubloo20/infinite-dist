@@ -5,6 +5,7 @@ import { useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { CONTRACT_TERMS } from "@/components/portal/JobContract";
 import type { ClientJob, JobAssignment } from "@/lib/portal/db";
+import { tidyHours } from "@/lib/portal/text";
 
 const dateAu = (d: string | null | undefined) =>
   d ? new Date(d).toLocaleDateString("en-AU", { day: "2-digit", month: "long", year: "numeric" }) : "____________________";
@@ -101,7 +102,7 @@ export default function WorkerContractPage() {
           <p><span className="font-semibold">Leaflet Amount:</span> {leaflets ? leaflets.toLocaleString() : "____________________"}</p>
           <p><span className="font-semibold">Allocated time:</span> {allocated}</p>
           <p><span className="font-semibold">Payment Amount:</span> {pay ? `$${Number(pay).toFixed(2)}` : "$____________"}</p>
-          <p><span className="font-semibold">Minimum Hours of work:</span> {mine?.min_hours || job.min_hours || "____________________"}</p>
+          <p><span className="font-semibold">Minimum Hours of work:</span> {tidyHours(mine?.min_hours || job.min_hours) || "____________________"}</p>
         </div>
 
         <h2 className="mt-8 font-display text-xl font-bold text-ink">Terms</h2>

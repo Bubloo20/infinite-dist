@@ -10,6 +10,7 @@ import ClientsTab, { ClientJobsTab } from "./ClientsTab";
 import TrendChart, { type TrendPoint } from "./TrendChart";
 import PublishToWorkers from "./PublishToWorkers";
 import type { JobInterest, JobAssignment } from "@/lib/portal/db";
+import { tidyHours } from "@/lib/portal/text";
 import { isTestName } from "@/lib/portal/text";
 import DateInput from "./DateInput";
 
@@ -380,7 +381,7 @@ function JobsTab({ logs, q, setQ, post, assignments, jobs, users, del }: {
                       {a.area_note ? ` · ${a.area_note}` : ""}
                       {a.start_date ? ` · starts ${day(a.start_date)}` : ""}
                       {a.due_date ? ` · due ${day(a.due_date)}` : ""}
-                      {a.min_hours ? ` · min ${a.min_hours} hrs` : ""}
+                      {a.min_hours ? ` · min ${tidyHours(a.min_hours)}` : ""}
                     </p>
                   </div>
                   <div className="flex items-center gap-4">

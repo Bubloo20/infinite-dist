@@ -308,7 +308,7 @@ export function ClientJobsTab({ agencies, agents, jobs, workLogs, users, assignm
             <option value="">Agent (optional)…</option>
             {agents.filter((g) => String(g.agency_id) === f.agencyId).map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
           </select>
-          <input className={input} placeholder="Job title / description" value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} />
+          <input className={input} placeholder="Job title (internal)" value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} />
 
           <input className={input} placeholder="Area" value={f.area} onChange={(e) => setF({ ...f, area: e.target.value })} />
           <label className="block">
@@ -651,8 +651,11 @@ function ClientJobRow({ job, agencyName, agentName, agencies, agents, expenses, 
                   </select>
                 </label>
                 <label className="block">
-                  <span className="mb-1 block text-[12px] font-semibold text-white/40">Title</span>
-                  <input className={input} value={e.title} onChange={(ev) => setE({ ...e, title: ev.target.value })} />
+                  <span className="mb-1 block text-[12px] font-semibold text-white/40">
+                    Title <span className="text-white/25">— internal, only you see this</span>
+                  </span>
+                  <input className={input} value={e.title} placeholder="e.g. collings-1250 total"
+                    onChange={(ev) => setE({ ...e, title: ev.target.value })} />
                 </label>
                 <label className="block">
                   <span className="mb-1 block text-[12px] font-semibold text-white/40">Job number (optional)</span>

@@ -8,6 +8,7 @@ import JobContract from "./JobContract";
 import WorkLogForm, { type EditableLog } from "./WorkLogForm";
 import type { ClientJob, JobAssignment } from "@/lib/portal/db";
 import { submitForm } from "@/lib/forms";
+import { tidyHours } from "@/lib/portal/text";
 
 const money = (v: string | null) => (v ? `$${Number(v).toFixed(2)}` : "—");
 const parseCenter = (s: string | null): [number, number, number] | null => {
@@ -110,9 +111,7 @@ function Brief({ job, mine }: { job: ClientJob; mine?: JobAssignment | null }) {
         ["Your area", mine.area_note || job.area || "—"],
         ["Your leaflets", mine.leaflet_share ? mine.leaflet_share.toLocaleString() : (job.quantity ? job.quantity.toLocaleString() : "—")],
         ["Your pay", money(mine.pay ?? job.worker_pay)],
-        ["Start", shortDate(mine.start_date)],
-        ["Due", shortDate(mine.due_date)],
-        ["Minimum hours", mine.min_hours || job.min_hours || "—"],
+        ["Minimum hours", tidyHours(mine.min_hours || job.min_hours) || "—"],
         ["Allocated time", mine.start_date || mine.due_date
           ? `${shortDate(mine.start_date)} – ${shortDate(mine.due_date)}`
           : mine.allocated_time || job.allocated_time || "—"],
@@ -122,7 +121,7 @@ function Brief({ job, mine }: { job: ClientJob; mine?: JobAssignment | null }) {
         ["Leaflets", job.quantity ? job.quantity.toLocaleString() : "—"],
         ["Your pay", money(job.worker_pay)],
         ["Allocated time", job.allocated_time || "—"],
-        ["Minimum hours", job.min_hours || "—"],
+        ["Minimum hours", tidyHours(job.min_hours) || "—"],
       ];
   return (
     <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3">
@@ -144,6 +143,19 @@ function BriefWithCountdown({ job, mine }: { job: ClientJob; mine?: JobAssignmen
     </>
   );
 }
+
+
+/**
+ * What to call a job when a worker is looking at it.
+ *
+ * The job's own title is the office's internal label — "collings-1250 total"
+ * means nothing to the person walking the streets. Each sub-contract carries
+ * its own name for the piece of work, and that's what they see.
+ */
+const workName = (
+  a: { title?: string | null; area_note?: string | null } | null | undefined,
+  j: { id: number; area?: string | null } | null | undefined,
+) => a?.title?.trim() || a?.area_note?.trim() || j?.area?.trim() || `Job #${j?.id ?? ""}`;
 
 export default function JobMarket({ workerName, only }: {
   workerName: string;
@@ -237,7 +249,7 @@ export default function JobMarket({ workerName, only }: {
         submitForm(
           {
             Worker: workerName || "A worker",
-            Job: job?.title || `Job #${jobId}`,
+            Job: workName(a, job),
             Area: a?.area_note || job?.area || "—",
             Leaflets: a?.leaflet_share ? a.leaflet_share.toLocaleString() : (job?.quantity?.toLocaleString() ?? "—"),
             Pay: money(a?.pay ?? job?.worker_pay ?? null),
@@ -245,7 +257,7 @@ export default function JobMarket({ workerName, only }: {
             Due: a?.due_date || "—",
             Status: "Accepted — contract drawn up, awaiting their signature",
           },
-          { subject: `Job accepted — ${workerName || "worker"} — ${job?.title || `#${jobId}`}`, from_name: "Infinite Distribution Portal" },
+          { subject: `Job accepted — ${workerName || "worker"} — ${workName(a, job)}`, from_name: "Infinite Distribution Portal" },
         ).catch(() => {});
       }
       load();
@@ -367,7 +379,7 @@ export default function JobMarket({ workerName, only }: {
                   <GlassCard className="p-6">
                     <div className="flex flex-wrap items-start justify-between gap-4">
                       <div>
-                        <h3 className="font-display text-xl font-bold text-white">{j.title || `Job #${j.id}`}</h3>
+                        <h3 className="font-display text-xl font-bold text-white">{workName(null, j)}</h3>
                         <p className="mt-1 text-sm text-white/50">{j.area || "Area to be confirmed"}</p>
                       </div>
                       <p className="font-display text-2xl font-extrabold text-emerald-300">
@@ -432,8 +444,7 @@ export default function JobMarket({ workerName, only }: {
                   <div className="mb-2 overflow-hidden rounded-[20px] border border-orchid/40 bg-gradient-to-br from-electric/25 to-orchid/20 p-6 sm:p-7">
                     <p className="text-xs font-bold uppercase tracking-[0.16em] text-orchid">New job for you</p>
                     <h3 className="mt-2 font-display text-[clamp(1.5rem,4.5vw,2rem)] font-extrabold leading-tight tracking-tight text-white">
-                      {j.title || `Job #${j.id}`}
-                      {a?.area_note ? <span className="text-white/65"> — {a.area_note}</span> : null}
+                      {workName(a, j)}
                     </h3>
                     {part && (
                       <p className="mt-1 text-[13px] font-bold uppercase tracking-wide text-orchid">{part} — sign this one separately</p>
@@ -452,8 +463,7 @@ export default function JobMarket({ workerName, only }: {
                   <div className="flex flex-wrap items-start justify-between gap-4">
                     <div className="min-w-0">
                       <h3 className="font-display text-xl font-bold text-white">
-                        {j.title || `Job #${j.id}`}
-                        {a?.area_note ? <span className="text-white/55"> — {a.area_note}</span> : null}
+                        {workName(a, j)}
                       </h3>
                       <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-white/50">
                         {part && (
@@ -540,7 +550,7 @@ export default function JobMarket({ workerName, only }: {
                 {!isShut(cardId) && (accepted || viewing === cardId) && (
                   <div id={`contract-${cardId}`} className="mt-2 space-y-2 border-l-2 border-orchid/35 pl-3 sm:pl-4">
                     <p className="pt-1 text-[11px] font-bold uppercase tracking-[0.14em] text-white/30">
-                      For {j.title || `Job #${j.id}`}
+                      For {workName(a, j)}
                     </p>
                     <JobContract job={j} workerName={workerName} signedDate={signed} mine={a}
                       autoOpen={viewing === cardId && !signed}
@@ -626,7 +636,7 @@ export default function JobMarket({ workerName, only }: {
                         className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3">
                         <span className="min-w-0">
                           <span className="block text-[14px] font-semibold text-white/80">
-                            {j.title || `Job #${j.id}`}
+                            {workName(a, j)}
                             {a?.area_note ? <span className="text-white/45"> — {a.area_note}</span> : null}
                           </span>
                           <span className="mt-0.5 block text-[12px] text-white/40">

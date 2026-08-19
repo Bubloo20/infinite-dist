@@ -9,6 +9,7 @@ import JobContract from "@/components/portal/JobContract";
 import WorkLogForm, { type EditableLog } from "@/components/portal/WorkLogForm";
 import JobTracker from "@/components/portal/JobTracker";
 import type { ClientJob, JobAssignment } from "@/lib/portal/db";
+import { tidyHours } from "@/lib/portal/text";
 
 type MyLog = {
   id: number; jobId: number | null; assignmentId: number | null; jobNumber: string;
@@ -120,9 +121,10 @@ export default function JobPage() {
     ["Your area", mine.area_note || job.area || "—"],
     ["Your leaflets", mine.leaflet_share ? mine.leaflet_share.toLocaleString() : "—"],
     ["Your pay", money(mine.pay ?? job.worker_pay)],
-    ["Start", shortDate(mine.start_date)],
-    ["Due", shortDate(mine.due_date)],
-    ["Minimum hours", mine.min_hours || job.min_hours || "—"],
+    ["Minimum hours", tidyHours(mine.min_hours || job.min_hours) || "—"],
+    ["Allocated time", mine.start_date || mine.due_date
+      ? `${shortDate(mine.start_date)} – ${shortDate(mine.due_date)}`
+      : mine.allocated_time || job.allocated_time || "—"],
   ];
 
   return (
@@ -140,8 +142,8 @@ export default function JobPage() {
           {accepted ? (paid ? "Completed" : "Your job") : "New job for you"}
         </p>
         <h1 className="mt-3 font-display text-[clamp(2rem,6vw,3rem)] font-extrabold leading-[1.05] tracking-tight text-white">
-          {job.title || `Job #${job.id}`}
-          {mine.area_note ? <span className="text-white/60"> — {mine.area_note}</span> : null}
+          {/* Their own name for this piece — the job's title is the office's. */}
+          {mine.title?.trim() || mine.area_note?.trim() || job.area?.trim() || `Job #${job.id}`}
         </h1>
 
         <GlassCard className="mt-7 p-5 sm:p-7">

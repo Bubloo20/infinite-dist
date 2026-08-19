@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState } from "react";
 import { GlassCard, ActionButton } from "./PortalShell";
+import { tidyHours, formatHours } from "@/lib/portal/text";
 import BoundaryMap, { type AreaSpec, EMPTY_SPEC, parseSpec, specHasDrawing, countPoints } from "./BoundaryMap";
 import ImageDrop from "./ImageDrop";
 import type { Agency, ClientJob, PortalUser, JobInterest, JobAssignment } from "@/lib/portal/db";
@@ -119,8 +120,9 @@ export default function PublishToWorkers({
               </label>
               <label className="block">
                 <span className="mb-1 block text-[12px] font-semibold text-white/40">Minimum hours</span>
-                <input className={input} placeholder="e.g. 6" value={f.minHours}
-                  onChange={(e) => setF({ ...f, minHours: e.target.value })} />
+                <input className={input} placeholder="e.g. 3.5 or 3 hours 30 mins" value={f.minHours}
+                  onChange={(e) => setF({ ...f, minHours: e.target.value })}
+                  onBlur={(e) => setF((p) => ({ ...p, minHours: tidyHours(e.target.value) }))} />
               </label>
 
               <div className="sm:col-span-3 flex flex-wrap items-center gap-2">
@@ -258,7 +260,7 @@ const payFor = (leaflets: number) =>
   leaflets <= 0 ? "" : (leaflets * (leaflets < 500 ? 0.07 : 0.065)).toFixed(2);
 
 const minHoursFor = (leaflets: number) =>
-  leaflets <= 0 ? "" : String(Math.round(leaflets * 3.5 / 1000 * 4) / 4);
+  leaflets <= 0 ? "" : formatHours(leaflets * 3.5 / 1000);
 
 export function SubContracts({ job, users, rows, post, del }: {
   job: ClientJob; users: PortalUser[]; rows: JobAssignment[];
@@ -266,7 +268,7 @@ export function SubContracts({ job, users, rows, post, del }: {
   del: (entity: string, id: number) => Promise<void>;
 }) {
   const blank = {
-    userId: "", pay: "", leafletShare: "", areaNote: "",
+    userId: "", title: "", pay: "", leafletShare: "", areaNote: "",
     startDate: "", dueDate: "", minHours: "", allocatedTime: "", mapImage: "",
     boundary: "", mapCenter: "",
   };
@@ -276,6 +278,7 @@ export function SubContracts({ job, users, rows, post, del }: {
   const ownHours = useRef(false);
   const [tracing, setTracing] = useState(false);
   const [editing, setEditing] = useState<number | null>(null);
+  const [editTitle, setEditTitle] = useState("");
   const [editSpec, setEditSpec] = useState<AreaSpec>(EMPTY_SPEC);
   const [editCenter, setEditCenter] = useState<[number, number, number] | null>(null);
   const [saving, setSaving] = useState(false);
@@ -298,7 +301,7 @@ export function SubContracts({ job, users, rows, post, del }: {
           {rows.length
             ? `${rows.length} worker${rows.length === 1 ? "" : "s"} · $${payTotal.toFixed(2)} allocated${
                 job.quantity ? ` · ${taken.toLocaleString()} of ${job.quantity.toLocaleString()} leaflets shared out` : ""}`
-            : "Split this job between several workers, each on their own pay and dates."}
+            : "Split this job between several workers, each on their own pay, dates and name for the work."}
         </p>
       </div>
 
@@ -308,7 +311,10 @@ export function SubContracts({ job, users, rows, post, del }: {
             <div key={r.id} className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-white/[0.04] px-4 py-3 ${
               editing === r.id ? "border-orchid/40" : "border-white/10"}`}>
               <div>
-                <p className="font-semibold text-white">{nameOf(r.user_id)}</p>
+                <p className="font-semibold text-white">
+                  {nameOf(r.user_id)}
+                  {r.title ? <span className="text-white/45"> — {r.title}</span> : null}
+                </p>
                 <p className="text-[13px] text-white/45">
                   {r.leaflet_share ? `${r.leaflet_share.toLocaleString()} leaflets` : "share not set"}
                   {r.area_note ? ` · ${r.area_note}` : ""}
@@ -316,7 +322,7 @@ export function SubContracts({ job, users, rows, post, del }: {
                   {shortDate(r.due_date) ? ` · due ${shortDate(r.due_date)}` : ""}
                 </p>
                 <p className="text-[13px] text-white/35">
-                  {r.min_hours ? `min ${r.min_hours} hrs` : "no minimum set"}
+                  {r.min_hours ? `min ${tidyHours(r.min_hours)}` : "no minimum set"}
                   {r.allocated_time ? ` · ${r.allocated_time}` : ""}
                   {r.map_image ? " · area diagram attached" : ""}
                   {specHasDrawing(parseSpec(r.boundary)) ? " · area drawn on map" : ""}
@@ -328,6 +334,7 @@ export function SubContracts({ job, users, rows, post, del }: {
                   onClick={() => {
                     if (editing === r.id) { setEditing(null); return; }
                     setEditing(r.id);
+                    setEditTitle(r.title || "");
                     setEditSpec(parseSpec(r.boundary));
                     setEditCenter(null);
                   }}
@@ -339,6 +346,13 @@ export function SubContracts({ job, users, rows, post, del }: {
 
               {editing === r.id && (
                 <div className="w-full border-t border-white/10 pt-3">
+                  <label className="mb-3 block">
+                    <span className="mb-1 block text-[11px] font-semibold text-white/35">
+                      What {nameOf(r.user_id)} sees this job called
+                    </span>
+                    <input className={input} value={editTitle} placeholder={r.area_note || `Job #${r.job_id}`}
+                      onChange={(e) => setEditTitle(e.target.value)} />
+                  </label>
                   <div className="grid gap-3 lg:grid-cols-2">
                     {r.map_image && (
                       <div>
@@ -359,23 +373,26 @@ export function SubContracts({ job, users, rows, post, del }: {
                   </div>
                   <div className="mt-3 flex flex-wrap items-center gap-2">
                     <button
-                      disabled={saving || !specHasDrawing(editSpec)}
+                      disabled={saving}
                       onClick={async () => {
                         setSaving(true);
+                        // The first drawn point is a good place to open the map next time.
+                        const first = editSpec.shapes.find((sh) => sh.length)?.[0];
                         // Send the row back whole — the upsert overwrites what it's given.
                         const ok = await post({
                           entity: "assignment", id: r.id, jobId: job.id, userId: r.user_id,
+                          title: editTitle.trim() || null,
                           pay: r.pay, leafletShare: r.leaflet_share, areaNote: r.area_note,
                           startDate: r.start_date, dueDate: r.due_date, status: r.status,
                           minHours: r.min_hours, allocatedTime: r.allocated_time,
-                          boundary: JSON.stringify(editSpec),
-                          mapCenter: JSON.stringify(editCenter ?? [editSpec.shapes[0][0][0], editSpec.shapes[0][0][1], 15]),
+                          boundary: specHasDrawing(editSpec) ? JSON.stringify(editSpec) : null,
+                          mapCenter: JSON.stringify(editCenter ?? (first ? [first[0], first[1], 15] : null)),
                         });
                         setSaving(false);
                         if (ok) setEditing(null);
                       }}
                       className={btn}>
-                      {saving ? "Saving…" : "Save this area"}
+                      {saving ? "Saving…" : "Save"}
                     </button>
                     <span className="text-[12px] text-white/35">
                       {!specHasDrawing(editSpec)
@@ -430,6 +447,8 @@ export function SubContracts({ job, users, rows, post, del }: {
             }));
           }} />
         <input className={input} placeholder="Their area" value={f.areaNote} onChange={(e) => setF({ ...f, areaNote: e.target.value })} />
+        <input className={input} placeholder="What they'll see this called" value={f.title}
+          onChange={(e) => setF({ ...f, title: e.target.value })} />
         <label className="block">
           <span className="mb-1 block text-[11px] font-semibold text-white/35">Start</span>
           <DateInput className={input} value={f.startDate} onChange={(v) => setF({ ...f, startDate: v })} />
@@ -441,8 +460,9 @@ export function SubContracts({ job, users, rows, post, del }: {
 
         <label className="block">
           <span className="mb-1 block text-[11px] font-semibold text-white/35">Min hours</span>
-          <input className={input} placeholder="e.g. 6" value={f.minHours}
-            onChange={(e) => { ownHours.current = true; setF({ ...f, minHours: e.target.value }); }} />
+          <input className={input} placeholder="e.g. 3.5 or 3 hours 30 mins" value={f.minHours}
+            onChange={(e) => { ownHours.current = true; setF({ ...f, minHours: e.target.value }); }}
+            onBlur={(e) => setF((p) => ({ ...p, minHours: tidyHours(e.target.value) }))} />
         </label>
         <label className="block">
           <span className="mb-1 block text-[11px] font-semibold text-white/35">Allocated time</span>

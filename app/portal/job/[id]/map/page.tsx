@@ -53,7 +53,7 @@ export default function JobMapPage() {
         const own = parseSpec(a.boundary);
         setSpec(specHasDrawing(own) ? own : parseSpec(j.boundary));
         setCenter(parseCenter(a.map_center ?? j.map_center));
-        setTitle(`${j.title || `Job #${j.id}`}${a.area_note ? ` — ${a.area_note}` : ""}`);
+        setTitle(a.title?.trim() || a.area_note?.trim() || j.area?.trim() || `Job #${j.id}`);
         setState("ok");
       })
       .catch(() => setState("gone"));

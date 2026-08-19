@@ -127,6 +127,7 @@ export async function POST(req: Request) {
         const id = await upsertAssignment({
           id: n(b.id),
           jobId, userId, pay: n(b.pay), leafletShare: n(b.leafletShare),
+          title: (b.title as string) || null,
           areaNote: (b.areaNote as string) || null,
           startDate: (b.startDate as string) || null, dueDate: (b.dueDate as string) || null,
           status: (b.status as string) || "assigned",

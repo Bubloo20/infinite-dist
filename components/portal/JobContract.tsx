@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { GlassCard } from "./PortalShell";
 import { submitForm } from "@/lib/forms";
 import type { ClientJob, JobAssignment } from "@/lib/portal/db";
+import { parseHours, formatHours, tidyHours } from "@/lib/portal/text";
 
 /** Terms transcribed from the Independent Contractor Agreement. */
 export const CONTRACT_TERMS = [
@@ -47,19 +48,16 @@ function hoursBetween(start?: string, end?: string): number {
 }
 
 /** 6.5 -> "6h 30m" */
-function fmtHours(h: number): string {
-  const mins = Math.round(h * 60);
-  const hh = Math.floor(mins / 60);
-  const mm = mins % 60;
-  if (!hh) return `${mm}m`;
-  return mm ? `${hh}h ${mm}m` : `${hh}h`;
-}
+const fmtHours = (h: number): string => formatHours(h) || "0 mins";
 
-/** "6", "6 hrs", "6.5 hours" -> 6 / 6.5 */
-function parseMinHours(v: string | null | undefined): number {
-  const m = String(v ?? "").match(/[\d.]+/);
-  return m ? Number(m[0]) || 0 : 0;
-}
+/**
+ * "6", "6.5", "2 hours 50 mins" -> 6 / 6.5 / 2.833
+ *
+ * This used to take the first number it found, so a minimum stored as
+ * "2 hours 50 mins" was read as 2 and the schedule check let people through
+ * fifty minutes short.
+ */
+const parseMinHours = parseHours;
 
 function SignaturePad({ onChange }: { onChange: (dataUrl: string | null) => void }) {
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -248,7 +246,7 @@ export default function JobContract({
     if (!scheduleOk) {
       setErr(halfEntered
         ? "One of your days has only a start or only an end time — fill in both, or clear it."
-        : `Your schedule adds up to ${totalHours.toFixed(1)} hours but this job requires at least ${minHours}. Add ${shortBy.toFixed(1)} more hours across any days.`);
+        : `Your schedule adds up to ${fmtHours(totalHours)} but this job requires at least ${fmtHours(minHours)}. Add ${fmtHours(shortBy)} more across any days.`);
       return;
     }
     setBusy(true); setErr("");
@@ -276,17 +274,17 @@ export default function JobContract({
         submitForm(
           {
             Worker: name.trim() || workerName,
-            Job: job.title || `Job #${job.id}`,
+            Job: mine?.title?.trim() || mine?.area_note?.trim() || job.area?.trim() || `Job #${job.id}`,
             Area: mine?.area_note || job.area || "—",
             Leaflets: (mine?.leaflet_share ?? job.quantity)?.toLocaleString() ?? "—",
             Pay: (mine?.pay ?? job.worker_pay) ? `$${Number(mine?.pay ?? job.worker_pay).toFixed(2)}` : "—",
-            "Minimum hours": mine?.min_hours || job.min_hours || "—",
+            "Minimum hours": tidyHours(mine?.min_hours || job.min_hours) || "—",
             "Hours they scheduled": fmtHours(totalHours),
             "Signed on": date,
             "Signed copy": `${window.location.origin}/portal/admin/contract/${job.id}`,
           },
           {
-            subject: `Contract signed — ${name.trim() || workerName} — ${job.title || `job #${job.id}`}`,
+            subject: `Contract signed — ${name.trim() || workerName} — ${mine?.title?.trim() || mine?.area_note?.trim() || `job #${job.id}`}`,
             from_name: "Infinite Distribution Portal",
           },
         ).catch(() => {});

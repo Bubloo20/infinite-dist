@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { CONTRACT_TERMS } from "@/components/portal/JobContract";
+import { tidyHours } from "@/lib/portal/text";
 
 type Data = {
   ok: boolean;
@@ -101,7 +102,7 @@ export default function SignedContractPage() {
             ["Leaflet amount", d.job.quantity ? d.job.quantity.toLocaleString() : "—"],
             ["Allocated time", d.job.allocated_time || "—"],
             ["Payment amount", d.job.worker_pay ? `$${Number(d.job.worker_pay).toFixed(2)}` : "—"],
-            ["Minimum hours of work", d.job.min_hours || "—"],
+            ["Minimum hours of work", tidyHours(d.job.min_hours) || "—"],
           ].map(([k, v]) => (
             <div key={k}>
               <p className="text-[11px] font-bold uppercase tracking-wide text-ink/45">{k}</p>
