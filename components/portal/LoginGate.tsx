@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { GlassCard, PortalMark } from "./PortalShell";
+import { armWelcome } from "./LoginFlourish";
 
 const inputCls =
   "w-full rounded-2xl border border-white/12 bg-white/[0.05] px-5 py-3.5 text-white placeholder-white/25 outline-none transition focus:border-orchid/60 focus:bg-white/[0.08] focus:ring-4 focus:ring-orchid/15";
@@ -114,6 +115,8 @@ export default function LoginGate({
       });
       const data = await res.json();
       if (data.ok) {
+        // The portal plays a welcome on the other side of this.
+        armWelcome(data.fullName || fullName);
         // Let the confirmation play before the portal swaps in.
         setSuccess(true);
         setTimeout(() => onSuccess(data.role), 900);
@@ -155,7 +158,7 @@ export default function LoginGate({
           <p className="mt-3 text-center text-[15px] leading-relaxed text-white/55">
             {isAdmin
               ? "Enter the admin password to manage work logs and payments."
-              : "Your account is already set up. Your first password is your first name with a capital letter — change it in Settings once you're in."}
+              : "Sign in to see your work."}
           </p>
 
           <form onSubmit={submit} className="mt-7 space-y-4">

@@ -8,6 +8,7 @@ import LoginGate from "@/components/portal/LoginGate";
 import MyEarnings from "@/components/portal/MyEarnings";
 import JobMarket from "@/components/portal/JobMarket";
 import AccountSettings from "@/components/portal/AccountSettings";
+import LoginFlourish from "@/components/portal/LoginFlourish";
 
 export default function PortalPage() {
   const [role, setRole] = useState<"worker" | "admin" | null>(null);
@@ -57,6 +58,7 @@ export default function PortalPage() {
   return (
     <main className="relative min-h-[100svh]">
       <PortalBackdrop />
+      <LoginFlourish />
 
       {loading ? (
         <div className="relative z-10 grid min-h-[100svh] place-items-center">

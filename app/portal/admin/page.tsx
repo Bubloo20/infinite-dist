@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { PortalBackdrop, Loading } from "@/components/portal/PortalShell";
 import LoginGate from "@/components/portal/LoginGate";
 import AdminDashboard from "@/components/portal/AdminDashboard";
+import LoginFlourish from "@/components/portal/LoginFlourish";
 
 export default function AdminPage() {
   const [role, setRole] = useState<"worker" | "admin" | null>(null);
@@ -25,6 +26,7 @@ export default function AdminPage() {
   return (
     <main className="relative min-h-[100svh]">
       <PortalBackdrop />
+      <LoginFlourish />
       {loading ? (
         <div className="relative z-10 grid min-h-[100svh] place-items-center">
           <Loading label="Loading" />
