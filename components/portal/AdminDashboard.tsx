@@ -11,7 +11,7 @@ import TrendChart, { type TrendPoint } from "./TrendChart";
 import PublishToWorkers from "./PublishToWorkers";
 import SignatureSetting from "./SignatureSetting";
 import type { JobInterest, JobAssignment } from "@/lib/portal/db";
-import { tidyHours } from "@/lib/portal/text";
+import { tidyHours, parseHours, formatHours } from "@/lib/portal/text";
 import { isTestName } from "@/lib/portal/text";
 import DateInput from "./DateInput";
 
@@ -51,7 +51,11 @@ export default function AdminDashboard({ onSignOut }: { onSignOut: () => void })
   const [agencyPayments, setAgencyPayments] = useState<AgencyPayment[]>([]);
   const [interest, setInterest] = useState<JobInterest[]>([]);
   const [assignments, setAssignments] = useState<JobAssignment[]>([]);
-  const [contracts, setContracts] = useState<{ id: number; job_id: number; user_id: number; signed_date: string }[]>([]);
+  // The schedule rides along with the agreement — it's what the worker filled
+  // in when they signed.
+  const [contracts, setContracts] = useState<
+    { id: number; job_id: number; user_id: number; assignment_id: number | null; signed_date: string; schedule: string | null }[]
+  >([]);
   const [dbOn, setDbOn] = useState(true);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<"clientjobs" | "agencies" | "workers" | "shifts" | "payments" | "finance">("clientjobs");
@@ -477,10 +481,74 @@ function JobRow({ log, post }: { log: WorkLog; post: (u: string, b: unknown) => 
 
 /* --------------------------------- workers -------------------------------- */
 
+/**
+ * The days a worker put down when they signed.
+ *
+ * It's collected during signing and then only ever seen on the job's own
+ * timesheet, which is the wrong way round when the question is "what is this
+ * person doing" rather than "who is on this job".
+ */
+function FilledSchedule({ raw, minHours }: { raw: string | null; minHours: string | null }) {
+  const days: [string, { start?: string; end?: string }][] = (() => {
+    try {
+      const v = raw ? JSON.parse(raw) : {};
+      return Object.entries(v as Record<string, { start?: string; end?: string }>)
+        .filter(([, d]) => d?.start || d?.end)
+        .sort(([a], [b]) => a.localeCompare(b));
+    } catch {
+      return [];
+    }
+  })();
+
+  if (!days.length) {
+    return <p className="mt-2 text-[13px] text-white/35">No days filled in.</p>;
+  }
+
+  const span = (d: { start?: string; end?: string }) => {
+    if (!d.start || !d.end) return 0;
+    const [sh, sm] = d.start.split(":").map(Number);
+    const [eh, em] = d.end.split(":").map(Number);
+    if ([sh, sm, eh, em].some(Number.isNaN)) return 0;
+    let mins = eh * 60 + em - (sh * 60 + sm);
+    if (mins < 0) mins += 1440;                       // finished after midnight
+    return mins / 60;
+  };
+  const total = days.reduce((t, [, d]) => t + span(d), 0);
+  const min = parseHours(minHours);
+  const short = min > 0 && total + 1e-9 < min;
+
+  return (
+    <div className="mt-2">
+      <div className="flex flex-wrap gap-1.5">
+        {days.map(([key, d]) => {
+          const when = new Date(`${key}T00:00:00`);
+          const label = Number.isNaN(when.getTime())
+            ? key
+            : when.toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "short" });
+          return (
+            <span key={key} className="rounded-lg border border-white/10 bg-white/[0.05] px-2.5 py-1 text-[12px] text-white/70">
+              <span className="font-semibold text-white/85">{label}</span>
+              <span className="text-white/45"> {d.start || "—"}–{d.end || "—"}</span>
+            </span>
+          );
+        })}
+      </div>
+      <p className="mt-1.5 text-[12px] text-white/45">
+        {days.length} day{days.length === 1 ? "" : "s"} · {formatHours(total) || "0 mins"} planned
+        {min > 0 && (
+          <span className={short ? "text-amber-300" : "text-emerald-300/80"}>
+            {" "}· minimum {formatHours(min)}{short ? ` — ${formatHours(min - total)} short` : " met"}
+          </span>
+        )}
+      </p>
+    </div>
+  );
+}
+
 function WorkersTab({ users, totals, contracts, jobs, assignments, post, reload, setMsg }: {
   users: PortalUser[];
   totals: (id: number) => { owed: number; paid: number; jobs: number };
-  contracts: { id: number; job_id: number; user_id: number; signed_date: string }[];
+  contracts: { id: number; job_id: number; user_id: number; assignment_id: number | null; signed_date: string; schedule: string | null }[];
   jobs: ClientJob[];
   assignments: JobAssignment[];
   post: (u: string, b: unknown) => Promise<boolean>;
@@ -543,7 +611,7 @@ function WorkersTab({ users, totals, contracts, jobs, assignments, post, reload,
 function WorkerRow({ user, t, post, contracts, jobs, mine, onDelete }: {
   user: PortalUser; t: { owed: number; paid: number; jobs: number };
   post: (u: string, b: unknown) => Promise<boolean>;
-  contracts: { id: number; job_id: number; signed_date: string }[];
+  contracts: { id: number; job_id: number; user_id: number; assignment_id: number | null; signed_date: string; schedule: string | null }[];
   jobs: ClientJob[];
   mine: JobAssignment[];
   onDelete: () => void;
@@ -554,7 +622,9 @@ function WorkerRow({ user, t, post, contracts, jobs, mine, onDelete }: {
   // Where each of their jobs actually stands.
   const theirJobs = mine.map((a) => {
     const job = jobs.find((j) => j.id === a.job_id) || null;
-    const signed = contracts.find((c) => c.job_id === a.job_id) || null;
+    const signed = contracts.find((c) =>
+      c.assignment_id != null ? c.assignment_id === a.id
+                              : c.job_id === a.job_id && c.user_id === a.user_id) || null;
     const state = job?.status === "completed" ? "done"
       : signed ? "signed"
       : a.status === "accepted" ? "accepted"
@@ -641,6 +711,7 @@ function WorkerRow({ user, t, post, contracts, jobs, mine, onDelete }: {
                   {a.due_date ? ` · due ${day(a.due_date)}` : ""}
                   {signed ? ` · signed ${day(signed.signed_date)}` : ""}
                 </p>
+                {signed && <FilledSchedule raw={signed.schedule} minHours={a.min_hours} />}
               </div>
               <div className="flex items-center gap-3">
                 <span className="font-display text-[15px] font-extrabold text-emerald-300">
