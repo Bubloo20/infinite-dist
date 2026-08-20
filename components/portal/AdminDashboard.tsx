@@ -9,6 +9,7 @@ import { unpackLinks, type WorkLog, type Payment, type PortalUser, type FinanceE
 import ClientsTab, { ClientJobsTab } from "./ClientsTab";
 import TrendChart, { type TrendPoint } from "./TrendChart";
 import PublishToWorkers from "./PublishToWorkers";
+import SignatureSetting from "./SignatureSetting";
 import type { JobInterest, JobAssignment } from "@/lib/portal/db";
 import { tidyHours } from "@/lib/portal/text";
 import { isTestName } from "@/lib/portal/text";
@@ -312,6 +313,7 @@ export default function AdminDashboard({ onSignOut }: { onSignOut: () => void })
         <JobsTab logs={filtered} q={q} setQ={setQ} post={post} assignments={assignments} jobs={clientJobs} users={users} del={delClient} />
       ) : tab === "workers" ? (
         <div className="space-y-4">
+          <SignatureSetting />
           <PublishToWorkers jobs={clientJobs} agencies={agencies} users={users} interest={interest} assignments={assignments} post={postClient} del={delClient} />
           <WorkersTab users={users} totals={userTotals} contracts={contracts} jobs={clientJobs} assignments={assignments} post={post} reload={load} setMsg={setMsg} />
         </div>

@@ -33,6 +33,20 @@ export default function WorkerContractPage() {
   const [state, setState] = useState<"loading" | "ok" | "error">("loading");
   // No signature file in place yet — fall back to a signing line.
   const [repMissing, setRepMissing] = useState(false);
+  // The office's signature is stored rather than shipped, so it can be changed
+  // without a deploy. The file in public/ is the fallback for older setups, and
+  // nothing is drawn until we know which one we have — otherwise the file's 404
+  // marks it missing a moment before the stored one arrives.
+  const [repSig, setRepSig] = useState<string | null>(null);
+  const [repChecked, setRepChecked] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/portal/admin/settings")
+      .then((r) => r.json())
+      .then((d) => setRepSig(d?.signature ?? null))
+      .catch(() => setRepSig(null))
+      .finally(() => setRepChecked(true));
+  }, []);
 
   useEffect(() => {
     fetch(`/api/portal/me/contract?jobId=${id}${assignmentId ? `&assignmentId=${assignmentId}` : ""}`)
@@ -161,7 +175,9 @@ export default function WorkerContractPage() {
             <p className="text-[13px] font-bold uppercase tracking-wide text-ink/50">
               Infinite Distribution representative
             </p>
-            {repMissing ? (
+            {!repChecked ? (
+              <div className="mt-2 h-24" />
+            ) : repMissing ? (
               <div className="mt-2 flex h-24 items-end">
                 <span className="w-full border-b border-slate-400 pb-1 text-[13px] text-ink/40 print:text-ink/60">
                   Signature
@@ -169,7 +185,7 @@ export default function WorkerContractPage() {
               </div>
             ) : (
               /* eslint-disable-next-line @next/next/no-img-element */
-              <img src="/images/signature.png" alt="Sarvesh Mohanrajh"
+              <img key={repSig || "file"} src={repSig || "/images/signature.png"} alt="Sarvesh Mohanrajh"
                 className="mt-2 h-24 w-full object-contain object-left"
                 onError={() => setRepMissing(true)} />
             )}

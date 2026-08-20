@@ -81,7 +81,7 @@ let schemaReady: Promise<void> | null = null;
  * date. Forget to raise it and your new column never gets added in production,
  * because the migration will be skipped.
  */
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 
 /**
  * Bring the schema up to date, once per process.
@@ -163,6 +163,17 @@ async function migrateSchema(): Promise<void> {
   // False until they choose their own password, which is what keeps the
   // name-based starting password working for people who haven't yet.
   await sql`ALTER TABLE portal_users ADD COLUMN IF NOT EXISTS password_set BOOLEAN NOT NULL DEFAULT FALSE;`;
+
+  // Odds and ends the office sets once and every contract reads — the
+  // countersignature above all. Kept in the database rather than as a file in
+  // the repo so it can be changed without a deploy.
+  await sql`
+    CREATE TABLE IF NOT EXISTS portal_settings (
+      key TEXT PRIMARY KEY,
+      value TEXT,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `;
 
   // Incremental upgrades — all safe to re-run.
   await sql`ALTER TABLE work_logs ALTER COLUMN strava_url DROP NOT NULL;`;
@@ -977,6 +988,23 @@ export async function deleteUser(id: number) {
  * nothing when the name is blank, unchanged, or already taken by somebody
  * else — a signature shouldn't be able to lock anyone out of their account.
  */
+/** One of the office's saved settings — the countersignature, and so on. */
+export async function getSetting(key: string): Promise<string | null> {
+  await ensureSchema();
+  const r = await sql<{ value: string | null }>`SELECT value FROM portal_settings WHERE key = ${key};`;
+  return r.rows[0]?.value ?? null;
+}
+
+export async function setSetting(key: string, value: string | null) {
+  await ensureSchema();
+  await sql`
+    INSERT INTO portal_settings (key, value, updated_at) VALUES (${key}, ${value}, NOW())
+    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW();`;
+}
+
+/** The key the countersignature lives under. */
+export const REP_SIGNATURE = "rep_signature";
+
 export async function renameUserTo(id: number, fullName: string): Promise<boolean> {
   await ensureSchema();
   const name = (fullName || "").trim();

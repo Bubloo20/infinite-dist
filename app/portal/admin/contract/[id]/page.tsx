@@ -20,10 +20,30 @@ type Data = {
  * missing file is obvious instead of silently printing an unsigned contract.
  */
 function RepSignature({ date }: { date: string }) {
+  const [stored, setStored] = useState<string | null>(null);
+  // Nothing is drawn until we know whether a signature is stored: rendering the
+  // file first meant its 404 latched "missing" a moment before the stored one
+  // arrived, and the contract printed an empty signing line over the top of a
+  // perfectly good signature.
+  const [checked, setChecked] = useState(false);
   const [missing, setMissing] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/portal/admin/settings")
+      .then((r) => r.json())
+      .then((d) => setStored(d?.signature ?? null))
+      .catch(() => setStored(null))
+      .finally(() => setChecked(true));
+  }, []);
+
+  const src = stored || "/images/signature.png";
+  useEffect(() => setMissing(false), [src]);
+
   return (
     <>
-      {missing ? (
+      {!checked ? (
+        <div className="mt-2 h-24" />
+      ) : missing ? (
         <div className="mt-2 flex h-24 items-end">
           <span className="w-full border-b border-slate-400 pb-1 text-[13px] text-ink/40 print:text-ink/60">
             Signature
@@ -31,7 +51,7 @@ function RepSignature({ date }: { date: string }) {
         </div>
       ) : (
         /* eslint-disable-next-line @next/next/no-img-element */
-        <img src="/images/signature.png" alt="Sarvesh Mohanrajh"
+        <img key={src} src={src} alt="Sarvesh Mohanrajh"
           className="mt-2 h-24 w-full object-contain object-left"
           onError={() => setMissing(true)} />
       )}
