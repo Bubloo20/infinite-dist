@@ -4,8 +4,6 @@ import { useCallback, useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { GlassCard, Loading } from "./PortalShell";
 import BoundaryMap, { parseSpec, specHasDrawing } from "./BoundaryMap";
-import JobContract from "./JobContract";
-import WorkLogForm, { type EditableLog } from "./WorkLogForm";
 import type { ClientJob, JobAssignment } from "@/lib/portal/db";
 import { submitForm } from "@/lib/forms";
 import { tidyHours } from "@/lib/portal/text";
@@ -174,16 +172,8 @@ export default function JobMarket({ workerName, only }: {
   const tab = only ?? tabState;
   const [busyId, setBusyId] = useState<number | null>(null);
   const [expanded, setExpanded] = useState<number | null>(null);
-  const [logging, setLogging] = useState<number | null>(null);
-  const [editingLog, setEditingLog] = useState<EditableLog | null>(null);
   const [mapOpen, setMapOpen] = useState<number | null>(null);
 
-  /** Take back an unpaid submission so it can be redone. */
-  const unmark = async (logId: number) => {
-    if (!window.confirm("Un-mark this work as done? You can submit it again afterwards.")) return;
-    await fetch(`/api/portal/me/log?id=${logId}`, { method: "DELETE" });
-    load();
-  };
   // Phones get a shorter map so the rest of the card isn't pushed off-screen.
   const [phone, setPhone] = useState(false);
   useEffect(() => {
@@ -223,16 +213,17 @@ export default function JobMarket({ workerName, only }: {
 
   useEffect(load, [load]);
 
-  // Coming back from the printable agreement lands on that job, ready to sign.
+  // Coming back from the printable agreement lands on that job, opened up.
   useEffect(() => {
     if (loading) return;
     const want = Number(new URLSearchParams(window.location.search).get("job"));
     if (!want) return;
     setTab("mine");
     setViewing(want);
+    setShut((cur) => cur.filter((x) => x !== want));
     setTimeout(() => {
-      document.getElementById(`contract-${want}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 120);
+      document.getElementById(`job-detail-${want}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 140);
   }, [loading]);
 
   const accept = async (jobId: number, assignmentId?: number | null) => {
@@ -546,7 +537,7 @@ export default function JobMarket({ workerName, only }: {
                                 {l.paidOn ? `Paid ${stamp(l)}` : "Awaiting verification"}
                               </span>
                               {!l.paidOn && (
-                                <button onClick={() => { setLogging(null); setEditingLog(l as EditableLog); }}
+                                <button onClick={() => viewJob(a?.id ?? null, j.id)}
                                   className="text-[12px] font-bold text-orchid transition hover:text-white">
                                   Edit
                                 </button>
@@ -567,68 +558,38 @@ export default function JobMarket({ workerName, only }: {
                   )}
                 </GlassCard>
 
-                {!isShut(cardId) && (accepted || viewing === cardId) && (
-                  <div id={`contract-${cardId}`} className="mt-2 space-y-2 border-l-2 border-orchid/35 pl-3 sm:pl-4">
-                    <p className="pt-1 text-[11px] font-bold uppercase tracking-[0.14em] text-white/30">
-                      For {workName(a, j)}
-                    </p>
-                    <JobContract job={j} workerName={workerName} signedDate={signed} mine={a}
-                      autoOpen={viewing === cardId && !signed}
-                      onClose={accepted ? undefined : () => setViewing(null)}
-                      onSigned={() => { setViewing(null); load(); }} />
-                    {signed && (
-                      <div>
-                        {shifts.length === 0 ? (
-                          <button onClick={() => setLogging(logging === cardId ? null : cardId)}
-                            className="flex w-full items-center justify-between gap-3 rounded-2xl border border-orchid/40 bg-gradient-to-r from-electric/20 to-orchid/15 px-5 py-4 text-left transition hover:from-electric/30 hover:to-orchid/25">
-                            <span>
-                              <span className="block font-display text-[15px] font-bold text-white">Mark work as done</span>
-                              <span className="mt-0.5 block text-[13px] text-white/55">
-                                Upload your hours, leaflets and tracking links
-                              </span>
-                            </span>
-                            <span className={`shrink-0 text-white/40 transition-transform ${logging === cardId ? "rotate-180" : ""}`}>▾</span>
-                          </button>
-                        ) : (
-                          <div className="rounded-2xl border border-emerald-400/25 bg-emerald-500/[0.06] px-5 py-4">
-                            <p className="font-display text-[15px] font-bold text-emerald-200">Marked as done</p>
-                            <p className="mt-1 text-[13px] text-emerald-100/65">
-                              {shifts.some((l) => l.paidOn)
-                                ? "This has been paid, so it's settled."
-                                : "Waiting on your tracking being checked. You can still change it."}
-                            </p>
-                            {!shifts.some((l) => l.paidOn) && (
-                              <div className="mt-3 flex flex-wrap gap-2">
-                                <button onClick={() => { setLogging(null); setEditingLog(shifts[0] as EditableLog); }}
-                                  className="rounded-xl border border-white/15 bg-white/[0.06] px-4 py-2 text-[13px] font-bold text-white/80 transition hover:bg-white/[0.12]">
-                                  Edit or add links
-                                </button>
-                                <button onClick={() => unmark(shifts[0].id)}
-                                  className="rounded-xl border border-rose-400/30 px-4 py-2 text-[13px] font-bold text-rose-300 transition hover:bg-rose-500/10">
-                                  Un-mark as done
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                        {logging === cardId && (
-                          <div className="mt-2">
-                            <WorkLogForm job={j} mine={a} signedDate={signed}
-                              onDone={() => { setLogging(null); load(); }}
-                              onCancel={() => setLogging(null)} />
-                          </div>
-                        )}
-                        {editingLog && shifts.some((l) => l.id === editingLog.id) && (
-                          <div className="mt-2">
-                            <WorkLogForm job={j} mine={a} editing={editingLog}
-                              onDone={() => { setEditingLog(null); load(); }}
-                              onCancel={() => setEditingLog(null)} />
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
+                {/*
+                  The agreement, the schedule and the tracking upload all want
+                  room and concentration, so they live on the job's own page.
+                  What stays here is the overview and the way through to it.
+                */}
+                {!isShut(cardId) && (
+                  <button
+                    onClick={() => viewJob(a?.id ?? null, j.id)}
+                    className="mt-2 flex w-full items-center justify-between gap-3 rounded-2xl border border-orchid/40 bg-gradient-to-r from-electric/20 to-orchid/15 px-5 py-4 text-left transition hover:from-electric/30 hover:to-orchid/25"
+                  >
+                    <span className="min-w-0">
+                      <span className="block font-display text-[15px] font-bold text-white">
+                        {!signed
+                          ? "Read and sign the agreement"
+                          : shifts.length === 0
+                            ? "Your timesheet and tracking"
+                            : "Open this job"}
+                      </span>
+                      <span className="mt-0.5 block text-[13px] text-white/55">
+                        {!signed
+                          ? "Set the days you'll work, then sign"
+                          : shifts.length === 0
+                            ? "Start the job, then mark it done when you've finished"
+                            : shifts.some((l) => l.paidOn)
+                              ? "Paid — everything's settled"
+                              : "Marked as done, waiting on your tracking being checked"}
+                      </span>
+                    </span>
+                    <span aria-hidden className="shrink-0 text-white/45">&rarr;</span>
+                  </button>
                 )}
+
               </div>
             );
           })}
