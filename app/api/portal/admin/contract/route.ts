@@ -15,9 +15,13 @@ export async function GET(req: Request) {
     if (!jobId) return NextResponse.json({ ok: true, contracts: await listContracts() });
 
     const rows = await sql<{
-      signed_name: string; signature_png: string; signed_date: string; schedule: string | null; user_id: number;
-    }>`SELECT signed_name, signature_png, signed_date, schedule, user_id
-       FROM job_contracts WHERE job_id = ${jobId} ORDER BY created_at DESC LIMIT 1;`;
+      signed_name: string; signature_png: string; signed_date: string; schedule: string | null;
+      user_id: number; assignment_id: number | null; junk_mail_allowed: boolean | null;
+    }>`SELECT c.signed_name, c.signature_png, c.signed_date, c.schedule, c.user_id, c.assignment_id,
+              a.junk_mail_allowed
+       FROM job_contracts c
+       LEFT JOIN job_assignments a ON a.id = c.assignment_id
+      WHERE c.job_id = ${jobId} ORDER BY c.created_at DESC LIMIT 1;`;
     const contract = rows.rows[0];
     if (!contract) return NextResponse.json({ ok: false, error: "No signed contract for this job." }, { status: 404 });
 

@@ -81,7 +81,7 @@ let schemaReady: Promise<void> | null = null;
  * date. Forget to raise it and your new column never gets added in production,
  * because the migration will be skipped.
  */
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 
 /**
  * Bring the schema up to date, once per process.
@@ -372,6 +372,9 @@ async function migrateSchema(): Promise<void> {
   await sql`ALTER TABLE job_assignments ADD COLUMN IF NOT EXISTS boundary TEXT;`;
   // The worker's own name for their piece. The job's own title is internal.
   await sql`ALTER TABLE job_assignments ADD COLUMN IF NOT EXISTS title TEXT;`;
+  // Whether this drop may go into letterboxes marked "No Junk Mail". It changes
+  // how the run is walked, so it's set per sub-contract and told to the worker.
+  await sql`ALTER TABLE job_assignments ADD COLUMN IF NOT EXISTS junk_mail_allowed BOOLEAN NOT NULL DEFAULT FALSE;`;
   await sql`ALTER TABLE job_assignments ADD COLUMN IF NOT EXISTS map_center TEXT;`;
 
   /**
@@ -495,6 +498,7 @@ export type ClientJob = {
 export type JobAssignment = {
   id: number; job_id: number; user_id: number;
   title: string | null;
+  junk_mail_allowed: boolean;
   pay: string | null; leaflet_share: number | null; area_note: string | null;
   start_date: string | null; due_date: string | null;
   min_hours: string | null; allocated_time: string | null; map_image: string | null;
@@ -658,7 +662,7 @@ export async function listAssignmentsForUser(userId: number): Promise<JobAssignm
 
 export async function upsertAssignment(a: {
   id?: number | null; jobId: number; userId: number; pay?: number | null;
-  title?: string | null;
+  title?: string | null; junkMailAllowed?: boolean;
   leafletShare?: number | null; areaNote?: string | null;
   startDate?: string | null; dueDate?: string | null; status?: string | null;
   minHours?: string | null; allocatedTime?: string | null; mapImage?: string | null;
@@ -671,7 +675,7 @@ export async function upsertAssignment(a: {
   if (a.id) {
     const u = await sql<{ id: number }>`
       UPDATE job_assignments SET
-        title = ${a.title ?? null},
+        title = ${a.title ?? null}, junk_mail_allowed = ${a.junkMailAllowed ?? false},
         pay = ${a.pay ?? null}, leaflet_share = ${a.leafletShare ?? null},
         area_note = ${a.areaNote ?? null}, start_date = ${a.startDate || null},
         due_date = ${a.dueDate || null}, status = ${a.status || 'assigned'},
@@ -686,10 +690,10 @@ export async function upsertAssignment(a: {
 
   const r = await sql<{ id: number }>`
     INSERT INTO job_assignments
-      (job_id, user_id, title, pay, leaflet_share, area_note, start_date, due_date, status,
+      (job_id, user_id, title, junk_mail_allowed, pay, leaflet_share, area_note, start_date, due_date, status,
        min_hours, allocated_time, map_image, boundary, map_center)
     VALUES
-      (${a.jobId}, ${a.userId}, ${a.title ?? null}, ${a.pay ?? null}, ${a.leafletShare ?? null}, ${a.areaNote ?? null},
+      (${a.jobId}, ${a.userId}, ${a.title ?? null}, ${a.junkMailAllowed ?? false}, ${a.pay ?? null}, ${a.leafletShare ?? null}, ${a.areaNote ?? null},
        ${a.startDate || null}, ${a.dueDate || null}, ${a.status || 'assigned'},
        ${a.minHours ?? null}, ${a.allocatedTime ?? null}, ${a.mapImage ?? null},
        ${a.boundary ?? null}, ${a.mapCenter ?? null})
@@ -710,7 +714,15 @@ export async function acceptAssignment(id: number, userId: number) {
 
 export async function deleteAssignment(id: number) {
   await ensureSchema();
-  await sql`DELETE FROM job_assignments WHERE id = ${id};`;
+  // The agreement was for this specific piece of work, so it goes with it.
+  // Left behind it becomes an agreement attached to a sub-contract that no
+  // longer exists — invisible everywhere, and confusing when someone goes
+  // looking for why a signed job vanished.
+  const row = await sql<{ job_id: number }>`
+    DELETE FROM job_assignments WHERE id = ${id} RETURNING job_id;`;
+  await sql`DELETE FROM job_contracts WHERE assignment_id = ${id};`;
+  // Their leaflets are no longer out with anyone.
+  if (row.rows[0]) await syncJobOutCount(row.rows[0].job_id);
 }
 
 /** Jobs a worker is on, whether via a sub-contract or the single-assignee field. */

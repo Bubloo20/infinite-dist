@@ -3,14 +3,15 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { CONTRACT_TERMS } from "@/components/portal/JobContract";
+import { CONTRACT_TERMS, junkMailTerm } from "@/components/portal/JobContract";
 import { tidyHours } from "@/lib/portal/text";
 
 type Data = {
   ok: boolean;
   job?: { id: number; title: string | null; area: string | null; quantity: number | null;
           worker_pay: string | null; allocated_time: string | null; min_hours: string | null };
-  contract?: { signed_name: string; signature_png: string; signed_date: string; schedule: string | null };
+  contract?: { signed_name: string; signature_png: string; signed_date: string; schedule: string | null;
+               junk_mail_allowed?: boolean | null };
   worker?: string | null;
 };
 
@@ -133,6 +134,8 @@ export default function SignedContractPage() {
 
         <h2 className="mt-8 font-display text-xl font-bold text-ink">Terms</h2>
         <ul className="mt-3 space-y-2">
+          {/* This job's own rule first — it changes how the street is walked. */}
+          <li className="font-semibold text-ink">{junkMailTerm(Boolean(d.contract?.junk_mail_allowed))}</li>
           {CONTRACT_TERMS.map((t, i) => (
             <li key={i} className="flex gap-3 text-[14px] leading-relaxed text-ink/80">
               <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-ink/50" />

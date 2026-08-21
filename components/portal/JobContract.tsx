@@ -25,6 +25,15 @@ export const CONTRACT_TERMS = [
   "The contractor is an independent subcontractor, not an employee.",
 ];
 
+/**
+ * Junk mail is decided per job, not once for everyone, so it can't sit in the
+ * standing terms — it goes in as its own line on the agreement being signed.
+ */
+export const junkMailTerm = (allowed: boolean) =>
+  allowed
+    ? "For this job, leaflets MAY be placed in letterboxes marked ‘No Junk Mail’."
+    : "For this job, letterboxes marked ‘No Junk Mail’ must be skipped — do not place leaflets in them.";
+
 const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;

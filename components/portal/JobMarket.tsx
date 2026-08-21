@@ -110,6 +110,7 @@ function Brief({ job, mine }: { job: ClientJob; mine?: JobAssignment | null }) {
         ["Your leaflets", mine.leaflet_share ? mine.leaflet_share.toLocaleString() : (job.quantity ? job.quantity.toLocaleString() : "—")],
         ["Your pay", money(mine.pay ?? job.worker_pay)],
         ["Minimum hours", tidyHours(mine.min_hours || job.min_hours) || "—"],
+        ["Junk mail", mine.junk_mail_allowed ? "Allowed" : "Not allowed"],
         ["Allocated time", mine.start_date || mine.due_date
           ? `${shortDate(mine.start_date)} – ${shortDate(mine.due_date)}`
           : mine.allocated_time || job.allocated_time || "—"],

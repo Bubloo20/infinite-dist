@@ -262,13 +262,65 @@ const payFor = (leaflets: number) =>
 const minHoursFor = (leaflets: number) =>
   leaflets <= 0 ? "" : formatHours(leaflets * 3.5 / 1000);
 
+/**
+ * Whether this run may go into letterboxes marked "No Junk Mail".
+ *
+ * It decides how the street is actually walked, so it's asked per sub-contract
+ * and spelled out rather than left as jargon on a checkbox.
+ */
+function JunkMailToggle({ value, onChange, tone = "dark" }: {
+  value: boolean;
+  onChange: (v: boolean) => void;
+  tone?: "dark" | "plain";
+}) {
+  const [why, setWhy] = useState(false);
+  return (
+    <div className={tone === "dark" ? "rounded-xl border border-white/12 bg-white/[0.04] px-3.5 py-2.5" : ""}>
+      <div className="flex items-center gap-2">
+        <label className="flex cursor-pointer items-center gap-2.5 text-[13px] text-white/75">
+          <input
+            type="checkbox"
+            checked={value}
+            onChange={(e) => onChange(e.target.checked)}
+            className="h-4 w-4 shrink-0 accent-orchid"
+          />
+          <span>
+            Junk mail allowed
+            <span className={`ml-2 rounded-md px-1.5 py-0.5 text-[11px] font-bold uppercase ${
+              value ? "bg-emerald-500/15 text-emerald-300" : "bg-white/[0.08] text-white/45"}`}>
+              {value ? "Yes" : "No"}
+            </span>
+          </span>
+        </label>
+        <button
+          type="button"
+          aria-label="What does junk mail allowed mean?"
+          aria-expanded={why}
+          onClick={() => setWhy((v) => !v)}
+          className="grid h-5 w-5 shrink-0 place-items-center rounded-full border border-white/25 text-[11px] font-bold text-white/55 transition hover:border-white/50 hover:text-white"
+        >
+          i
+        </button>
+      </div>
+      {why && (
+        <p className="mt-2 max-w-md text-[12px] leading-relaxed text-white/55">
+          Whether the worker may put leaflets in letterboxes marked
+          &ldquo;No Junk Mail&rdquo;. <span className="font-semibold text-white/75">Yes</span> — every box on
+          the street. <span className="font-semibold text-white/75">No</span> — skip any that say no junk
+          mail, addressed items only.
+        </p>
+      )}
+    </div>
+  );
+}
+
 export function SubContracts({ job, users, rows, post, del }: {
   job: ClientJob; users: PortalUser[]; rows: JobAssignment[];
   post: (body: Record<string, unknown>) => Promise<boolean>;
   del: (entity: string, id: number) => Promise<void>;
 }) {
   const blank = {
-    userId: "", title: "", pay: "", leafletShare: "", areaNote: "",
+    userId: "", title: "", junkMailAllowed: false, pay: "", leafletShare: "", areaNote: "",
     startDate: "", dueDate: "", minHours: "", allocatedTime: "", mapImage: "",
     boundary: "", mapCenter: "",
   };
@@ -281,6 +333,7 @@ export function SubContracts({ job, users, rows, post, del }: {
   const [payRow, setPayRow] = useState<number | null>(null);
   const [payDraft, setPayDraft] = useState("");
   const [editTitle, setEditTitle] = useState("");
+  const [editJunk, setEditJunk] = useState(false);
   const [editSpec, setEditSpec] = useState<AreaSpec>(EMPTY_SPEC);
   const [editCenter, setEditCenter] = useState<[number, number, number] | null>(null);
   const [saving, setSaving] = useState(false);
@@ -328,6 +381,7 @@ export function SubContracts({ job, users, rows, post, del }: {
                   {r.allocated_time ? ` · ${r.allocated_time}` : ""}
                   {r.map_image ? " · area diagram attached" : ""}
                   {specHasDrawing(parseSpec(r.boundary)) ? " · area drawn on map" : ""}
+                  {r.junk_mail_allowed ? " · junk mail allowed" : " · no junk mail"}
                 </p>
               </div>
               <div className="flex items-center gap-4">
@@ -356,7 +410,8 @@ export function SubContracts({ job, users, rows, post, del }: {
                         if (Math.abs(next - Number(r.pay || 0)) < 0.005) return;   // nothing moved
                         await post({
                           entity: "assignment", id: r.id, jobId: job.id, userId: r.user_id,
-                          title: r.title, pay: next, leafletShare: r.leaflet_share, areaNote: r.area_note,
+                          title: r.title, junkMailAllowed: r.junk_mail_allowed,
+                          pay: next, leafletShare: r.leaflet_share, areaNote: r.area_note,
                           startDate: r.start_date, dueDate: r.due_date, status: r.status,
                           minHours: r.min_hours, allocatedTime: r.allocated_time,
                         });
@@ -378,6 +433,7 @@ export function SubContracts({ job, users, rows, post, del }: {
                     if (editing === r.id) { setEditing(null); return; }
                     setEditing(r.id);
                     setEditTitle(r.title || "");
+                    setEditJunk(Boolean(r.junk_mail_allowed));
                     setEditSpec(parseSpec(r.boundary));
                     setEditCenter(null);
                   }}
@@ -396,6 +452,9 @@ export function SubContracts({ job, users, rows, post, del }: {
                     <input className={input} value={editTitle} placeholder={r.area_note || `Job #${r.job_id}`}
                       onChange={(e) => setEditTitle(e.target.value)} />
                   </label>
+                  <div className="mb-3">
+                    <JunkMailToggle value={editJunk} onChange={setEditJunk} />
+                  </div>
                   <div className="grid gap-3 lg:grid-cols-2">
                     {r.map_image && (
                       <div>
@@ -424,7 +483,7 @@ export function SubContracts({ job, users, rows, post, del }: {
                         // Send the row back whole — the upsert overwrites what it's given.
                         const ok = await post({
                           entity: "assignment", id: r.id, jobId: job.id, userId: r.user_id,
-                          title: editTitle.trim() || null,
+                          title: editTitle.trim() || null, junkMailAllowed: editJunk,
                           pay: r.pay, leafletShare: r.leaflet_share, areaNote: r.area_note,
                           startDate: r.start_date, dueDate: r.due_date, status: r.status,
                           minHours: r.min_hours, allocatedTime: r.allocated_time,
@@ -492,6 +551,9 @@ export function SubContracts({ job, users, rows, post, del }: {
         <input className={input} placeholder="Their area" value={f.areaNote} onChange={(e) => setF({ ...f, areaNote: e.target.value })} />
         <input className={input} placeholder="What they'll see this called" value={f.title}
           onChange={(e) => setF({ ...f, title: e.target.value })} />
+        <div className="sm:col-span-2">
+          <JunkMailToggle value={f.junkMailAllowed} onChange={(v) => setF({ ...f, junkMailAllowed: v })} />
+        </div>
         <label className="block">
           <span className="mb-1 block text-[11px] font-semibold text-white/35">Start</span>
           <DateInput className={input} value={f.startDate} onChange={(v) => setF({ ...f, startDate: v })} />
