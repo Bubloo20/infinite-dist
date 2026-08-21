@@ -68,6 +68,31 @@ export default function InvoicePage() {
       .finally(() => setLoading(false));
   }, [id]);
 
+  /**
+   * Putting the invoice in front of the agency is what makes it sent — the
+   * status used to have to be changed by hand afterwards, and an invoice that
+   * had gone out still read "not sent" on the dashboard.
+   */
+  const markSent = async (j: ClientJob) => {
+    if (j.invoice_status !== "not_sent") return;   // already sent, or already paid
+    const r = await fetch("/api/portal/admin/clients", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        entity: "job", id: j.id,
+        agencyId: j.agency_id, agentId: j.agent_id, title: j.title, area: j.area,
+        leafletType: j.leaflet_type, quantity: j.quantity, ratePerLeaflet: j.rate_per_leaflet,
+        amount: j.amount, status: j.status,
+        invoiceStatus: "sent",
+        invoiceNo: j.invoice_no, invoiceDate: j.invoice_date,
+        pickedOn: j.picked_on, completedOn: j.completed_on, notes: j.notes,
+        jobNumber: j.job_number,
+      }),
+    });
+    const d = await r.json().catch(() => ({ ok: false }));
+    if (d.ok) setJob({ ...j, invoice_status: "sent" });
+  };
+
   if (loading) return <div className="grid min-h-screen place-items-center bg-white text-ink">Loading…</div>;
   if (denied) return <div className="grid min-h-screen place-items-center bg-white text-ink">Admin sign-in required. <Link href="/portal/admin" className="ml-2 underline">Sign in</Link></div>;
   if (!job) return <div className="grid min-h-screen place-items-center bg-white text-ink">Invoice not found.</div>;
@@ -91,7 +116,18 @@ export default function InvoicePage() {
 
       {/* The invoice as a file, plus a draft waiting in Gmail to attach it to. */}
       <div className="mx-auto mb-4 max-w-[820px] rounded-2xl border border-slate-200 bg-white px-6 py-5 shadow-sm print:hidden">
-        <p className="font-display text-base font-bold text-ink">Email this to yourself</p>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="font-display text-base font-bold text-ink">Email this to yourself</p>
+          {/* So it's obvious the dashboard has been updated too. */}
+          <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide ${
+            job.invoice_status === "received" ? "bg-emerald-50 text-emerald-700"
+              : job.invoice_status === "sent" ? "bg-sky-50 text-sky-700"
+              : "bg-slate-100 text-slate-500"}`}>
+            {job.invoice_status === "received" ? "Paid"
+              : job.invoice_status === "sent" ? "Marked as sent"
+              : "Not sent yet"}
+          </span>
+        </div>
         <div className="mt-3 flex flex-wrap items-center gap-3">
           <button
             disabled={drafting}
@@ -117,6 +153,7 @@ export default function InvoicePage() {
                     `&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(DRAFT_BODY)}`,
                   "_blank", "noopener",
                 );
+                await markSent(job);
               } finally {
                 setDrafting(false);
               }
@@ -152,7 +189,7 @@ export default function InvoicePage() {
           </select>
           <button
             disabled={!sendTo || !agencyAgents.find((a) => String(a.id) === sendTo)?.email}
-            onClick={() => {
+            onClick={async () => {
               const to = agencyAgents.find((a) => String(a.id) === sendTo);
               if (!to?.email) return;
               const invNo = job.invoice_no || "";
@@ -169,6 +206,7 @@ export default function InvoicePage() {
                 `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(to.email)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`,
                 "_blank", "noopener",
               );
+              await markSent(job);
             }}
             className="rounded-xl bg-ink px-6 py-2.5 text-sm font-bold text-white transition hover:-translate-y-0.5 disabled:opacity-40 disabled:hover:translate-y-0"
           >

@@ -468,14 +468,18 @@ function ClientJobRow({ job, agencyName, agentName, agencies, agents, expenses, 
   const s = STATUS[job.status];
   const inv = effectiveInvoice(job);
   // Three buckets across the job's quantity: completed, out with a worker, and
-  // still waiting to be dispatched. A completed job counts as fully delivered
-  // unless a partial figure was entered.
+  // still waiting to be dispatched.
+  //
   // Both numbers come from what the workers have actually done — accepted work
-  // is out for delivery, approved work is completed — unless someone has typed
-  // a figure over the top.
+  // is out for delivery, approved work is completed. Two things outrank that:
+  // a figure typed in by hand, and marking the whole job Completed, which says
+  // the lot went out whatever the individual sub-contracts have got to.
   const qty = job.quantity ?? 0;
-  const delivered = job.delivered_override ?? job.delivered_count ?? 0;
-  const out = Math.max(0, Math.min(job.out_override ?? job.out_count ?? 0, qty - delivered));
+  const finished = job.status === "completed";
+  const delivered = job.delivered_override ?? (finished ? qty : job.delivered_count ?? 0);
+  const out = finished && job.out_override == null
+    ? 0
+    : Math.max(0, Math.min(job.out_override ?? job.out_count ?? 0, qty - delivered));
   const remaining = Math.max(0, qty - delivered - out);
   const setCount = (which: "out" | "delivered", v: number | null) =>
     post({ entity: "job", id: job.id, ...jobPayload(job),
