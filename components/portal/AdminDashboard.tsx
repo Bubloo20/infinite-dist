@@ -198,6 +198,15 @@ export default function AdminDashboard({ onSignOut }: { onSignOut: () => void })
     await load(true);          // don't report done until the new data is on screen
     return true;
   };
+  /** Throw away a logged shift, then recount the job it belonged to. */
+  const removeLog = async (id: number) => {
+    const r = await fetch(`/api/portal/admin/job?id=${id}`, { method: "DELETE" });
+    const d = await r.json().catch(() => ({ ok: false }));
+    if (!d.ok) { setMsg(d.error || "Couldn't delete that shift."); return; }
+    setMsg("");
+    await load(true);
+  };
+
   const delClient = async (entity: string, id: number) => {
     const r = await fetch(`/api/portal/admin/clients?entity=${entity}&id=${id}`, { method: "DELETE" });
     const d = await r.json();
@@ -314,7 +323,7 @@ export default function AdminDashboard({ onSignOut }: { onSignOut: () => void })
       ) : tab === "agencies" ? (
         <ClientsTab agencies={agencies} agents={agents} jobs={clientJobs} agencyPayments={agencyPayments} post={postClient} del={delClient} />
       ) : tab === "shifts" ? (
-        <JobsTab logs={filtered} q={q} setQ={setQ} post={post} assignments={assignments} jobs={clientJobs} users={users} del={delClient} />
+        <JobsTab logs={filtered} q={q} setQ={setQ} post={post} assignments={assignments} jobs={clientJobs} users={users} del={delClient} removeLog={removeLog} />
       ) : tab === "workers" ? (
         <div className="space-y-4">
           <SignatureSetting />
@@ -332,11 +341,12 @@ export default function AdminDashboard({ onSignOut }: { onSignOut: () => void })
 
 /* ---------------------------------- jobs ---------------------------------- */
 
-function JobsTab({ logs, q, setQ, post, assignments, jobs, users, del }: {
+function JobsTab({ logs, q, setQ, post, assignments, jobs, users, del, removeLog }: {
   logs: WorkLog[]; q: string; setQ: (v: string) => void;
   post: (u: string, b: unknown) => Promise<boolean>;
   assignments: JobAssignment[]; jobs: ClientJob[]; users: PortalUser[];
   del: (entity: string, id: number) => Promise<void>;
+  removeLog: (id: number) => Promise<void>;
 }) {
   const exportCsv = () => {
     const head = ["Worker", "Job", "Area", "Started", "Finished", "Time", "Leaflets", "Amount", "Paid on", "Strava", "MapMy", "Notes"];
@@ -408,14 +418,18 @@ function JobsTab({ logs, q, setQ, post, assignments, jobs, users, del }: {
         <div className="space-y-3">
           {!logs.length ? (
             <GlassCard className="p-14 text-center"><p className="text-white/50">No shifts logged yet.</p></GlassCard>
-          ) : logs.map((l) => <JobRow key={l.id} log={l} post={post} />)}
+          ) : logs.map((l) => <JobRow key={l.id} log={l} post={post} removeLog={removeLog} />)}
         </div>
       </div>
     </>
   );
 }
 
-function JobRow({ log, post }: { log: WorkLog; post: (u: string, b: unknown) => Promise<boolean> }) {
+function JobRow({ log, post, removeLog }: {
+  log: WorkLog;
+  post: (u: string, b: unknown) => Promise<boolean>;
+  removeLog: (id: number) => Promise<void>;
+}) {
   const [amount, setAmount] = useState(log.amount ?? "");
   const strava = unpackLinks(log.strava_urls);
   const mapmy = unpackLinks(log.mapmy_urls);
@@ -472,6 +486,14 @@ function JobRow({ log, post }: { log: WorkLog; post: (u: string, b: unknown) => 
             className={`${paid ? btnGhost : btn} disabled:cursor-not-allowed disabled:opacity-40`}
             title={!paid && !log.verified_at ? "Verify the tracking first" : undefined}>
             {paid ? "Mark unpaid" : "Mark as paid"}
+          </button>
+          <button
+            onClick={() => {
+              if (!window.confirm(`Delete ${log.worker_name}'s shift? This can't be undone.`)) return;
+              removeLog(log.id);
+            }}
+            className="rounded-xl px-4 py-2.5 text-sm font-semibold text-white/30 transition hover:text-rose-300">
+            Delete
           </button>
         </div>
       </div>

@@ -35,6 +35,8 @@ export async function GET() {
       ok: true, open, mine, interest, assignments, logs,
       contracts: signed.map((c) => ({
         jobId: c.job_id, assignmentId: c.assignment_id, signedDate: c.signed_date,
+        // What the pay was when they signed, so a change since is visible.
+        agreedPay: c.agreed_pay,
       })),
     });
   } catch (e) {
@@ -112,7 +114,11 @@ export async function POST(req: Request) {
       await saveContract({
         jobId, userId: s.userId, assignmentId: signFor?.id ?? null,
         signedName: signedName || user?.full_name || "",
-        signaturePng, signedDate, schedule: (b.schedule as string) || null,
+        signaturePng, signedDate,
+        // Left out when they're only agreeing to a new figure — the days they
+        // already gave us are kept rather than wiped.
+        schedule: (b.schedule as string) || null,
+        agreedPay: signFor?.pay != null ? Number(signFor.pay) : null,
       });
       // However they wrote their name on the agreement is how they're known
       // from here on — the register was only ever the office's best guess.

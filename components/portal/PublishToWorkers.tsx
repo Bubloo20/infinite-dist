@@ -278,6 +278,8 @@ export function SubContracts({ job, users, rows, post, del }: {
   const ownHours = useRef(false);
   const [tracing, setTracing] = useState(false);
   const [editing, setEditing] = useState<number | null>(null);
+  const [payRow, setPayRow] = useState<number | null>(null);
+  const [payDraft, setPayDraft] = useState("");
   const [editTitle, setEditTitle] = useState("");
   const [editSpec, setEditSpec] = useState<AreaSpec>(EMPTY_SPEC);
   const [editCenter, setEditCenter] = useState<[number, number, number] | null>(null);
@@ -329,7 +331,48 @@ export function SubContracts({ job, users, rows, post, del }: {
                 </p>
               </div>
               <div className="flex items-center gap-4">
-                <span className="font-display text-lg font-extrabold text-emerald-300">${Number(r.pay || 0).toFixed(2)}</span>
+                {/*
+                  Pay is changed here rather than buried in the map panel. If
+                  they've already signed, changing it means they signed for a
+                  different number — the portal asks them to agree to the new
+                  one before they carry on.
+                */}
+                {payRow === r.id ? (
+                  <span className="flex items-center gap-1.5">
+                    <span className="font-display text-lg font-extrabold text-emerald-300">$</span>
+                    <input
+                      autoFocus
+                      inputMode="decimal"
+                      value={payDraft}
+                      onChange={(ev) => setPayDraft(ev.target.value.replace(/[^0-9.]/g, ""))}
+                      onKeyDown={(ev) => {
+                        if (ev.key === "Enter") ev.currentTarget.blur();
+                        if (ev.key === "Escape") { setPayRow(null); }
+                      }}
+                      onBlur={async () => {
+                        const next = payDraft === "" ? null : Number(payDraft);
+                        setPayRow(null);
+                        if (next === null || Number.isNaN(next)) return;
+                        if (Math.abs(next - Number(r.pay || 0)) < 0.005) return;   // nothing moved
+                        await post({
+                          entity: "assignment", id: r.id, jobId: job.id, userId: r.user_id,
+                          title: r.title, pay: next, leafletShare: r.leaflet_share, areaNote: r.area_note,
+                          startDate: r.start_date, dueDate: r.due_date, status: r.status,
+                          minHours: r.min_hours, allocatedTime: r.allocated_time,
+                        });
+                      }}
+                      className="w-24 rounded-lg border border-white/25 bg-night/80 px-2 py-1 text-right font-display text-lg font-extrabold text-emerald-300 outline-none"
+                    />
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    title="Click to change what this worker is paid"
+                    onClick={() => { setPayDraft(String(Number(r.pay || 0).toFixed(2))); setPayRow(r.id); }}
+                    className="font-display text-lg font-extrabold text-emerald-300 underline decoration-dotted decoration-emerald-300/40 underline-offset-4 transition hover:text-emerald-200">
+                    ${Number(r.pay || 0).toFixed(2)}
+                  </button>
+                )}
                 <button
                   onClick={() => {
                     if (editing === r.id) { setEditing(null); return; }

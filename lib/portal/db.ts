@@ -81,7 +81,7 @@ let schemaReady: Promise<void> | null = null;
  * date. Forget to raise it and your new column never gets added in production,
  * because the migration will be skipped.
  */
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 
 /**
  * Bring the schema up to date, once per process.
@@ -191,6 +191,15 @@ async function migrateSchema(): Promise<void> {
   // Optional photos on a shift, stored as a JSON array of small data URLs.
   await sql`ALTER TABLE work_logs ADD COLUMN IF NOT EXISTS photos TEXT;`;
   await sql`ALTER TABLE job_contracts ADD COLUMN IF NOT EXISTS assignment_id INTEGER;`;
+  // What the pay was when they put their name to it. If the sub-contract's pay
+  // moves away from this, they agreed to a different number and have to say so.
+  await sql`ALTER TABLE job_contracts ADD COLUMN IF NOT EXISTS agreed_pay NUMERIC(10,2);`;
+  // Agreements signed before this was recorded agreed to whatever the pay is
+  // now — nothing has changed under them.
+  await sql`
+    UPDATE job_contracts c SET agreed_pay = a.pay
+      FROM job_assignments a
+     WHERE c.assignment_id = a.id AND c.agreed_pay IS NULL AND a.pay IS NOT NULL;`;
 
   // A tracked walk: one row per session, its trail in session_points.
   await sql`
@@ -499,6 +508,7 @@ export type JobInterest = {
 export type JobContract = {
   id: number; job_id: number; user_id: number; assignment_id: number | null; signed_name: string;
   signature_png: string; signed_date: string; schedule: string | null;
+  agreed_pay: string | null;
   agreed: boolean; created_at: string;
 };
 
@@ -829,18 +839,21 @@ export async function getContractForAssignment(assignmentId: number): Promise<Jo
 export async function saveContract(c: {
   jobId: number; userId: number; assignmentId?: number | null; signedName: string;
   signaturePng: string; signedDate: string; schedule?: string | null;
+  agreedPay?: number | null;
 }) {
   await ensureSchema();
   // Keyed on the sub-contract, so a worker holding two on one job signs twice.
   if (c.assignmentId) {
     await sql`
       INSERT INTO job_contracts
-        (job_id, user_id, assignment_id, signed_name, signature_png, signed_date, schedule, agreed)
+        (job_id, user_id, assignment_id, signed_name, signature_png, signed_date, schedule, agreed_pay, agreed)
       VALUES (${c.jobId}, ${c.userId}, ${c.assignmentId}, ${c.signedName}, ${c.signaturePng},
-              ${c.signedDate}, ${c.schedule || null}, TRUE)
+              ${c.signedDate}, ${c.schedule || null}, ${c.agreedPay ?? null}, TRUE)
       ON CONFLICT (assignment_id) WHERE assignment_id IS NOT NULL DO UPDATE SET
         signed_name = EXCLUDED.signed_name, signature_png = EXCLUDED.signature_png,
-        signed_date = EXCLUDED.signed_date, schedule = EXCLUDED.schedule, created_at = NOW();`;
+        signed_date = EXCLUDED.signed_date, agreed_pay = EXCLUDED.agreed_pay,
+        -- Re-signing over a pay change keeps the days they already gave us.
+        schedule = COALESCE(EXCLUDED.schedule, job_contracts.schedule), created_at = NOW();`;
     return;
   }
   // Older jobs with no sub-contract row keep one agreement for the job.
@@ -850,13 +863,14 @@ export async function saveContract(c: {
   if (existing.rows[0]) {
     await sql`
       UPDATE job_contracts SET signed_name = ${c.signedName}, signature_png = ${c.signaturePng},
-        signed_date = ${c.signedDate}, schedule = ${c.schedule || null}, created_at = NOW()
+        signed_date = ${c.signedDate}, agreed_pay = ${c.agreedPay ?? null},
+        schedule = COALESCE(${c.schedule || null}, schedule), created_at = NOW()
        WHERE id = ${existing.rows[0].id};`;
     return;
   }
   await sql`
-    INSERT INTO job_contracts (job_id, user_id, signed_name, signature_png, signed_date, schedule, agreed)
-    VALUES (${c.jobId}, ${c.userId}, ${c.signedName}, ${c.signaturePng}, ${c.signedDate}, ${c.schedule || null}, TRUE);`;
+    INSERT INTO job_contracts (job_id, user_id, signed_name, signature_png, signed_date, schedule, agreed_pay, agreed)
+    VALUES (${c.jobId}, ${c.userId}, ${c.signedName}, ${c.signaturePng}, ${c.signedDate}, ${c.schedule || null}, ${c.agreedPay ?? null}, TRUE);`;
 }
 
 /** Every agreement this worker has signed, newest first. */
@@ -1112,6 +1126,20 @@ export async function listWorkLogsForUser(userId: number): Promise<WorkLog[]> {
     SELECT * FROM work_logs WHERE user_id = ${userId} ORDER BY created_at DESC LIMIT 300;
   `;
   return r.rows;
+}
+
+/**
+ * Remove a logged shift for good.
+ *
+ * The job's figures are recounted afterwards, or a deleted shift would leave
+ * its leaflets sitting in the completed column.
+ */
+export async function deleteWorkLog(id: number) {
+  await ensureSchema();
+  const r = await sql<{ client_job_id: number | null }>`
+    DELETE FROM work_logs WHERE id = ${id} RETURNING client_job_id;`;
+  const jobId = r.rows[0]?.client_job_id;
+  if (jobId) await syncJobOutCount(jobId);
 }
 
 /** Admin sets what a job is worth. */

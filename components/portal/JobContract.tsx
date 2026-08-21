@@ -59,7 +59,7 @@ const fmtHours = (h: number): string => formatHours(h) || "0 mins";
  */
 const parseMinHours = parseHours;
 
-function SignaturePad({ onChange }: { onChange: (dataUrl: string | null) => void }) {
+export function SignaturePad({ onChange }: { onChange: (dataUrl: string | null) => void }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const drawing = useRef(false);
   const [hasInk, setHasInk] = useState(false);

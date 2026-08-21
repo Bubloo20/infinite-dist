@@ -163,7 +163,9 @@ export default function JobMarket({ workerName, only }: {
   const [open, setOpen] = useState<ClientJob[]>([]);
   const [mine, setMine] = useState<ClientJob[]>([]);
   const [interest, setInterest] = useState<number[]>([]);
-  const [contracts, setContracts] = useState<{ jobId: number; assignmentId: number | null; signedDate: string }[]>([]);
+  const [contracts, setContracts] = useState<
+    { jobId: number; assignmentId: number | null; signedDate: string; agreedPay: string | number | null }[]
+  >([]);
   const [assignments, setAssignments] = useState<JobAssignment[]>([]);
   const [logs, setLogs] = useState<MyLog[]>([]);
   const [loading, setLoading] = useState(true);
@@ -304,6 +306,14 @@ export default function JobMarket({ workerName, only }: {
    * goes through view, accept, sign and timesheet from scratch, even when the
    * same worker is already on that job.
    */
+  /** Signed for one figure, being paid another. */
+  const payMovedFor = (a: JobAssignment | null | undefined) => {
+    if (!a) return false;
+    const c = contracts.find((x) => x.assignmentId === a.id);
+    if (!c || c.agreedPay == null || a.pay == null) return false;
+    return Math.abs(Number(a.pay) - Number(c.agreedPay)) >= 0.005;
+  };
+
   const signedFor = (jobId: number, assignmentId?: number | null) =>
     contracts.find((c) => (assignmentId ? c.assignmentId === assignmentId : c.jobId === jobId && !c.assignmentId))
       ?.signedDate ?? null;
@@ -566,24 +576,31 @@ export default function JobMarket({ workerName, only }: {
                 {!isShut(cardId) && (
                   <button
                     onClick={() => viewJob(a?.id ?? null, j.id)}
-                    className="mt-2 flex w-full items-center justify-between gap-3 rounded-2xl border border-orchid/40 bg-gradient-to-r from-electric/20 to-orchid/15 px-5 py-4 text-left transition hover:from-electric/30 hover:to-orchid/25"
+                    className={`mt-2 flex w-full items-center justify-between gap-3 rounded-2xl border px-5 py-4 text-left transition ${
+                      payMovedFor(a)
+                        ? "border-amber-400/50 bg-amber-500/15 hover:bg-amber-500/25"
+                        : "border-orchid/40 bg-gradient-to-r from-electric/20 to-orchid/15 hover:from-electric/30 hover:to-orchid/25"}`}
                   >
                     <span className="min-w-0">
                       <span className="block font-display text-[15px] font-bold text-white">
-                        {!signed
-                          ? "Read and sign the agreement"
-                          : shifts.length === 0
-                            ? "Your timesheet and tracking"
-                            : "Open this job"}
+                        {payMovedFor(a)
+                          ? "Your pay for this job has changed"
+                          : !signed
+                            ? "Read and sign the agreement"
+                            : shifts.length === 0
+                              ? "Your timesheet and tracking"
+                              : "Open this job"}
                       </span>
                       <span className="mt-0.5 block text-[13px] text-white/55">
-                        {!signed
-                          ? "Set the days you'll work, then sign"
-                          : shifts.length === 0
-                            ? "Start the job, then mark it done when you've finished"
-                            : shifts.some((l) => l.paidOn)
-                              ? "Paid — everything's settled"
-                              : "Marked as done, waiting on your tracking being checked"}
+                        {payMovedFor(a)
+                          ? "Read the new amount and sign to agree to it"
+                          : !signed
+                            ? "Set the days you'll work, then sign"
+                            : shifts.length === 0
+                              ? "Start the job, then mark it done when you've finished"
+                              : shifts.some((l) => l.paidOn)
+                                ? "Paid — everything's settled"
+                                : "Marked as done, waiting on your tracking being checked"}
                       </span>
                     </span>
                     <span aria-hidden className="shrink-0 text-white/45">&rarr;</span>

@@ -6,6 +6,7 @@ import Link from "next/link";
 import { PortalBackdrop, PortalMark, GlassCard, Loading } from "@/components/portal/PortalShell";
 import BoundaryMap, { parseSpec, specHasDrawing } from "@/components/portal/BoundaryMap";
 import JobContract from "@/components/portal/JobContract";
+import PayChangeNotice from "@/components/portal/PayChangeNotice";
 import WorkLogForm, { type EditableLog } from "@/components/portal/WorkLogForm";
 import JobTracker from "@/components/portal/JobTracker";
 import type { ClientJob, JobAssignment } from "@/lib/portal/db";
@@ -42,6 +43,8 @@ export default function JobPage() {
   const [job, setJob] = useState<ClientJob | null>(null);
   const [mine, setMine] = useState<JobAssignment | null>(null);
   const [signedDate, setSignedDate] = useState<string | null>(null);
+  // What they agreed to be paid, which may no longer be what the job pays.
+  const [agreedPay, setAgreedPay] = useState<number | null>(null);
   const [logs, setLogs] = useState<MyLog[]>([]);
   const [workerName, setWorkerName] = useState("");
   const [state, setState] = useState<"loading" | "ok" | "gone">("loading");
@@ -63,9 +66,10 @@ export default function JobPage() {
         setMine(a);
         setJob(j);
         setWorkerName(sess.fullName || "");
-        setSignedDate(
-          (d.contracts || []).find((c: { assignmentId: number | null }) => c.assignmentId === a.id)?.signedDate ?? null,
-        );
+        const mineContract = (d.contracts || [])
+          .find((c: { assignmentId: number | null }) => c.assignmentId === a.id) ?? null;
+        setSignedDate(mineContract?.signedDate ?? null);
+        setAgreedPay(mineContract?.agreedPay != null ? Number(mineContract.agreedPay) : null);
         setLogs((d.logs || []).filter((l: MyLog) => l.assignmentId === a.id));
         setState("ok");
       })
@@ -115,6 +119,10 @@ export default function JobPage() {
   const own = parseSpec(mine.boundary);
   const spec = specHasDrawing(own) ? own : parseSpec(job.boundary);
   const accepted = mine.status === "accepted" || Boolean(signedDate);
+  // Signed for one figure, being paid another — until they agree to the new one.
+  const payNow = mine.pay != null ? Number(mine.pay) : null;
+  const payMoved = Boolean(signedDate) && agreedPay != null && payNow != null
+    && Math.abs(payNow - agreedPay) >= 0.005;
   const paid = logs.length > 0 && logs.every((l) => l.paidOn);
 
   const facts: [string, string][] = [
@@ -195,6 +203,20 @@ export default function JobPage() {
               {busy ? "…" : "Take this job now (sign below to confirm)"}
             </button>
           </GlassCard>
+        )}
+
+        {/* A pay change is the one thing that has to be agreed to again. */}
+        {payMoved && (
+          <div className="mt-4">
+            <PayChangeNotice
+              jobId={job.id}
+              assignmentId={mine.id}
+              workerName={workerName}
+              agreedPay={agreedPay}
+              nowPay={payNow}
+              onAgreed={load}
+            />
+          </div>
         )}
 
         <div className="mt-4">

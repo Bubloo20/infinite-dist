@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { isAdmin } from "@/lib/portal/auth";
-import { setWorkLogAmount, setWorkLogPaid, setWorkLogVerified } from "@/lib/portal/db";
+import { setWorkLogAmount, setWorkLogPaid, setWorkLogVerified, deleteWorkLog } from "@/lib/portal/db";
 
 export const dynamic = "force-dynamic";
 
@@ -34,5 +34,23 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true });
   } catch (e) {
     return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "Update failed." }, { status: 500 });
+  }
+}
+
+/** Throw a logged shift away. */
+export async function DELETE(req: Request) {
+  if (!isAdmin()) {
+    return NextResponse.json({ ok: false, error: "Admin access required." }, { status: 401 });
+  }
+  const id = Number(new URL(req.url).searchParams.get("id"));
+  if (!id) return NextResponse.json({ ok: false, error: "Missing shift." }, { status: 400 });
+  try {
+    await deleteWorkLog(id);
+    return NextResponse.json({ ok: true });
+  } catch (e) {
+    return NextResponse.json(
+      { ok: false, error: e instanceof Error ? e.message : "Couldn't delete it." },
+      { status: 500 },
+    );
   }
 }
