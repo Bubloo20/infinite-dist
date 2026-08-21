@@ -11,7 +11,7 @@ import TrendChart, { type TrendPoint } from "./TrendChart";
 import PublishToWorkers from "./PublishToWorkers";
 import SignatureSetting from "./SignatureSetting";
 import type { JobInterest, JobAssignment } from "@/lib/portal/db";
-import { tidyHours, parseHours, formatHours } from "@/lib/portal/text";
+import { tidyHours, parseHours, formatHours, clockLabel } from "@/lib/portal/text";
 import { isTestName } from "@/lib/portal/text";
 import DateInput from "./DateInput";
 
@@ -550,7 +550,7 @@ function FilledSchedule({ raw, minHours }: { raw: string | null; minHours: strin
           return (
             <span key={key} className="rounded-lg border border-white/10 bg-white/[0.05] px-2.5 py-1 text-[12px] text-white/70">
               <span className="font-semibold text-white/85">{label}</span>
-              <span className="text-white/45"> {d.start || "—"}–{d.end || "—"}</span>
+              <span className="text-white/45"> {clockLabel(d.start) || "—"} – {clockLabel(d.end) || "—"}</span>
             </span>
           );
         })}

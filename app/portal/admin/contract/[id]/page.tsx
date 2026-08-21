@@ -4,14 +4,20 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { CONTRACT_TERMS, junkMailTerm } from "@/components/portal/JobContract";
-import { tidyHours } from "@/lib/portal/text";
+import { tidyHours, clockLabel } from "@/lib/portal/text";
 
 type Data = {
   ok: boolean;
   job?: { id: number; title: string | null; area: string | null; quantity: number | null;
           worker_pay: string | null; allocated_time: string | null; min_hours: string | null };
-  contract?: { signed_name: string; signature_png: string; signed_date: string; schedule: string | null;
-               junk_mail_allowed?: boolean | null };
+  contract?: {
+    signed_name: string; signature_png: string; signed_date: string; schedule: string | null;
+    junk_mail_allowed?: boolean | null;
+    // The sub-contract's own figures — an agreement covers one worker's slice.
+    leaflet_share?: number | null; area_note?: string | null; pay?: string | null;
+    min_hours?: string | null; allocated_time?: string | null;
+    start_date?: string | null; due_date?: string | null;
+  };
   worker?: string | null;
 };
 
@@ -117,14 +123,32 @@ export default function SignedContractPage() {
         <p className="mt-2 text-[15px] text-ink/70">Sarvesh Mohanrajh, operating under Infinite Distribution · ABN 66 177 274 211</p>
 
         <div className="mt-7 grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-5 sm:grid-cols-2">
-          {[
-            ["Contractor", d.worker || d.contract.signed_name],
-            ["Job area", d.job.area || "—"],
-            ["Leaflet amount", d.job.quantity ? d.job.quantity.toLocaleString() : "—"],
-            ["Allocated time", d.job.allocated_time || "—"],
-            ["Payment amount", d.job.worker_pay ? `$${Number(d.job.worker_pay).toFixed(2)}` : "—"],
-            ["Minimum hours of work", tidyHours(d.job.min_hours) || "—"],
-          ].map(([k, v]) => (
+          {/*
+            Every figure here is the sub-contract's own. Falling back to the
+            job's totals put the whole run on one worker's agreement — a
+            thousand-leaflet slice of a five-thousand job read as five thousand.
+            Job-level values are only used where there is no sub-contract at
+            all, which is how the oldest jobs were assigned.
+          */}
+          {(() => {
+            const c = d.contract!;
+            const solo = c.leaflet_share == null && c.pay == null && !c.area_note;
+            const span = c.start_date || c.due_date
+              ? `${dateAu(c.start_date ?? null)} to ${dateAu(c.due_date ?? null)}`
+              : c.allocated_time || (solo ? d.job!.allocated_time : null);
+            return [
+              ["Contractor", d.worker || c.signed_name],
+              ["Job area", c.area_note || (solo ? d.job!.area : null) || "—"],
+              ["Leaflet amount",
+                c.leaflet_share != null ? c.leaflet_share.toLocaleString()
+                  : solo && d.job!.quantity ? d.job!.quantity.toLocaleString() : "—"],
+              ["Allocated time", span || "—"],
+              ["Payment amount",
+                c.pay != null ? `$${Number(c.pay).toFixed(2)}`
+                  : solo && d.job!.worker_pay ? `$${Number(d.job!.worker_pay).toFixed(2)}` : "—"],
+              ["Minimum hours of work", tidyHours(c.min_hours || (solo ? d.job!.min_hours : null)) || "—"],
+            ];
+          })().map(([k, v]) => (
             <div key={k}>
               <p className="text-[11px] font-bold uppercase tracking-wide text-ink/45">{k}</p>
               <p className="mt-0.5 font-semibold text-ink">{v}</p>
@@ -152,8 +176,8 @@ export default function SignedContractPage() {
                 {days.map(([day, v]) => (
                   <tr key={day}>
                     <td className="border border-slate-300 px-3 py-2 font-semibold">{scheduleDay(day)}</td>
-                    <td className="border border-slate-300 px-3 py-2">Start: {v.start || "—"}</td>
-                    <td className="border border-slate-300 px-3 py-2">End: {v.end || "—"}</td>
+                    <td className="border border-slate-300 px-3 py-2">Start: {clockLabel(v.start) || "—"}</td>
+                    <td className="border border-slate-300 px-3 py-2">End: {clockLabel(v.end) || "—"}</td>
                   </tr>
                 ))}
               </tbody>

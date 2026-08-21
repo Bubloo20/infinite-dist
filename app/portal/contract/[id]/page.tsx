@@ -5,7 +5,7 @@ import { useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { CONTRACT_TERMS, junkMailTerm } from "@/components/portal/JobContract";
 import type { ClientJob, JobAssignment } from "@/lib/portal/db";
-import { tidyHours } from "@/lib/portal/text";
+import { tidyHours, clockLabel } from "@/lib/portal/text";
 
 const dateAu = (d: string | null | undefined) =>
   d ? new Date(d).toLocaleDateString("en-AU", { day: "2-digit", month: "long", year: "numeric" }) : "____________________";
@@ -73,11 +73,15 @@ export default function WorkerContractPage() {
     );
   }
 
-  const pay = mine?.pay ?? job.worker_pay;
-  const leaflets = mine?.leaflet_share ?? job.quantity;
+  // An agreement covers this worker's slice. Where there IS a sub-contract its
+  // figures are the whole story — falling through to the job's totals put the
+  // entire run on one person's contract.
+  const solo = !mine;
+  const pay = mine ? mine.pay : job.worker_pay;
+  const leaflets = mine ? mine.leaflet_share : job.quantity;
   const allocated = mine?.start_date || mine?.due_date
     ? `${dateAu(mine?.start_date)} to ${dateAu(mine?.due_date)}`
-    : mine?.allocated_time || job.allocated_time || "____________________";
+    : mine?.allocated_time || (solo ? job.allocated_time : null) || "____________________";
 
   // The day this agreement was drawn up for them.
   const drawnUp = (mine?.created_at || "").slice(0, 10) || new Date().toISOString().slice(0, 10);
@@ -112,11 +116,11 @@ export default function WorkerContractPage() {
           <p><span className="font-semibold">Business Name:</span> Sarvesh Mohanrajh (operating under Infinite Distribution)</p>
           <p><span className="font-semibold">ABN:</span> 66 177 274 211</p>
           <p><span className="font-semibold">Contractor Name:</span> {who || "____________________"}</p>
-          <p><span className="font-semibold">Job area:</span> {mine?.area_note || job.area || "____________________"}</p>
+          <p><span className="font-semibold">Job area:</span> {mine ? mine.area_note || "____________________" : job.area || "____________________"}</p>
           <p><span className="font-semibold">Leaflet Amount:</span> {leaflets ? leaflets.toLocaleString() : "____________________"}</p>
           <p><span className="font-semibold">Allocated time:</span> {allocated}</p>
           <p><span className="font-semibold">Payment Amount:</span> {pay ? `$${Number(pay).toFixed(2)}` : "$____________"}</p>
-          <p><span className="font-semibold">Minimum Hours of work:</span> {tidyHours(mine?.min_hours || job.min_hours) || "____________________"}</p>
+          <p><span className="font-semibold">Minimum Hours of work:</span> {tidyHours(mine ? mine.min_hours : job.min_hours) || "____________________"}</p>
         </div>
 
         <h2 className="mt-8 font-display text-xl font-bold text-ink">Terms</h2>
@@ -139,8 +143,8 @@ export default function WorkerContractPage() {
                 {signedDays.map(([day, v]) => (
                   <tr key={day}>
                     <td className="border border-slate-300 px-3 py-2 font-semibold">{scheduleDay(day)}</td>
-                    <td className="border border-slate-300 px-3 py-2">Start: {v.start || "—"}</td>
-                    <td className="border border-slate-300 px-3 py-2">End: {v.end || "—"}</td>
+                    <td className="border border-slate-300 px-3 py-2">Start: {clockLabel(v.start) || "—"}</td>
+                    <td className="border border-slate-300 px-3 py-2">End: {clockLabel(v.end) || "—"}</td>
                   </tr>
                 ))}
               </tbody>

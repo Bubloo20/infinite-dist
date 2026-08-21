@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { GlassCard } from "./PortalShell";
 import { submitForm } from "@/lib/forms";
 import type { ClientJob, JobAssignment } from "@/lib/portal/db";
-import { parseHours, formatHours, tidyHours } from "@/lib/portal/text";
+import { parseHours, formatHours, tidyHours, clockLabel } from "@/lib/portal/text";
 
 /** Terms transcribed from the Independent Contractor Agreement. */
 export const CONTRACT_TERMS = [
@@ -402,7 +402,7 @@ export default function JobContract({
                     {half ? (
                       <span className="text-amber-300">Needs both a start and an end</span>
                     ) : hrs ? (
-                      <span className="text-emerald-200">{v.start} – {v.end}</span>
+                      <span className="text-emerald-200">{clockLabel(v.start)} – {clockLabel(v.end)}</span>
                     ) : (
                       <span className="text-white/30">Not working — tap to add times</span>
                     )}
@@ -417,15 +417,26 @@ export default function JobContract({
                   <div className="flex flex-wrap items-center gap-2 border-t border-white/10 px-3 py-2.5">
                     <label className="flex min-w-[140px] flex-1 items-center gap-2">
                       <span className="text-[11px] font-bold uppercase tracking-wide text-white/40">Start</span>
-                      <input type="time" value={v.start} aria-label={`${DAY_NAMES[d.getDay()]} ${key} start`}
-                        onChange={(ev) => setSchedule((sc) => ({ ...sc, [key]: { start: ev.target.value, end: sc[key]?.end || "" } }))}
-                        className="w-full rounded-lg border border-white/12 bg-white/[0.05] px-2 py-1.5 text-[13px] text-white [color-scheme:dark]" />
+                      <span className="flex-1">
+                        <input type="time" value={v.start} aria-label={`${DAY_NAMES[d.getDay()]} ${key} start`}
+                          onChange={(ev) => setSchedule((sc) => ({ ...sc, [key]: { start: ev.target.value, end: sc[key]?.end || "" } }))}
+                          className="w-full rounded-lg border border-white/12 bg-white/[0.05] px-2 py-1.5 text-[13px] text-white [color-scheme:dark]" />
+                        {/* Morning or afternoon, said in words. */}
+                        <span className="mt-1 block text-[11px] font-semibold text-orchid">
+                          {clockLabel(v.start) || " "}
+                        </span>
+                      </span>
                     </label>
                     <label className="flex min-w-[140px] flex-1 items-center gap-2">
                       <span className="text-[11px] font-bold uppercase tracking-wide text-white/40">End</span>
-                      <input type="time" value={v.end} aria-label={`${DAY_NAMES[d.getDay()]} ${key} end`}
-                        onChange={(ev) => setSchedule((sc) => ({ ...sc, [key]: { start: sc[key]?.start || "", end: ev.target.value } }))}
-                        className="w-full rounded-lg border border-white/12 bg-white/[0.05] px-2 py-1.5 text-[13px] text-white [color-scheme:dark]" />
+                      <span className="flex-1">
+                        <input type="time" value={v.end} aria-label={`${DAY_NAMES[d.getDay()]} ${key} end`}
+                          onChange={(ev) => setSchedule((sc) => ({ ...sc, [key]: { start: sc[key]?.start || "", end: ev.target.value } }))}
+                          className="w-full rounded-lg border border-white/12 bg-white/[0.05] px-2 py-1.5 text-[13px] text-white [color-scheme:dark]" />
+                        <span className="mt-1 block text-[11px] font-semibold text-orchid">
+                          {clockLabel(v.end) || " "}
+                        </span>
+                      </span>
                     </label>
                     {(v.start || v.end) && (
                       <button type="button"

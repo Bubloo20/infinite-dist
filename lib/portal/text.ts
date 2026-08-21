@@ -64,3 +64,21 @@ export function formatHours(hours: number): string {
 
 /** Whatever was typed, tidied into hours and minutes. Blank stays blank. */
 export const tidyHours = (v: string | number | null | undefined): string => formatHours(parseHours(v));
+
+/**
+ * "16:30" -> "4:30 pm".
+ *
+ * Times are stored as 24-hour because that's what a time input gives back, but
+ * nobody arranging a Saturday afternoon thinks in 24-hour. Anything shown to a
+ * worker goes through here so there's no doubt which half of the day it is.
+ */
+export function clockLabel(hhmm: string | null | undefined): string {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(hhmm ?? "").trim());
+  if (!m) return "";
+  const h = Number(m[1]);
+  const mins = Number(m[2]);
+  if (h > 23 || mins > 59) return "";
+  const period = h < 12 ? "am" : "pm";
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${h12}:${m[2]} ${period}`;
+}

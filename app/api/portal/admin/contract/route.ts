@@ -17,8 +17,14 @@ export async function GET(req: Request) {
     const rows = await sql<{
       signed_name: string; signature_png: string; signed_date: string; schedule: string | null;
       user_id: number; assignment_id: number | null; junk_mail_allowed: boolean | null;
+      leaflet_share: number | null; area_note: string | null; pay: string | null;
+      min_hours: string | null; allocated_time: string | null;
+      start_date: string | null; due_date: string | null; title: string | null;
     }>`SELECT c.signed_name, c.signature_png, c.signed_date, c.schedule, c.user_id, c.assignment_id,
-              a.junk_mail_allowed
+              a.junk_mail_allowed,
+              -- The agreement is for this worker's slice, never the whole job.
+              a.leaflet_share, a.area_note, a.pay, a.min_hours, a.allocated_time,
+              a.start_date, a.due_date, a.title
        FROM job_contracts c
        LEFT JOIN job_assignments a ON a.id = c.assignment_id
       WHERE c.job_id = ${jobId} ORDER BY c.created_at DESC LIMIT 1;`;

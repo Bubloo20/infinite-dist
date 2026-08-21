@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { parseHours } from "@/lib/portal/text";
+import { parseHours, clockLabel } from "@/lib/portal/text";
 
 type Log = {
   id: number; worker_name: string; started_at: string; ended_at: string;
@@ -152,8 +152,8 @@ export default function TimesheetPage() {
                     {days.map(([day, v]) => (
                       <tr key={day}>
                         <td className="border border-slate-300 px-3 py-1.5 font-semibold">{dayLabel(day)}</td>
-                        <td className="border border-slate-300 px-3 py-1.5">Start: {v.start || "—"}</td>
-                        <td className="border border-slate-300 px-3 py-1.5">End: {v.end || "—"}</td>
+                        <td className="border border-slate-300 px-3 py-1.5">Start: {clockLabel(v.start) || "—"}</td>
+                        <td className="border border-slate-300 px-3 py-1.5">End: {clockLabel(v.end) || "—"}</td>
                         <td className="border border-slate-300 px-3 py-1.5 text-right">
                           {hoursBetween(v.start, v.end) ? fmtHours(hoursBetween(v.start, v.end)) : "—"}
                         </td>
