@@ -376,7 +376,12 @@ function JobsTab({ logs, q, setQ, post, assignments, jobs, users, del, removeLog
             {assignments.map((a) => {
               const job = jobs.find((j) => j.id === a.job_id);
               const who = users.find((u) => u.id === a.user_id)?.full_name || `User ${a.user_id}`;
-              const logged = logs.some((l) => l.user_id === a.user_id && l.client_job_id === a.job_id);
+              const shift = logs.find((l) =>
+                l.assignment_id != null
+                  ? l.assignment_id === a.id
+                  : l.user_id === a.user_id && l.client_job_id === a.job_id);
+              const logged = Boolean(shift);
+              const paid = Boolean(shift?.paid_on);
               return (
                 <GlassCard key={a.id} className="flex flex-wrap items-center justify-between gap-3 p-4">
                   <div>
@@ -389,7 +394,10 @@ function JobsTab({ logs, q, setQ, post, assignments, jobs, users, del, removeLog
                         logged ? "border-emerald-400/30 bg-emerald-500/12 text-emerald-300"
                         : a.status === "accepted" ? "border-sky-400/30 bg-sky-500/12 text-sky-300"
                         : "border-amber-400/30 bg-amber-500/12 text-amber-300"}`}>
-                        {logged ? "Shift logged" : a.status === "accepted" ? "Accepted" : "Awaiting acceptance"}
+                        {paid ? `Paid ${day(shift!.paid_on!)}`
+                          : logged ? "Shift logged"
+                          : a.status === "accepted" ? "Accepted"
+                          : "Awaiting acceptance"}
                       </span>
                     </div>
                     <p className="mt-1 text-[13px] text-white/45">
@@ -402,6 +410,40 @@ function JobsTab({ logs, q, setQ, post, assignments, jobs, users, del, removeLog
                   </div>
                   <div className="flex items-center gap-4">
                     <span className="font-display text-lg font-extrabold text-emerald-300">{money(num(a.pay))}</span>
+
+                    {/*
+                      Paying happens where you're already looking at the work.
+                      The tracking still has to be signed off first — that rule
+                      is what the verification is for — so the button to do it
+                      sits right here rather than sending you to another tab.
+                    */}
+                    {logged && !paid && !shift!.verified_at && (
+                      <button
+                        onClick={() => post("/api/portal/admin/job", { id: shift!.id, verified: true })}
+                        className="rounded-xl border border-amber-400/40 bg-amber-500/15 px-3.5 py-2 text-[13px] font-bold text-amber-200 transition hover:bg-amber-500/25">
+                        Verify tracking
+                      </button>
+                    )}
+                    {logged && (
+                      <button
+                        onClick={() => post("/api/portal/admin/job", {
+                          id: shift!.id,
+                          markPaid: !paid,
+                          // A shift with no amount on it would be paid for
+                          // nothing and show as $0 owed and $0 paid, so the
+                          // figure they agreed to carries over.
+                          ...(!paid && shift!.amount == null && a.pay != null ? { amount: a.pay } : {}),
+                        })}
+                        disabled={!paid && !shift!.verified_at}
+                        title={!paid && !shift!.verified_at ? "Verify the tracking first" : undefined}
+                        className={`rounded-xl px-3.5 py-2 text-[13px] font-bold transition disabled:cursor-not-allowed disabled:opacity-40 ${
+                          paid
+                            ? "border border-white/12 bg-white/[0.06] text-white/70 hover:bg-white/[0.12]"
+                            : "bg-gradient-to-r from-electric to-orchid text-white"}`}>
+                        {paid ? "Mark unpaid" : "Mark as paid"}
+                      </button>
+                    )}
+
                     <button onClick={() => del("assignment", a.id)} className="text-[13px] text-white/30 transition hover:text-rose-300">Remove</button>
                   </div>
                 </GlassCard>
