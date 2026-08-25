@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { GlassCard, PortalMark, Loading } from "./PortalShell";
@@ -12,6 +12,9 @@ import PublishToWorkers from "./PublishToWorkers";
 import SignatureSetting from "./SignatureSetting";
 import type { JobInterest, JobAssignment } from "@/lib/portal/db";
 import { tidyHours, parseHours, formatHours, clockLabel } from "@/lib/portal/text";
+
+/** Today, stamped the way the server stamps a payment. */
+const today = () => new Date().toISOString().slice(0, 10);
 import { isTestName } from "@/lib/portal/text";
 import DateInput from "./DateInput";
 
@@ -68,6 +71,8 @@ export default function AdminDashboard({ onSignOut }: { onSignOut: () => void })
   // land last and paint stale rows over fresh ones — which reads as "my edit
   // didn't save" until the page is reloaded by hand.
   const refreshSeq = useRef(0);
+  // Lets the shift handlers stay stable without going stale.
+  const logsRef = useRef<WorkLog[]>([]);
 
   // `silent` refreshes keep the screen up: saving shouldn't wipe the dashboard
   // back to a spinner and lose whatever drawer or half-typed field was open.
@@ -96,6 +101,8 @@ export default function AdminDashboard({ onSignOut }: { onSignOut: () => void })
       if (mine === refreshSeq.current) setLoading(false);
     }
   }, []);
+
+  useEffect(() => { logsRef.current = logs; }, [logs]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -198,14 +205,41 @@ export default function AdminDashboard({ onSignOut }: { onSignOut: () => void })
     await load(true);          // don't report done until the new data is on screen
     return true;
   };
+  /**
+   * Verifying and paying land on screen at once.
+   *
+   * These used to wait on a full refresh — four endpoints — before anything
+   * moved, so a button you'd already pressed sat there looking untouched. The
+   * row changes immediately, the server is told, and the refresh happens
+   * behind it to bring the totals along. If the save fails the row goes back
+   * to what it was and says why, so nothing is claimed that didn't happen.
+   */
+  const patchLog = useCallback(async (id: number, patch: Partial<WorkLog>, body: Record<string, unknown>) => {
+    const before = logsRef.current.find((l) => l.id === id);
+    setLogs((cur) => cur.map((l) => (l.id === id ? { ...l, ...patch } : l)));
+    setMsg("");
+    try {
+      const r = await fetch("/api/portal/admin/job", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, ...body }),
+      });
+      const d = await r.json();
+      if (!d.ok) throw new Error(d.error || "That didn't save.");
+      load(true);                      // deliberately not awaited
+    } catch (e) {
+      if (before) setLogs((cur) => cur.map((l) => (l.id === id ? before : l)));
+      setMsg(e instanceof Error ? e.message : "That didn't save.");
+    }
+  }, [load]);
+
   /** Throw away a logged shift, then recount the job it belonged to. */
-  const removeLog = async (id: number) => {
+  const removeLog = useCallback(async (id: number) => {
     const r = await fetch(`/api/portal/admin/job?id=${id}`, { method: "DELETE" });
     const d = await r.json().catch(() => ({ ok: false }));
     if (!d.ok) { setMsg(d.error || "Couldn't delete that shift."); return; }
     setMsg("");
     await load(true);
-  };
+  }, [load]);
 
   const delClient = async (entity: string, id: number) => {
     const r = await fetch(`/api/portal/admin/clients?entity=${entity}&id=${id}`, { method: "DELETE" });
@@ -323,7 +357,7 @@ export default function AdminDashboard({ onSignOut }: { onSignOut: () => void })
       ) : tab === "agencies" ? (
         <ClientsTab agencies={agencies} agents={agents} jobs={clientJobs} agencyPayments={agencyPayments} post={postClient} del={delClient} />
       ) : tab === "shifts" ? (
-        <JobsTab logs={filtered} q={q} setQ={setQ} post={post} assignments={assignments} jobs={clientJobs} users={users} del={delClient} removeLog={removeLog} />
+        <JobsTab logs={filtered} q={q} setQ={setQ} post={post} assignments={assignments} jobs={clientJobs} users={users} del={delClient} removeLog={removeLog} patchLog={patchLog} />
       ) : tab === "workers" ? (
         <div className="space-y-4">
           <SignatureSetting />
@@ -341,12 +375,13 @@ export default function AdminDashboard({ onSignOut }: { onSignOut: () => void })
 
 /* ---------------------------------- jobs ---------------------------------- */
 
-function JobsTab({ logs, q, setQ, post, assignments, jobs, users, del, removeLog }: {
+function JobsTab({ logs, q, setQ, post, assignments, jobs, users, del, removeLog, patchLog }: {
   logs: WorkLog[]; q: string; setQ: (v: string) => void;
   post: (u: string, b: unknown) => Promise<boolean>;
   assignments: JobAssignment[]; jobs: ClientJob[]; users: PortalUser[];
   del: (entity: string, id: number) => Promise<void>;
   removeLog: (id: number) => Promise<void>;
+  patchLog: (id: number, patch: Partial<WorkLog>, body: Record<string, unknown>) => Promise<void>;
 }) {
   const exportCsv = () => {
     const head = ["Worker", "Job", "Area", "Started", "Finished", "Time", "Leaflets", "Amount", "Paid on", "Strava", "MapMy", "Notes"];
@@ -419,21 +454,24 @@ function JobsTab({ logs, q, setQ, post, assignments, jobs, users, del, removeLog
                     */}
                     {logged && !paid && !shift!.verified_at && (
                       <button
-                        onClick={() => post("/api/portal/admin/job", { id: shift!.id, verified: true })}
+                        onClick={() => patchLog(shift!.id, { verified_at: new Date().toISOString() }, { verified: true })}
                         className="rounded-xl border border-amber-400/40 bg-amber-500/15 px-3.5 py-2 text-[13px] font-bold text-amber-200 transition hover:bg-amber-500/25">
                         Verify tracking
                       </button>
                     )}
                     {logged && (
                       <button
-                        onClick={() => post("/api/portal/admin/job", {
-                          id: shift!.id,
-                          markPaid: !paid,
+                        onClick={() => {
                           // A shift with no amount on it would be paid for
                           // nothing and show as $0 owed and $0 paid, so the
                           // figure they agreed to carries over.
-                          ...(!paid && shift!.amount == null && a.pay != null ? { amount: a.pay } : {}),
-                        })}
+                          const carry = !paid && shift!.amount == null && a.pay != null ? String(a.pay) : null;
+                          patchLog(
+                            shift!.id,
+                            { paid_on: paid ? null : today(), ...(carry ? { amount: carry } : {}) },
+                            { markPaid: !paid, ...(carry ? { amount: carry } : {}) },
+                          );
+                        }}
                         disabled={!paid && !shift!.verified_at}
                         title={!paid && !shift!.verified_at ? "Verify the tracking first" : undefined}
                         className={`rounded-xl px-3.5 py-2 text-[13px] font-bold transition disabled:cursor-not-allowed disabled:opacity-40 ${
@@ -460,17 +498,18 @@ function JobsTab({ logs, q, setQ, post, assignments, jobs, users, del, removeLog
         <div className="space-y-3">
           {!logs.length ? (
             <GlassCard className="p-14 text-center"><p className="text-white/50">No shifts logged yet.</p></GlassCard>
-          ) : logs.map((l) => <JobRow key={l.id} log={l} post={post} removeLog={removeLog} />)}
+          ) : logs.map((l) => <JobRow key={l.id} log={l} post={post} removeLog={removeLog} patchLog={patchLog} />)}
         </div>
       </div>
     </>
   );
 }
 
-function JobRow({ log, post, removeLog }: {
+const JobRow = memo(function JobRow({ log, post, removeLog, patchLog }: {
   log: WorkLog;
   post: (u: string, b: unknown) => Promise<boolean>;
   removeLog: (id: number) => Promise<void>;
+  patchLog: (id: number, patch: Partial<WorkLog>, body: Record<string, unknown>) => Promise<void>;
 }) {
   const [amount, setAmount] = useState(log.amount ?? "");
   const strava = unpackLinks(log.strava_urls);
@@ -517,13 +556,13 @@ function JobRow({ log, post, removeLog }: {
             <button onClick={() => post("/api/portal/admin/job", { id: log.id, amount: amount === "" ? null : amount })} className={btnGhost}>Save</button>
           </div>
           {/* Marked done by the worker; the office checks the tracking, then pays. */}
-          <button onClick={() => post("/api/portal/admin/job", { id: log.id, verified: !log.verified_at })}
+          <button onClick={() => patchLog(log.id, { verified_at: log.verified_at ? null : new Date().toISOString() }, { verified: !log.verified_at })}
             className={log.verified_at
               ? "rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-semibold text-emerald-300 transition hover:bg-emerald-500/20"
               : "rounded-xl border border-amber-400/40 bg-amber-500/15 px-4 py-2.5 text-sm font-bold text-amber-200 transition hover:bg-amber-500/25"}>
             {log.verified_at ? "Verified ✓ — undo" : "Verify tracking"}
           </button>
-          <button onClick={() => post("/api/portal/admin/job", { id: log.id, markPaid: !paid })}
+          <button onClick={() => patchLog(log.id, { paid_on: paid ? null : new Date().toISOString().slice(0, 10) }, { markPaid: !paid })}
             disabled={!paid && !log.verified_at}
             className={`${paid ? btnGhost : btn} disabled:cursor-not-allowed disabled:opacity-40`}
             title={!paid && !log.verified_at ? "Verify the tracking first" : undefined}>
@@ -541,7 +580,7 @@ function JobRow({ log, post, removeLog }: {
       </div>
     </GlassCard>
   );
-}
+});
 
 /* --------------------------------- workers -------------------------------- */
 
