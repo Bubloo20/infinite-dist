@@ -383,6 +383,9 @@ function JobsTab({ logs, q, setQ, post, assignments, jobs, users, del, removeLog
   removeLog: (id: number) => Promise<void>;
   patchLog: (id: number, patch: Partial<WorkLog>, body: Record<string, unknown>) => Promise<void>;
 }) {
+  // One shift's detail open at a time — the list is long enough already.
+  const [openShift, setOpenShift] = useState<number | null>(null);
+
   const exportCsv = () => {
     const head = ["Worker", "Job", "Area", "Started", "Finished", "Time", "Leaflets", "Amount", "Paid on", "Strava", "MapMy", "Notes"];
     const rows = logs.map((l) => [
@@ -403,7 +406,7 @@ function JobsTab({ logs, q, setQ, post, assignments, jobs, users, del, removeLog
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search worker, job, area or notes…" className={`${input} flex-1 min-w-[220px]`} />
         <button onClick={exportCsv} disabled={!logs.length} className={btn}>Export CSV</button>
       </div>
-      {/* Work that's been handed out but not yet logged. */}
+      {/* Work that's been handed out, and what came back for it. */}
       {assignments.length > 0 && (
         <div className="mt-6">
           <p className="text-[12px] font-bold uppercase tracking-[0.14em] text-white/40">Assigned work</p>
@@ -434,6 +437,15 @@ function JobsTab({ logs, q, setQ, post, assignments, jobs, users, del, removeLog
                           : a.status === "accepted" ? "Accepted"
                           : "Awaiting acceptance"}
                       </span>
+                      {/* Their side of it — tracking, photos, what they logged. */}
+                      {logged && (
+                        <button
+                          onClick={() => setOpenShift((cur) => (cur === a.id ? null : a.id))}
+                          className="flex items-center gap-1 text-[12px] font-bold text-orchid transition hover:text-white">
+                          {openShift === a.id ? "Hide what they logged" : "See what they logged"}
+                          <span className={`transition-transform ${openShift === a.id ? "rotate-180" : ""}`}>▾</span>
+                        </button>
+                      )}
                     </div>
                     <p className="mt-1 text-[13px] text-white/45">
                       {a.leaflet_share ? `${a.leaflet_share.toLocaleString()} leaflets` : "share not set"}
@@ -484,6 +496,8 @@ function JobsTab({ logs, q, setQ, post, assignments, jobs, users, del, removeLog
 
                     <button onClick={() => del("assignment", a.id)} className="text-[13px] text-white/30 transition hover:text-rose-300">Remove</button>
                   </div>
+
+                  {logged && openShift === a.id && <ShiftDetail log={shift!} />}
                 </GlassCard>
               );
             })}
@@ -502,6 +516,87 @@ function JobsTab({ logs, q, setQ, post, assignments, jobs, users, del, removeLog
         </div>
       </div>
     </>
+  );
+}
+
+/**
+ * What the worker actually submitted for a shift.
+ *
+ * The figures live on the sub-contract row; this is their side of it — when
+ * they walked, how long for, how many went out, the tracking links and any
+ * photos. Shown where the work is rather than only in a separate list, so
+ * checking someone's tracking before paying them doesn't mean hunting for the
+ * same shift twice.
+ */
+function ShiftDetail({ log }: { log: WorkLog }) {
+  const strava = unpackLinks(log.strava_urls);
+  const mapmy = unpackLinks(log.mapmy_urls);
+  const photos = unpackLinks(log.photos);
+
+  const facts: [string, string][] = [
+    ["Worked", `${stamp(log.started_at)} → ${stamp(log.ended_at)}`],
+    ["Time spent", log.time_spent || "—"],
+    ["Leaflets", log.leaflet_count != null ? log.leaflet_count.toLocaleString() : "—"],
+    ["Area covered", log.area_worked || "—"],
+    ["Amount", log.amount ? money(num(log.amount)) : "—"],
+    ["Tracking", log.verified_at ? `Checked ${day(log.verified_at)}` : "Not checked yet"],
+  ];
+
+  return (
+    <div className="w-full border-t border-white/10 pt-3">
+      <div className="grid gap-2.5 sm:grid-cols-3">
+        {facts.map(([k, v]) => (
+          <div key={k} className="rounded-xl border border-white/10 bg-white/[0.04] px-3.5 py-2.5">
+            <p className="text-[11px] font-bold uppercase tracking-wide text-white/35">{k}</p>
+            <p className="mt-0.5 text-[14px] font-semibold text-white">{v}</p>
+          </div>
+        ))}
+      </div>
+
+      {(strava.length > 0 || mapmy.length > 0) && (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {strava.map((u, i) => (
+            <a key={u} href={u} target="_blank" rel="noreferrer"
+              className="rounded-lg border border-[#fc4c02]/40 bg-[#fc4c02]/10 px-3 py-1.5 text-[12px] font-bold text-[#ff8b5e] transition hover:bg-[#fc4c02]/20">
+              Strava {strava.length > 1 ? i + 1 : ""} ↗
+            </a>
+          ))}
+          {mapmy.map((u, i) => (
+            <a key={u} href={u} target="_blank" rel="noreferrer"
+              className="rounded-lg border border-white/12 bg-white/[0.05] px-3 py-1.5 text-[12px] font-bold text-white/65 transition hover:bg-white/[0.1]">
+              Map My {mapmy.length > 1 ? i + 1 : ""} ↗
+            </a>
+          ))}
+        </div>
+      )}
+
+      {photos.length > 0 && (
+        <div className="mt-3">
+          <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-white/35">
+            {photos.length} photo{photos.length === 1 ? "" : "s"}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {photos.map((src, i) => (
+              <a key={i} href={src} target="_blank" rel="noreferrer">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={src} alt={`Photo ${i + 1}`}
+                  className="h-20 w-20 rounded-lg border border-white/12 object-cover transition hover:border-white/35" />
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {log.notes && (
+        <p className="mt-3 max-w-2xl rounded-xl border border-white/10 bg-white/[0.03] px-3.5 py-2.5 text-[13px] italic text-white/60">
+          &ldquo;{log.notes}&rdquo;
+        </p>
+      )}
+
+      {!strava.length && !mapmy.length && !photos.length && !log.notes && (
+        <p className="mt-3 text-[13px] text-white/35">No tracking links, photos or notes were submitted.</p>
+      )}
+    </div>
   );
 }
 
