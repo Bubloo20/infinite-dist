@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { TILE_URL, TILE_ATTRIBUTION, TILE_MAX_ZOOM, TILE_MAX_NATIVE_ZOOM } from "@/lib/mapTiles";
 import "leaflet/dist/leaflet.css";
 
 export type LatLng = [number, number];
@@ -399,9 +400,10 @@ export default function BoundaryMap({
       } as L.MapOptions);
       mapRef.current = map;
 
-      L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
-        maxZoom: 20,
+      L.tileLayer(TILE_URL, {
+        attribution: TILE_ATTRIBUTION,
+        maxZoom: TILE_MAX_ZOOM,
+        maxNativeZoom: TILE_MAX_NATIVE_ZOOM,
       }).addTo(map);
 
       groupRef.current = L.layerGroup().addTo(map);

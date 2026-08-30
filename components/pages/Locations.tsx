@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import "leaflet/dist/leaflet.css";
+import { TILE_URL, TILE_ATTRIBUTION, TILE_MAX_ZOOM, TILE_MAX_NATIVE_ZOOM } from "@/lib/mapTiles";
 
 // Core coverage suburbs — a 4km delivery radius is drawn over each.
 const suburbs = [
@@ -46,14 +47,11 @@ export default function Locations() {
       });
       mapRef.current = map;
 
-      L.tileLayer(
-        "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
-        {
-          attribution:
-            '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-          maxZoom: 19,
-        },
-      ).addTo(map);
+      L.tileLayer(TILE_URL, {
+        attribution: TILE_ATTRIBUTION,
+        maxZoom: TILE_MAX_ZOOM,
+        maxNativeZoom: TILE_MAX_NATIVE_ZOOM,
+      }).addTo(map);
 
       // Build the view bounds geographically (independent of map projection) so
       // this works before the first setView. Each suburb contributes an 8km box
