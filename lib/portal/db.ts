@@ -673,19 +673,42 @@ export async function upsertAssignment(a: {
   // With an id we're editing that exact row; without one it's a new
   // sub-contract, even if this worker already has one on the job.
   if (a.id) {
+    // Handing the work to somebody else is not an edit like the others: the
+    // new person hasn't agreed to anything, so whatever the last one signed
+    // stops applying and it goes back to being an offer they have to accept.
+    const cur = await sql<{ user_id: number }>`
+      SELECT user_id FROM job_assignments WHERE id = ${a.id};`;
+    const movedOn = Boolean(cur.rows[0]) && cur.rows[0].user_id !== a.userId;
+    if (movedOn) {
+      // Work already done can't be handed over — it's theirs, and it's the
+      // record that pays them.
+      const done = await sql`SELECT 1 FROM work_logs WHERE assignment_id = ${a.id} LIMIT 1;`;
+      if (done.rows.length) {
+        throw new Error(
+          "That worker has already logged a shift on this one. Delete the shift first, or add a separate sub-contract for the new worker.",
+        );
+      }
+    }
+
     const u = await sql<{ id: number }>`
       UPDATE job_assignments SET
+        user_id = ${a.userId},
+        status = ${movedOn ? "assigned" : (a.status || "assigned")},
         title = ${a.title ?? null}, junk_mail_allowed = ${a.junkMailAllowed ?? false},
         pay = ${a.pay ?? null}, leaflet_share = ${a.leafletShare ?? null},
         area_note = ${a.areaNote ?? null}, start_date = ${a.startDate || null},
-        due_date = ${a.dueDate || null}, status = ${a.status || 'assigned'},
+        due_date = ${a.dueDate || null},
         min_hours = ${a.minHours ?? null}, allocated_time = ${a.allocatedTime ?? null},
         map_image = COALESCE(${a.mapImage ?? null}, map_image),
         boundary = COALESCE(${a.boundary ?? null}, boundary),
         map_center = COALESCE(${a.mapCenter ?? null}, map_center)
       WHERE id = ${a.id}
       RETURNING id;`;
-    if (u.rows[0]) return u.rows[0].id;
+    if (u.rows[0]) {
+      // The previous worker's agreement was for them, not for whoever has it now.
+      if (movedOn) await sql`DELETE FROM job_contracts WHERE assignment_id = ${a.id};`;
+      return u.rows[0].id;
+    }
   }
 
   const r = await sql<{ id: number }>`

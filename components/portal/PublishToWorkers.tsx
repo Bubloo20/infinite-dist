@@ -334,6 +334,7 @@ export function SubContracts({ job, users, rows, post, del }: {
   const [payDraft, setPayDraft] = useState("");
   const [editTitle, setEditTitle] = useState("");
   const [editJunk, setEditJunk] = useState(false);
+  const [editWho, setEditWho] = useState("");
   const [editSpec, setEditSpec] = useState<AreaSpec>(EMPTY_SPEC);
   const [editCenter, setEditCenter] = useState<[number, number, number] | null>(null);
   const [saving, setSaving] = useState(false);
@@ -434,6 +435,7 @@ export function SubContracts({ job, users, rows, post, del }: {
                     setEditing(r.id);
                     setEditTitle(r.title || "");
                     setEditJunk(Boolean(r.junk_mail_allowed));
+                    setEditWho(String(r.user_id));
                     setEditSpec(parseSpec(r.boundary));
                     setEditCenter(null);
                   }}
@@ -445,9 +447,30 @@ export function SubContracts({ job, users, rows, post, del }: {
 
               {editing === r.id && (
                 <div className="w-full border-t border-white/10 pt-3">
+                  {/*
+                    Handing it to somebody else puts it straight into their
+                    portal as work to accept. Whatever the last person signed
+                    stops applying, so it goes back to awaiting acceptance
+                    rather than looking agreed by someone who never saw it.
+                  */}
+                  <label className="mb-3 block">
+                    <span className="mb-1 block text-[11px] font-semibold text-white/35">Assigned to</span>
+                    <select className={input} value={editWho} onChange={(e) => setEditWho(e.target.value)}>
+                      {users.map((u) => (
+                        <option key={u.id} value={u.id}>{u.full_name}</option>
+                      ))}
+                    </select>
+                    {editWho !== String(r.user_id) && (
+                      <span className="mt-1 block text-[12px] font-semibold text-amber-300">
+                        Saving hands this to {nameOf(Number(editWho))} — it goes to them to accept and sign,
+                        and {nameOf(r.user_id)} loses it.
+                      </span>
+                    )}
+                  </label>
+
                   <label className="mb-3 block">
                     <span className="mb-1 block text-[11px] font-semibold text-white/35">
-                      What {nameOf(r.user_id)} sees this job called
+                      What {nameOf(Number(editWho) || r.user_id)} sees this job called
                     </span>
                     <input className={input} value={editTitle} placeholder={r.area_note || `Job #${r.job_id}`}
                       onChange={(e) => setEditTitle(e.target.value)} />
@@ -482,7 +505,8 @@ export function SubContracts({ job, users, rows, post, del }: {
                         const first = editSpec.shapes.find((sh) => sh.length)?.[0];
                         // Send the row back whole — the upsert overwrites what it's given.
                         const ok = await post({
-                          entity: "assignment", id: r.id, jobId: job.id, userId: r.user_id,
+                          entity: "assignment", id: r.id, jobId: job.id,
+                          userId: Number(editWho) || r.user_id,
                           title: editTitle.trim() || null, junkMailAllowed: editJunk,
                           pay: r.pay, leafletShare: r.leaflet_share, areaNote: r.area_note,
                           startDate: r.start_date, dueDate: r.due_date, status: r.status,
