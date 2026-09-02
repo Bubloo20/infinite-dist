@@ -337,6 +337,10 @@ export function SubContracts({ job, users, rows, post, del }: {
     area: "", start: "", due: "", minHours: "",
   };
   const [ed, setEd] = useState(blankEdit);
+  // Reset each time a row is opened, so one row's manual pay doesn't stick to
+  // the next one.
+  const ownPayEdit = useRef(false);
+  const ownHoursEdit = useRef(false);
   const [editSpec, setEditSpec] = useState<AreaSpec>(EMPTY_SPEC);
   const [editCenter, setEditCenter] = useState<[number, number, number] | null>(null);
   const [saving, setSaving] = useState(false);
@@ -443,6 +447,8 @@ export function SubContracts({ job, users, rows, post, del }: {
                   onClick={() => {
                     if (editing === r.id) { setEditing(null); return; }
                     setEditing(r.id);
+                    ownPayEdit.current = false;
+                    ownHoursEdit.current = false;
                     setEd({
                       who: String(r.user_id),
                       title: r.title || "",
@@ -493,12 +499,23 @@ export function SubContracts({ job, users, rows, post, del }: {
                     <label className="block">
                       <span className="mb-1 block text-[11px] font-semibold text-emerald-300">Payment $</span>
                       <input className={input} inputMode="decimal" value={ed.pay}
-                        onChange={(e) => setEd({ ...ed, pay: e.target.value.replace(/[^0-9.]/g, "") })} />
+                        onChange={(e) => {
+                          ownPayEdit.current = true;
+                          setEd({ ...ed, pay: e.target.value.replace(/[^0-9.]/g, "") });
+                        }} />
                     </label>
                     <label className="block">
                       <span className="mb-1 block text-[11px] font-semibold text-white/35">Leaflets</span>
                       <input className={input} inputMode="numeric" value={ed.leaflets}
-                        onChange={(e) => setEd({ ...ed, leaflets: e.target.value.replace(/[^0-9]/g, "") })} />
+                        onChange={(e) => {
+                          const v = e.target.value.replace(/[^0-9]/g, "");
+                          const n = Number(v) || 0;
+                          setEd((p) => ({
+                            ...p, leaflets: v,
+                            pay: ownPayEdit.current ? p.pay : payFor(n),
+                            minHours: ownHoursEdit.current ? p.minHours : minHoursFor(n),
+                          }));
+                        }} />
                     </label>
                     <label className="block">
                       <span className="mb-1 block text-[11px] font-semibold text-white/35">Their area</span>
@@ -517,7 +534,7 @@ export function SubContracts({ job, users, rows, post, del }: {
                     <label className="block">
                       <span className="mb-1 block text-[11px] font-semibold text-white/35">Minimum hours</span>
                       <input className={input} placeholder="e.g. 3.5 or 3 hours 30 mins" value={ed.minHours}
-                        onChange={(e) => setEd({ ...ed, minHours: e.target.value })}
+                        onChange={(e) => { ownHoursEdit.current = true; setEd({ ...ed, minHours: e.target.value }); }}
                         onBlur={(e) => setEd((p) => ({ ...p, minHours: tidyHours(e.target.value) }))} />
                     </label>
                   </div>
