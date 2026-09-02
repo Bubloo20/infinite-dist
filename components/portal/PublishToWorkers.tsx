@@ -332,9 +332,11 @@ export function SubContracts({ job, users, rows, post, del }: {
   const [editing, setEditing] = useState<number | null>(null);
   const [payRow, setPayRow] = useState<number | null>(null);
   const [payDraft, setPayDraft] = useState("");
-  const [editTitle, setEditTitle] = useState("");
-  const [editJunk, setEditJunk] = useState(false);
-  const [editWho, setEditWho] = useState("");
+  const blankEdit = {
+    who: "", title: "", junk: false, pay: "", leaflets: "",
+    area: "", start: "", due: "", minHours: "",
+  };
+  const [ed, setEd] = useState(blankEdit);
   const [editSpec, setEditSpec] = useState<AreaSpec>(EMPTY_SPEC);
   const [editCenter, setEditCenter] = useState<[number, number, number] | null>(null);
   const [saving, setSaving] = useState(false);
@@ -344,6 +346,14 @@ export function SubContracts({ job, users, rows, post, del }: {
   const nameOf = (id: number) => users.find((u) => u.id === id)?.full_name || `User ${id}`;
   const shortDate = (d: string | null) =>
     d ? new Date(d).toLocaleDateString("en-AU", { day: "2-digit", month: "short" }) : null;
+
+  /** A stored date as the date box wants it, read in local time. */
+  const toDateInput = (v: string | null) => {
+    if (!v) return "";
+    const d = new Date(v);
+    if (Number.isNaN(d.getTime())) return "";
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  };
 
   const taken = rows.reduce((t, r) => t + (r.leaflet_share || 0), 0);
   const payTotal = rows.reduce((t, r) => t + Number(r.pay || 0), 0);
@@ -433,9 +443,17 @@ export function SubContracts({ job, users, rows, post, del }: {
                   onClick={() => {
                     if (editing === r.id) { setEditing(null); return; }
                     setEditing(r.id);
-                    setEditTitle(r.title || "");
-                    setEditJunk(Boolean(r.junk_mail_allowed));
-                    setEditWho(String(r.user_id));
+                    setEd({
+                      who: String(r.user_id),
+                      title: r.title || "",
+                      junk: Boolean(r.junk_mail_allowed),
+                      pay: r.pay != null ? String(Number(r.pay).toFixed(2)) : "",
+                      leaflets: r.leaflet_share != null ? String(r.leaflet_share) : "",
+                      area: r.area_note || "",
+                      start: toDateInput(r.start_date),
+                      due: toDateInput(r.due_date),
+                      minHours: r.min_hours || "",
+                    });
                     setEditSpec(parseSpec(r.boundary));
                     setEditCenter(null);
                   }}
@@ -448,36 +466,79 @@ export function SubContracts({ job, users, rows, post, del }: {
               {editing === r.id && (
                 <div className="w-full border-t border-white/10 pt-3">
                   {/*
-                    Handing it to somebody else puts it straight into their
-                    portal as work to accept. Whatever the last person signed
-                    stops applying, so it goes back to awaiting acceptance
-                    rather than looking agreed by someone who never saw it.
+                    Everything this sub-contract commits someone to, in one
+                    place. Handing it to a different worker puts it straight
+                    into their portal as work to accept; whatever the last one
+                    signed stops applying, so it goes back to awaiting
+                    acceptance rather than looking agreed by someone who never
+                    saw it.
                   */}
-                  <label className="mb-3 block">
-                    <span className="mb-1 block text-[11px] font-semibold text-white/35">Assigned to</span>
-                    <select className={input} value={editWho} onChange={(e) => setEditWho(e.target.value)}>
-                      {users.map((u) => (
-                        <option key={u.id} value={u.id}>{u.full_name}</option>
-                      ))}
-                    </select>
-                    {editWho !== String(r.user_id) && (
-                      <span className="mt-1 block text-[12px] font-semibold text-amber-300">
-                        Saving hands this to {nameOf(Number(editWho))} — it goes to them to accept and sign,
-                        and {nameOf(r.user_id)} loses it.
+                  <div className="mb-3 grid gap-3 sm:grid-cols-3">
+                    <label className="block sm:col-span-1">
+                      <span className="mb-1 block text-[11px] font-semibold text-white/35">Assigned to</span>
+                      <select className={input} value={ed.who} onChange={(e) => setEd({ ...ed, who: e.target.value })}>
+                        {users.map((u) => (
+                          <option key={u.id} value={u.id}>{u.full_name}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="block sm:col-span-2">
+                      <span className="mb-1 block text-[11px] font-semibold text-white/35">
+                        What {nameOf(Number(ed.who) || r.user_id)} sees this job called
                       </span>
-                    )}
-                  </label>
+                      <input className={input} value={ed.title} placeholder={ed.area || `Job #${r.job_id}`}
+                        onChange={(e) => setEd({ ...ed, title: e.target.value })} />
+                    </label>
 
-                  <label className="mb-3 block">
-                    <span className="mb-1 block text-[11px] font-semibold text-white/35">
-                      What {nameOf(Number(editWho) || r.user_id)} sees this job called
-                    </span>
-                    <input className={input} value={editTitle} placeholder={r.area_note || `Job #${r.job_id}`}
-                      onChange={(e) => setEditTitle(e.target.value)} />
-                  </label>
-                  <div className="mb-3">
-                    <JunkMailToggle value={editJunk} onChange={setEditJunk} />
+                    <label className="block">
+                      <span className="mb-1 block text-[11px] font-semibold text-emerald-300">Payment $</span>
+                      <input className={input} inputMode="decimal" value={ed.pay}
+                        onChange={(e) => setEd({ ...ed, pay: e.target.value.replace(/[^0-9.]/g, "") })} />
+                    </label>
+                    <label className="block">
+                      <span className="mb-1 block text-[11px] font-semibold text-white/35">Leaflets</span>
+                      <input className={input} inputMode="numeric" value={ed.leaflets}
+                        onChange={(e) => setEd({ ...ed, leaflets: e.target.value.replace(/[^0-9]/g, "") })} />
+                    </label>
+                    <label className="block">
+                      <span className="mb-1 block text-[11px] font-semibold text-white/35">Their area</span>
+                      <input className={input} value={ed.area}
+                        onChange={(e) => setEd({ ...ed, area: e.target.value })} />
+                    </label>
+
+                    <label className="block">
+                      <span className="mb-1 block text-[11px] font-semibold text-white/35">Start</span>
+                      <DateInput className={input} value={ed.start} onChange={(v) => setEd({ ...ed, start: v })} />
+                    </label>
+                    <label className="block">
+                      <span className="mb-1 block text-[11px] font-semibold text-white/35">Due</span>
+                      <DateInput className={input} value={ed.due} onChange={(v) => setEd({ ...ed, due: v })} />
+                    </label>
+                    <label className="block">
+                      <span className="mb-1 block text-[11px] font-semibold text-white/35">Minimum hours</span>
+                      <input className={input} placeholder="e.g. 3.5 or 3 hours 30 mins" value={ed.minHours}
+                        onChange={(e) => setEd({ ...ed, minHours: e.target.value })}
+                        onBlur={(e) => setEd((p) => ({ ...p, minHours: tidyHours(e.target.value) }))} />
+                    </label>
                   </div>
+
+                  {ed.who !== String(r.user_id) && (
+                    <p className="mb-3 rounded-xl border border-amber-400/35 bg-amber-500/10 px-3.5 py-2.5 text-[12px] font-semibold text-amber-200">
+                      Saving hands this to {nameOf(Number(ed.who))} — it goes to them to accept and sign, and
+                      {" "}{nameOf(r.user_id)} loses it.
+                    </p>
+                  )}
+                  {ed.who === String(r.user_id) && ed.pay !== "" && Number(ed.pay).toFixed(2) !== Number(r.pay || 0).toFixed(2) && (
+                    <p className="mb-3 rounded-xl border border-amber-400/35 bg-amber-500/10 px-3.5 py-2.5 text-[12px] font-semibold text-amber-200">
+                      Changing the pay asks {nameOf(r.user_id)} to read the new amount and sign for it before
+                      they carry on.
+                    </p>
+                  )}
+
+                  <div className="mb-3">
+                    <JunkMailToggle value={ed.junk} onChange={(v) => setEd({ ...ed, junk: v })} />
+                  </div>
+
                   <div className="grid gap-3 lg:grid-cols-2">
                     {r.map_image && (
                       <div>
@@ -506,11 +567,14 @@ export function SubContracts({ job, users, rows, post, del }: {
                         // Send the row back whole — the upsert overwrites what it's given.
                         const ok = await post({
                           entity: "assignment", id: r.id, jobId: job.id,
-                          userId: Number(editWho) || r.user_id,
-                          title: editTitle.trim() || null, junkMailAllowed: editJunk,
-                          pay: r.pay, leafletShare: r.leaflet_share, areaNote: r.area_note,
-                          startDate: r.start_date, dueDate: r.due_date, status: r.status,
-                          minHours: r.min_hours, allocatedTime: r.allocated_time,
+                          userId: Number(ed.who) || r.user_id,
+                          title: ed.title.trim() || null, junkMailAllowed: ed.junk,
+                          pay: ed.pay === "" ? null : Number(ed.pay),
+                          leafletShare: ed.leaflets === "" ? null : Number(ed.leaflets),
+                          areaNote: ed.area.trim() || null,
+                          startDate: ed.start || null, dueDate: ed.due || null, status: r.status,
+                          minHours: tidyHours(ed.minHours) || null,
+                          allocatedTime: spanOf(ed.start, ed.due),
                           boundary: specHasDrawing(editSpec) ? JSON.stringify(editSpec) : null,
                           mapCenter: JSON.stringify(editCenter ?? (first ? [first[0], first[1], 15] : null)),
                         });
