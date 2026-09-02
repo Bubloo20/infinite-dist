@@ -144,12 +144,21 @@ export function SignaturePad({ onChange }: { onChange: (dataUrl: string | null) 
 
 export default function JobContract({
   job, workerName, signedDate, mine, onSigned, onClose, autoOpen = false,
+  step, onState,
 }: {
   job: ClientJob; workerName: string; signedDate?: string | null;
   mine?: JobAssignment | null; onSigned: () => void;
   onClose?: () => void;
   /** Opened straight from "View job" — send them to the agreement immediately. */
   autoOpen?: boolean;
+  /**
+   * Taking a job is walked through a step at a time on a phone. With a step
+   * given, only that part is drawn and the surrounding page supplies the
+   * heading and the buttons; without one this is the whole thing on one card,
+   * as it is anywhere else it's used.
+   */
+  step?: 2 | 3 | 4;
+  onState?: (s: { scheduleOk: boolean; seen: boolean; ready: boolean; submit: () => void; busy: boolean }) => void;
 }) {
   const [name, setName] = useState(workerName);
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
@@ -243,6 +252,15 @@ export default function JobContract({
   const ready = !busy && seen && Boolean(name.trim()) && Boolean(sig) && scheduleOk && agreed;
 
   useEffect(() => {
+    submitRef.current = () => { void submit(); };
+  });
+
+  useEffect(() => {
+    onState?.({ scheduleOk, seen, ready, busy, submit: () => submitRef.current() });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scheduleOk, seen, ready, busy]);
+
+  useEffect(() => {
     const check = () => {
       try { setSeen(localStorage.getItem(seenKey) === "1"); } catch { /* private mode */ }
     };
@@ -250,6 +268,10 @@ export default function JobContract({
     window.addEventListener("focus", check);
     return () => window.removeEventListener("focus", check);
   }, [job.id]);
+
+  // Kept in a ref so reporting state upward doesn't re-run on every keystroke
+  // of the signature pad.
+  const submitRef = useRef<() => void>(() => {});
 
   const submit = async () => {
     if (!scheduleOk) {
@@ -322,47 +344,36 @@ export default function JobContract({
   }
 
   return (
-    <GlassCard className="relative p-6 sm:p-8">
+    <GlassCard className={step ? "relative border-0 bg-transparent p-0 shadow-none" : "relative p-6 sm:p-8"}>
       {toast && (
         <div className="pointer-events-none absolute right-4 top-4 z-20 flex items-center gap-2 rounded-xl border border-orchid/40 bg-[#1b1430] px-4 py-2.5 text-[13px] font-semibold text-white/85 shadow-[0_18px_40px_-16px_rgba(0,0,0,0.9)]">
           <span className="text-orchid">●</span>
           Date set to today for signing
         </div>
       )}
-      <p className="text-xs font-bold uppercase tracking-[0.16em] text-orchid">Independent contractor agreement</p>
-      <h3 className="mt-3 font-display text-2xl font-extrabold tracking-tight text-white">Terms for this job</h3>
-      <p className="mt-2 text-sm text-white/50">
-        Infinite Distribution · ABN 66 177 274 211 · for {workerName || "you"}
-      </p>
+      {!step && (
+        <>
+          <p className="text-xs font-bold uppercase tracking-[0.16em] text-orchid">Independent contractor agreement</p>
+          <h3 className="mt-3 font-display text-2xl font-extrabold tracking-tight text-white">Terms for this job</h3>
+          <p className="mt-2 text-sm text-white/50">
+            Infinite Distribution · ABN 66 177 274 211 · for {workerName || "you"}
+          </p>
+        </>
+      )}
 
-      <div className={`mt-6 rounded-2xl border p-5 ${
-        seen ? "border-emerald-400/30 bg-emerald-500/[0.07]" : "border-orchid/40 bg-orchid/[0.08]"}`}>
+      {(!step || step === 2) && (<>
+      {/*
+        Hours, then the agreement, then the signature. Reading first and
+        filling in afterwards meant signing a contract whose schedule was
+        still blank when you read it.
+      */}
+      <div className={step ? "" : "mt-7"}>
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="font-display text-base font-bold text-white">
-              {seen ? "Agreement read ✓" : "Read the agreement first"}
+          {!step && (
+            <p className="text-[13px] font-semibold uppercase tracking-[0.1em] text-white/50">
+              <span className="text-orchid">Step 1</span> — your working schedule
             </p>
-            <p className="mt-1 text-[13px] text-white/55">
-              {seen
-                ? "You can open it again any time before signing."
-                : "Open the full agreement — you need to read it before you can sign."}
-            </p>
-          </div>
-          <a
-            href={contractHref}
-            target="_blank"
-            rel="noreferrer"
-            onClick={() => { try { localStorage.setItem(seenKey, "1"); } catch {} setTimeout(() => setSeen(true), 400); }}
-            className="rounded-2xl bg-gradient-to-r from-electric to-orchid px-6 py-3 font-display text-[15px] font-bold text-white shadow-[0_14px_34px_-14px_rgba(182,109,199,0.9)] transition hover:-translate-y-0.5"
-          >
-            {seen ? "View agreement again ↗" : "View agreement (PDF) ↗"}
-          </a>
-        </div>
-      </div>
-
-      <div className={`mt-7 transition ${seen ? "" : "pointer-events-none select-none opacity-40"}`}>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-[13px] font-semibold uppercase tracking-[0.1em] text-white/50">Your working schedule</p>
+          )}
           <div className="flex items-center gap-1.5">
             <button type="button" onClick={() => shiftWeek(-1)} aria-label="Previous week"
               className="rounded-lg border border-white/12 bg-white/[0.05] px-3 py-1.5 text-[13px] font-bold text-white/60 transition hover:bg-white/[0.1] hover:text-white">←</button>
@@ -473,9 +484,44 @@ export default function JobContract({
         </div>
       </div>
 
-      <div className={`mt-7 grid gap-4 transition sm:grid-cols-2 ${seen ? "" : "pointer-events-none select-none opacity-40"}`}>
+      </>)}
+
+      {(!step || step === 3) && (<>
+      <div className={`rounded-2xl border p-5 ${step ? "" : "mt-6"} ${
+        seen ? "border-emerald-400/30 bg-emerald-500/[0.07]" : "border-orchid/40 bg-orchid/[0.08]"}`}>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="font-display text-base font-bold text-white">
+              <span className="text-orchid">Step 2</span> — {seen ? "agreement read ✓" : "read the agreement"}
+            </p>
+            <p className="mt-1 text-[13px] text-white/55">
+              {seen
+                ? "You can open it again any time before signing."
+                : scheduleOk
+                  ? "It has the hours you just entered in it. Read it through, then sign below."
+                  : "Fill your hours in above first — they go into the agreement you're signing."}
+            </p>
+          </div>
+          <a
+            href={contractHref}
+            target="_blank"
+            rel="noreferrer"
+            onClick={() => { try { localStorage.setItem(seenKey, "1"); } catch {} setTimeout(() => setSeen(true), 400); }}
+            className="rounded-2xl bg-gradient-to-r from-electric to-orchid px-6 py-3 font-display text-[15px] font-bold text-white shadow-[0_14px_34px_-14px_rgba(182,109,199,0.9)] transition hover:-translate-y-0.5"
+          >
+            {seen ? "View agreement again ↗" : "View agreement (PDF) ↗"}
+          </a>
+        </div>
+      </div>
+
+      </>)}
+
+      {(!step || step === 4) && (<>
+      <div className={`grid gap-4 transition sm:grid-cols-2 ${step ? "" : "mt-7"} ${seen ? "" : "pointer-events-none select-none opacity-40"}`}>
         <div>
-          <label className="mb-2 block text-[13px] font-semibold uppercase tracking-[0.1em] text-white/50">Full name</label>
+          <label className="mb-2 block text-[13px] font-semibold uppercase tracking-[0.1em] text-white/50">
+            <span className="text-orchid">Step 3</span> — full name
+          </label>
           <input value={name} onChange={(e) => setName(e.target.value)}
             className="w-full rounded-2xl border border-white/12 bg-white/[0.05] px-5 py-3 text-white outline-none focus:border-orchid/60" />
         </div>
@@ -514,7 +560,7 @@ export default function JobContract({
         {busy ? "Submitting…" : ready ? "Accept job & sign" : blocker}
       </button>
 
-      <div className="mt-3 flex flex-wrap gap-2">
+      <div className={`mt-3 flex flex-wrap gap-2 ${step ? "hidden" : ""}`}>
         <button type="button" onClick={saveDraft}
           className="flex-1 rounded-2xl border border-white/12 bg-white/[0.05] px-5 py-3 font-display text-[14px] font-bold text-white/75 transition hover:bg-white/[0.1] hover:text-white">
           Save for later
@@ -526,6 +572,8 @@ export default function JobContract({
           </button>
         )}
       </div>
+      </>)}
+
     </GlassCard>
   );
 }

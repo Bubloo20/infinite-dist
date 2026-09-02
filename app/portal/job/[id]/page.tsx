@@ -6,6 +6,7 @@ import Link from "next/link";
 import { PortalBackdrop, PortalMark, GlassCard, Loading } from "@/components/portal/PortalShell";
 import BoundaryMap, { parseSpec, specHasDrawing } from "@/components/portal/BoundaryMap";
 import JobContract from "@/components/portal/JobContract";
+import TakeJobSteps from "@/components/portal/TakeJobSteps";
 import PayChangeNotice from "@/components/portal/PayChangeNotice";
 import WorkLogForm, { type EditableLog } from "@/components/portal/WorkLogForm";
 import JobTracker from "@/components/portal/JobTracker";
@@ -147,6 +148,16 @@ export default function JobPage() {
           </Link>
         </div>
 
+        {/*
+          Work they haven't taken yet is walked through a step at a time —
+          read it, put your hours in, read the agreement, sign. Once it's
+          theirs this becomes the job itself: the map, the tracker and the
+          place to mark it done.
+        */}
+        {!signedDate ? (
+          <TakeJobSteps job={job} mine={mine} workerName={workerName} onSigned={load} />
+        ) : (
+        <>
         <p className="text-xs font-bold uppercase tracking-[0.16em] text-orchid">
           {accepted ? (paid ? "Completed" : "Your job") : "New job for you"}
         </p>
@@ -177,7 +188,8 @@ export default function JobPage() {
               </button>
               {mapOpen && (
                 <div className="mt-2">
-                  <BoundaryMap spec={spec} center={parseCenter(mine.map_center ?? job.map_center)} height={420} locate
+                  <BoundaryMap spec={spec} center={parseCenter(mine.map_center ?? job.map_center)} height={420}
+                    locate={accepted}
                     fullHref={`/portal/job/${assignmentId}/map`} />
                 </div>
               )}
@@ -286,6 +298,9 @@ export default function JobPage() {
               </div>
             )}
           </div>
+        )}
+
+        </>
         )}
 
         <button onClick={() => router.push("/portal")}

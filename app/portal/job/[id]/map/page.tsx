@@ -27,6 +27,7 @@ export default function JobMapPage() {
   const [spec, setSpec] = useState<AreaSpec>(EMPTY_SPEC);
   const [center, setCenter] = useState<[number, number, number] | null>(null);
   const [title, setTitle] = useState("");
+  const [accepted, setAccepted] = useState(false);
   const [height, setHeight] = useState(600);
   const [state, setState] = useState<"loading" | "ok" | "gone">("loading");
 
@@ -54,6 +55,10 @@ export default function JobMapPage() {
         setSpec(specHasDrawing(own) ? own : parseSpec(j.boundary));
         setCenter(parseCenter(a.map_center ?? j.map_center));
         setTitle(a.title?.trim() || a.area_note?.trim() || j.area?.trim() || `Job #${j.id}`);
+        // Their position is only checked against the area once the work is
+        // theirs — before that it's a job they're still deciding about.
+        setAccepted(a.status === "accepted" ||
+          (d.contracts || []).some((c: { assignmentId: number | null }) => c.assignmentId === a.id));
         setState("ok");
       })
       .catch(() => setState("gone"));
@@ -82,7 +87,7 @@ export default function JobMapPage() {
         </div>
       ) : (
         <div className="px-2 pb-2">
-          <BoundaryMap spec={spec} center={center} height={height} locate />
+          <BoundaryMap spec={spec} center={center} height={height} locate={accepted} />
         </div>
       )}
     </main>
