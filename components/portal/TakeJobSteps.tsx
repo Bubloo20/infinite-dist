@@ -19,6 +19,8 @@ type Flow = {
   seen: boolean;
   ready: boolean;
   busy: boolean;
+  hoursProblem: string;
+  signProblem: string;
   submit: () => void;
 };
 
@@ -42,8 +44,13 @@ export default function TakeJobSteps({
   const [step, setStep] = useState(1);
   const [done, setDone] = useState(false);
   const [flow, setFlow] = useState<Flow>({
-    scheduleOk: false, seen: false, ready: false, busy: false, submit: () => {},
+    scheduleOk: false, seen: false, ready: false, busy: false,
+    hoursProblem: "", signProblem: "", submit: () => {},
   });
+  // What to do about it, shown when they press on regardless.
+  const [notice, setNotice] = useState("");
+
+  useEffect(() => { setNotice(""); }, [step]);
 
   // Each step starts at the top, or the next screen opens halfway down where
   // the last one happened to be scrolled to.
@@ -84,7 +91,26 @@ export default function TakeJobSteps({
     ["Junk mail", mine.junk_mail_allowed ? "Allowed" : "Not allowed"],
   ];
 
+  /**
+   * Pressing on while something is missing says what and where.
+   *
+   * A greyed-out button is no answer on a phone: you press it, nothing
+   * happens, and there's nothing to read. This always responds.
+   */
   const next = () => {
+    if (step === 2 && !flow.scheduleOk) {
+      setNotice(flow.hoursProblem || "Fill in the days you'll be working above.");
+      return;
+    }
+    if (step === 3 && !flow.seen) {
+      setNotice("Open the agreement above and read it through — the button turns green once you have.");
+      return;
+    }
+    if (step === 4 && !flow.ready) {
+      setNotice(flow.signProblem || "Finish signing above.");
+      return;
+    }
+    setNotice("");
     if (step === 4) {
       flow.submit();
       return;
@@ -97,12 +123,19 @@ export default function TakeJobSteps({
       : step === 3 ? !flow.seen
         : step === 4 ? !flow.ready
           : false;
+  // Once they've done the thing it was asking for, stop asking.
+  useEffect(() => {
+    if (!blocked) setNotice("");
+  }, [blocked]);
+
+  const label2 = step === 2 ? "Next — the agreement →"
+    : step === 3 ? "Next — sign it →"
+      : "";
 
   const label =
     step === 1 ? "Accept this job →"
-      : step === 2 ? (flow.scheduleOk ? "Next — the agreement →" : "Fill in your hours to continue")
-        : step === 3 ? (flow.seen ? "Next — sign it →" : "Open the agreement to continue")
-          : flow.busy ? "Signing…" : flow.ready ? "Sign & accept" : "Sign above to finish";
+      : step === 2 || step === 3 ? label2
+        : flow.busy ? "Signing…" : "Sign & accept";
 
   return (
     <div>
@@ -195,6 +228,13 @@ export default function TakeJobSteps({
 
       </GlassCard>
 
+      {notice && (
+        <p className="mt-4 flex items-start gap-2.5 rounded-2xl border border-amber-400/40 bg-amber-500/12 px-4 py-3.5 text-[14px] leading-relaxed text-amber-100">
+          <span aria-hidden className="mt-0.5 shrink-0 text-[15px]">!</span>
+          <span>{notice}</span>
+        </p>
+      )}
+
       {/* One button, always in the same place. */}
       <div className="mt-4 flex items-center gap-2">
         {step > 1 && (
@@ -207,10 +247,10 @@ export default function TakeJobSteps({
         )}
         <button
           onClick={next}
-          disabled={blocked}
+          disabled={flow.busy}
           className={`flex-1 rounded-2xl px-6 py-4 font-display text-[15px] font-bold transition ${
             blocked
-              ? "cursor-not-allowed border border-white/10 bg-white/[0.06] text-white/35"
+              ? "border border-white/12 bg-white/[0.07] text-white/55"
               : "bg-gradient-to-r from-electric to-orchid text-white shadow-[0_16px_40px_-14px_rgba(182,109,199,0.85)] hover:-translate-y-0.5"
           }`}
         >

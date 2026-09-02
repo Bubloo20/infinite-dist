@@ -158,7 +158,12 @@ export default function JobContract({
    * as it is anywhere else it's used.
    */
   step?: 2 | 3 | 4;
-  onState?: (s: { scheduleOk: boolean; seen: boolean; ready: boolean; submit: () => void; busy: boolean }) => void;
+  onState?: (s: {
+    scheduleOk: boolean; seen: boolean; ready: boolean; busy: boolean;
+    /** Plain English for what's stopping them, when something is. */
+    hoursProblem: string; signProblem: string;
+    submit: () => void;
+  }) => void;
 }) {
   const [name, setName] = useState(workerName);
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
@@ -249,6 +254,17 @@ export default function JobContract({
     : !scheduleOk ? "Your hours don't meet the minimum yet"
     : !agreed ? "Tick the box to agree"
     : "Accept job & sign";
+
+  /** Told in full, so someone stuck knows what to go and do. */
+  const hoursProblem = halfEntered
+    ? "One of your days has a start time but no end time (or the other way round). Open that day and fill in both, or clear it."
+    : !scheduleOk
+      ? `You've put down ${fmtHours(totalHours)}, and this job needs at least ${fmtHours(minHours)}. Add another ${fmtHours(shortBy)} on any day — page back and forward through the weeks if you need to.`
+      : "";
+  const signProblem = !name.trim() ? "Put your full name in the box above."
+    : !sig ? "Draw your signature in the box above with your finger."
+    : !agreed ? "Tick the box to say you've read and agree to the terms."
+    : "";
   const ready = !busy && seen && Boolean(name.trim()) && Boolean(sig) && scheduleOk && agreed;
 
   useEffect(() => {
@@ -256,9 +272,9 @@ export default function JobContract({
   });
 
   useEffect(() => {
-    onState?.({ scheduleOk, seen, ready, busy, submit: () => submitRef.current() });
+    onState?.({ scheduleOk, seen, ready, busy, hoursProblem, signProblem, submit: () => submitRef.current() });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scheduleOk, seen, ready, busy]);
+  }, [scheduleOk, seen, ready, busy, hoursProblem, signProblem]);
 
   useEffect(() => {
     const check = () => {
