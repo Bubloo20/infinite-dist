@@ -12,9 +12,20 @@
 /** The width the sheet is designed at, whatever the screen is doing. */
 const SHEET_WIDTH = 820;
 
-/** A file name that reads well in an inbox. */
-export const invoiceFileName = (invoiceNo: string | null) =>
-  invoiceNo ? `Letterbox invoice ${invoiceNo}.pdf` : "Letterbox invoice.pdf";
+/**
+ * A file name that says who it's for.
+ *
+ * These end up in an inbox and a downloads folder among other invoices, so the
+ * agency's name is worth more there than anything else — "Invoice 01 - Nelson
+ * Alexander.pdf" is findable months later in a way "Letterbox invoice.pdf" is
+ * not. Characters a file system won't take are dropped.
+ */
+export const invoiceFileName = (invoiceNo: string | null, agency?: string | null) => {
+  const safe = (v: string) => v.replace(/[\/:*?"<>|]/g, "").replace(/\s+/g, " ").trim();
+  const parts = ["Invoice", invoiceNo ? safe(invoiceNo) : "", agency ? `- ${safe(agency)}` : ""]
+    .filter(Boolean);
+  return `${parts.join(" ")}.pdf`;
+};
 
 /**
  * Render an element to a PDF page.

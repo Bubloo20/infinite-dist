@@ -183,7 +183,7 @@ export default function InvoicePage() {
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement("a");
                 a.href = url;
-                a.download = invoiceFileName(job.invoice_no);
+                a.download = invoiceFileName(job.invoice_no, agency?.name);
                 a.click();
                 setTimeout(() => URL.revokeObjectURL(url), 10_000);
 
@@ -211,7 +211,7 @@ export default function InvoicePage() {
           </span>
         </div>
         <p className="mt-2.5 text-[13px] text-ink/50">
-          Saves <span className="font-semibold text-ink/70">{invoiceFileName(job.invoice_no)}</span> and opens a Gmail compose to {DRAFT_TO} with the subject and message filled in —
+          Saves <span className="font-semibold text-ink/70">{invoiceFileName(job.invoice_no, agency?.name)}</span> and opens a Gmail compose to {DRAFT_TO} with the subject and message filled in —
           drag the downloaded file in to attach it, then send it to yourself or forward it on.
         </p>
       </div>
