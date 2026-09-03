@@ -767,6 +767,7 @@ function jobPayload(j: ClientJob) {
     amount: j.amount, status: j.status, invoiceStatus: j.invoice_status,
     invoiceNo: j.invoice_no, invoiceDate: j.invoice_date,
     pickedOn: j.picked_on, completedOn: j.completed_on, notes: j.notes,
+    invoicePeriodOn: j.invoice_period_on,
     jobNumber: j.job_number, deliveredCount: j.delivered_count, outCount: j.out_count,
   };
 }

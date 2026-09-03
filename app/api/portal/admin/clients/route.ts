@@ -81,6 +81,7 @@ export async function POST(req: Request) {
           invoiceNo: (b.invoiceNo as string) || null,
           invoiceNoHidden: Boolean(b.invoiceNoHidden), invoiceDate: (b.invoiceDate as string) || null,
           pickedOn: (b.pickedOn as string) || null, completedOn: (b.completedOn as string) || null,
+          invoicePeriodOn: (b.invoicePeriodOn as string) || null,
           notes: (b.notes as string) || null,
         });
         if (b.jobNumber !== undefined) await setJobProgress(id, (b.jobNumber as string) || null);

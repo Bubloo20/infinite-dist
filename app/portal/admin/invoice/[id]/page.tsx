@@ -93,11 +93,32 @@ export default function InvoicePage() {
         invoiceStatus: "sent",
         invoiceNo: j.invoice_no, invoiceDate: j.invoice_date,
         pickedOn: j.picked_on, completedOn: j.completed_on, notes: j.notes,
+        invoicePeriodOn: j.invoice_period_on,
         jobNumber: j.job_number,
       }),
     });
     const d = await r.json().catch(() => ({ ok: false }));
     if (d.ok) setJob({ ...j, invoice_status: "sent" });
+  };
+
+  /** Pin the period this invoice bills for, or clear it to follow the work. */
+  const setPeriod = async (j: ClientJob, value: string) => {
+    const next = value || null;
+    setJob({ ...j, invoice_period_on: next });
+    await fetch("/api/portal/admin/clients", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        entity: "job", id: j.id,
+        agencyId: j.agency_id, agentId: j.agent_id, title: j.title, area: j.area,
+        leafletType: j.leaflet_type, quantity: j.quantity, ratePerLeaflet: j.rate_per_leaflet,
+        amount: j.amount, status: j.status, invoiceStatus: j.invoice_status,
+        invoiceNo: j.invoice_no, invoiceDate: j.invoice_date,
+        pickedOn: j.picked_on, completedOn: j.completed_on, notes: j.notes,
+        invoicePeriodOn: next,
+        jobNumber: j.job_number,
+      }),
+    });
   };
 
   if (loading) return <div className="grid min-h-screen place-items-center bg-white text-ink">Loading…</div>;
@@ -112,9 +133,11 @@ export default function InvoicePage() {
    * The job's own completion date is the fallback for anything with no
    * sub-contracts, which is how the oldest jobs were run.
    */
-  const finishedOn = dueDates.length
+  const lastDue = dueDates.length
     ? dueDates.reduce((latest, d) => (new Date(d) > new Date(latest) ? d : latest))
     : job.completed_on;
+  // Set by hand on this page when the run didn't go the way it was planned.
+  const finishedOn = job.invoice_period_on || lastDue;
 
   const qty = job.quantity ?? 0;
   const rate = job.rate_per_leaflet ? Number(job.rate_per_leaflet) : 0;
@@ -190,6 +213,35 @@ export default function InvoicePage() {
         <p className="mt-2.5 text-[13px] text-ink/50">
           Saves <span className="font-semibold text-ink/70">{invoiceFileName(job.invoice_no)}</span> and opens a Gmail compose to {DRAFT_TO} with the subject and message filled in —
           drag the downloaded file in to attach it, then send it to yourself or forward it on.
+        </p>
+      </div>
+
+      {/* The period this invoice bills for. */}
+      <div className="mx-auto mb-4 max-w-[820px] rounded-2xl border border-slate-200 bg-white px-6 py-5 shadow-sm print:hidden">
+        <p className="font-display text-base font-bold text-ink">Period this invoice covers</p>
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          <input
+            type="date"
+            value={job.invoice_period_on || ""}
+            onChange={(e) => setPeriod(job, e.target.value)}
+            className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm text-ink outline-none focus:border-ink"
+          />
+          {job.invoice_period_on ? (
+            <button
+              onClick={() => setPeriod(job, "")}
+              className="text-[13px] font-semibold text-ink/45 transition hover:text-ink"
+            >
+              Clear and follow the work
+            </button>
+          ) : (
+            <span className="text-[13px] text-ink/50">
+              Following the last worker&apos;s due date — {dateAu(lastDue)}
+            </span>
+          )}
+        </div>
+        <p className="mt-2.5 text-[13px] text-ink/50">
+          Left empty this is the day the last sub-contract was due, since the job isn&apos;t finished until
+          the last one is. Set a date to bill for a different day.
         </p>
       </div>
 

@@ -81,7 +81,7 @@ let schemaReady: Promise<void> | null = null;
  * date. Forget to raise it and your new column never gets added in production,
  * because the migration will be skipped.
  */
-const SCHEMA_VERSION = 4;
+const SCHEMA_VERSION = 5;
 
 /**
  * Bring the schema up to date, once per process.
@@ -361,6 +361,10 @@ async function migrateSchema(): Promise<void> {
   // Typed in by hand to override what the worker statuses say. NULL = automatic.
   await sql`ALTER TABLE client_jobs ADD COLUMN IF NOT EXISTS out_override INTEGER;`;
   await sql`ALTER TABLE client_jobs ADD COLUMN IF NOT EXISTS delivered_override INTEGER;`;
+  // The period an invoice bills for. Left empty it follows the last worker's
+  // due date; set, it wins. Kept apart from completed_on, which tracks when the
+  // job itself was finished and is used elsewhere.
+  await sql`ALTER TABLE client_jobs ADD COLUMN IF NOT EXISTS invoice_period_on DATE;`;
   // Each agency runs its own invoice sequence, and some invoices go out with no
   // number at all.
   await sql`ALTER TABLE agencies ADD COLUMN IF NOT EXISTS invoice_seq INTEGER;`;
@@ -494,6 +498,7 @@ export type ClientJob = {
   out_count: number | null;
   out_override: number | null;
   delivered_override: number | null;
+  invoice_period_on: string | null;
 };
 export type JobAssignment = {
   id: number; job_id: number; user_id: number;
@@ -593,6 +598,7 @@ export async function upsertClientJob(j: {
   quantity?: number | null; ratePerLeaflet?: number | null; amount?: number | null;
   status?: JobStatus; invoiceStatus?: InvoiceStatus; invoiceNo?: string | null; invoiceNoHidden?: boolean;
   invoiceDate?: string | null; pickedOn?: string | null; completedOn?: string | null; notes?: string | null;
+  invoicePeriodOn?: string | null;
 }) {
   await ensureSchema();
   if (j.id) {
@@ -604,7 +610,8 @@ export async function upsertClientJob(j: {
         status=${j.status ?? "to_send"}, invoice_status=${j.invoiceStatus ?? "not_sent"},
         invoice_no=${j.invoiceNo ?? null}, invoice_date=${j.invoiceDate ?? null},
         invoice_no_hidden=${j.invoiceNoHidden ?? false},
-        picked_on=${j.pickedOn ?? null}, completed_on=${j.completedOn ?? null}, notes=${j.notes ?? null}
+        picked_on=${j.pickedOn ?? null}, completed_on=${j.completedOn ?? null}, notes=${j.notes ?? null},
+        invoice_period_on=${j.invoicePeriodOn ?? null}
       WHERE id=${j.id};`;
     return j.id;
   }
