@@ -46,6 +46,8 @@ export default function InvoicePage() {
   const [loading, setLoading] = useState(true);
   const [denied, setDenied] = useState(false);
   const [agencyAgents, setAgencyAgents] = useState<Agent[]>([]);
+  // Every sub-contract on this job, for working out when it actually finishes.
+  const [dueDates, setDueDates] = useState<string[]>([]);
   const [sendTo, setSendTo] = useState("");
   const [drafting, setDrafting] = useState(false);
 
@@ -62,6 +64,11 @@ export default function InvoicePage() {
           setAgent(all.find((a) => a.id === j.agent_id) || null);
           setAgencyAgents(all.filter((a) => a.agency_id === j.agency_id));
           if (j.agent_id) setSendTo(String(j.agent_id));
+          setDueDates(
+            (d.assignments || [])
+              .filter((a: { job_id: number; due_date: string | null }) => a.job_id === j.id && a.due_date)
+              .map((a: { due_date: string }) => a.due_date),
+          );
         }
       })
       .catch(() => setDenied(true))
@@ -96,6 +103,18 @@ export default function InvoicePage() {
   if (loading) return <div className="grid min-h-screen place-items-center bg-white text-ink">Loading…</div>;
   if (denied) return <div className="grid min-h-screen place-items-center bg-white text-ink">Admin sign-in required. <Link href="/portal/admin" className="ml-2 underline">Sign in</Link></div>;
   if (!job) return <div className="grid min-h-screen place-items-center bg-white text-ink">Invoice not found.</div>;
+
+  /**
+   * The day the job finishes is the day the last worker on it was due.
+   *
+   * A job with four sub-contracts running to different dates isn't complete
+   * until the last of them is, so that's the period the agency is billed for.
+   * The job's own completion date is the fallback for anything with no
+   * sub-contracts, which is how the oldest jobs were run.
+   */
+  const finishedOn = dueDates.length
+    ? dueDates.reduce((latest, d) => (new Date(d) > new Date(latest) ? d : latest))
+    : job.completed_on;
 
   const qty = job.quantity ?? 0;
   const rate = job.rate_per_leaflet ? Number(job.rate_per_leaflet) : 0;
@@ -197,7 +216,7 @@ export default function InvoicePage() {
               const body =
                 `Hi ${to.name.split(" ")[0]},\n\n` +
                 `Please find attached invoice ${invNo} for ${qty ? qty.toLocaleString() : ""} leaflets` +
-                `${job.area ? ` in ${job.area}` : ""}${job.completed_on ? `, completed ${dateAu(job.completed_on)}` : ""}.\n\n` +
+                `${job.area ? ` in ${job.area}` : ""}${finishedOn ? `, completed ${dateAu(finishedOn)}` : ""}.\n\n` +
                 `Total amount due: $${money(total)}\n` +
                 `Payment terms: within 1 week of the invoice date.\n\n` +
                 `Bank details\nAccount name: Sarvesh Mohanrajh\nBSB: 670 - 864\nAccount No: 3878 5206\n\n` +
@@ -261,7 +280,7 @@ export default function InvoicePage() {
           <tbody>
             <tr>
               <td className="border border-slate-300 px-3 py-3">{leafletLine(job.area, job.title)}</td>
-              <td className="border border-slate-300 px-3 py-3">{dateAu(job.completed_on)}</td>
+              <td className="border border-slate-300 px-3 py-3">{dateAu(finishedOn)}</td>
               <td className="border border-slate-300 px-3 py-3">{qty ? qty.toLocaleString("en-AU") : "—"}</td>
               <td className="border border-slate-300 px-3 py-3">{rate ? rate.toFixed(2) : "—"}</td>
               <td className="border border-slate-300 px-3 py-3 font-semibold">{money(total)}</td>
