@@ -180,7 +180,12 @@ export default function JobContract({
   const daysFilled = Object.values(schedule).filter((v) => v?.start && v?.end).length;
   const shortBy = Math.max(0, minHours - totalHours);
   const halfEntered = Object.values(schedule).some((v) => (v?.start && !v?.end) || (!v?.start && v?.end));
-  const scheduleOk = minHours === 0 ? true : totalHours + 1e-9 >= minHours && !halfEntered;
+  // The office can waive the schedule for a job — a small drop someone will
+  // fit in when they can. A half-filled day is still wrong, though.
+  const noScheduleNeeded = Boolean(mine?.schedule_optional);
+  const scheduleOk = noScheduleNeeded
+    ? !halfEntered
+    : minHours === 0 ? true : totalHours + 1e-9 >= minHours && !halfEntered;
 
   // Pick up an unfinished draft, and open the agreement if they came here to read it.
   useEffect(() => {

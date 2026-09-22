@@ -12,7 +12,10 @@ const money = (v: string | null) => (v ? `$${Number(v).toFixed(2)}` : "—");
 const shortDate = (d: string | null | undefined) =>
   d ? new Date(d).toLocaleDateString("en-AU", { day: "2-digit", month: "short" }) : "—";
 
-const STEPS = ["The job", "Your hours", "The agreement", "Sign"];
+type StepKey = "job" | "hours" | "agreement" | "sign";
+const TITLES: Record<StepKey, string> = {
+  job: "The job", hours: "Your hours", agreement: "The agreement", sign: "Sign",
+};
 
 type Flow = {
   scheduleOk: boolean;
@@ -41,7 +44,13 @@ export default function TakeJobSteps({
   onSigned: () => void;
 }) {
   const router = useRouter();
-  const [step, setStep] = useState(1);
+  // A job the office marked "schedule not needed" has three screens, not four.
+  const steps: StepKey[] = mine.schedule_optional
+    ? ["job", "agreement", "sign"]
+    : ["job", "hours", "agreement", "sign"];
+  const [at, setAt] = useState(0);
+  const key = steps[at];
+  const total = steps.length;
   const [done, setDone] = useState(false);
   const [flow, setFlow] = useState<Flow>({
     scheduleOk: false, seen: false, ready: false, busy: false,
@@ -50,13 +59,13 @@ export default function TakeJobSteps({
   // What to do about it, shown when they press on regardless.
   const [notice, setNotice] = useState("");
 
-  useEffect(() => { setNotice(""); }, [step]);
+  useEffect(() => { setNotice(""); }, [at]);
 
   // Each step starts at the top, or the next screen opens halfway down where
   // the last one happened to be scrolled to.
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "smooth" });
-  }, [step]);
+  }, [at]);
 
   const own = parseSpec(mine.boundary);
   const spec: AreaSpec = specHasDrawing(own) ? own : parseSpec(job.boundary);
@@ -87,7 +96,7 @@ export default function TakeJobSteps({
     ["Leaflets", mine.leaflet_share ? mine.leaflet_share.toLocaleString() : "—"],
     ["Your pay", money(mine.pay ?? job.worker_pay)],
     ["Minimum hours", tidyHours(mine.min_hours || job.min_hours) || "—"],
-    ["By", shortDate(mine.due_date)],
+    [mine.schedule_optional ? "Do it by" : "By", shortDate(mine.due_date)],
     ["Junk mail", mine.junk_mail_allowed ? "Allowed" : "Not allowed"],
   ];
 
@@ -98,66 +107,63 @@ export default function TakeJobSteps({
    * happens, and there's nothing to read. This always responds.
    */
   const next = () => {
-    if (step === 2 && !flow.scheduleOk) {
+    if (key === "hours" && !flow.scheduleOk) {
       setNotice(flow.hoursProblem || "Fill in the days you'll be working above.");
       return;
     }
-    if (step === 3 && !flow.seen) {
+    if (key === "agreement" && !flow.seen) {
       setNotice("Open the agreement above and read it through — the button turns green once you have.");
       return;
     }
-    if (step === 4 && !flow.ready) {
+    if (key === "sign" && !flow.ready) {
       setNotice(flow.signProblem || "Finish signing above.");
       return;
     }
     setNotice("");
-    if (step === 4) {
+    if (key === "sign") {
       flow.submit();
       return;
     }
-    setStep(step + 1);
+    setAt(at + 1);
   };
 
   const blocked =
-    step === 2 ? !flow.scheduleOk
-      : step === 3 ? !flow.seen
-        : step === 4 ? !flow.ready
+    key === "hours" ? !flow.scheduleOk
+      : key === "agreement" ? !flow.seen
+        : key === "sign" ? !flow.ready
           : false;
   // Once they've done the thing it was asking for, stop asking.
   useEffect(() => {
     if (!blocked) setNotice("");
   }, [blocked]);
 
-  const label2 = step === 2 ? "Next — the agreement →"
-    : step === 3 ? "Next — sign it →"
-      : "";
-
   const label =
-    step === 1 ? "Accept this job →"
-      : step === 2 || step === 3 ? label2
-        : flow.busy ? "Signing…" : "Sign & accept";
+    key === "job" ? "Accept this job →"
+      : key === "hours" ? "Next — the agreement →"
+        : key === "agreement" ? "Next — sign it →"
+          : flow.busy ? "Signing…" : "Sign & accept";
 
   return (
     <div>
       {/* Where they are, kept to one line so it doesn't crowd a phone. */}
       <div className="mb-4">
         <div className="flex items-center gap-1.5">
-          {STEPS.map((s, i) => (
+          {steps.map((k, i) => (
             <span
-              key={s}
+              key={k}
               className={`h-1 flex-1 rounded-full transition ${
-                i + 1 <= step ? "bg-gradient-to-r from-electric to-orchid" : "bg-white/12"
+                i <= at ? "bg-gradient-to-r from-electric to-orchid" : "bg-white/12"
               }`}
             />
           ))}
         </div>
         <p className="mt-2 text-[12px] font-bold uppercase tracking-[0.14em] text-white/40">
-          Step {step} of 4 — {STEPS[step - 1]}
+          Step {at + 1} of {total} — {TITLES[key]}
         </p>
       </div>
 
       <GlassCard className="p-5 sm:p-7">
-        {step === 1 && (
+        {key === "job" && (
           <>
             <h2 className="font-display text-[clamp(1.4rem,5vw,1.9rem)] font-extrabold leading-tight text-white">
               {name}
@@ -186,7 +192,7 @@ export default function TakeJobSteps({
           </>
         )}
 
-        {step === 2 && (
+        {key === "hours" && (
           <>
             <h2 className="font-display text-xl font-extrabold text-white">When will you do it?</h2>
             <p className="mt-1.5 text-[14px] leading-relaxed text-white/50">
@@ -195,16 +201,18 @@ export default function TakeJobSteps({
           </>
         )}
 
-        {step === 3 && (
+        {key === "agreement" && (
           <>
             <h2 className="font-display text-xl font-extrabold text-white">Read the agreement</h2>
             <p className="mt-1.5 text-[14px] leading-relaxed text-white/50">
-              It has your area, pay, hours and the days you just entered in it.
+              {mine.schedule_optional
+                ? "It has your area, pay and hours in it. There is no set schedule for this one — do the drop when you can, by the due date."
+                : "It has your area, pay, hours and the days you just entered in it."}
             </p>
           </>
         )}
 
-        {step === 4 && (
+        {key === "sign" && (
           <>
             <h2 className="font-display text-xl font-extrabold text-white">Sign to accept</h2>
             <p className="mt-1.5 text-[14px] leading-relaxed text-white/50">
@@ -218,10 +226,10 @@ export default function TakeJobSteps({
           step at a time. Rendering a fresh one per step threw the hours away on
           the way to the signature — the schedule lives in its state.
         */}
-        <div className={step === 1 ? "hidden" : "mt-5"}>
+        <div className={key === "job" ? "hidden" : "mt-5"}>
           <JobContract
             job={job} workerName={workerName} mine={mine}
-            step={(step >= 2 ? step : 2) as 2 | 3 | 4}
+            step={key === "hours" ? 2 : key === "agreement" ? 3 : key === "sign" ? 4 : 2}
             onSigned={() => setDone(true)} onState={setFlow}
           />
         </div>
@@ -237,9 +245,9 @@ export default function TakeJobSteps({
 
       {/* One button, always in the same place. */}
       <div className="mt-4 flex items-center gap-2">
-        {step > 1 && (
+        {at > 0 && (
           <button
-            onClick={() => setStep(step - 1)}
+            onClick={() => setAt(at - 1)}
             className="shrink-0 rounded-2xl border border-white/12 bg-white/[0.05] px-5 py-4 font-display text-[14px] font-bold text-white/60 transition hover:bg-white/[0.1] hover:text-white"
           >
             Back
@@ -258,7 +266,7 @@ export default function TakeJobSteps({
         </button>
       </div>
 
-      {step === 1 && (
+      {key === "job" && (
         <button
           onClick={() => router.push("/portal")}
           className="mt-3 w-full rounded-2xl px-6 py-3 text-[13px] font-semibold text-white/35 transition hover:text-white/70"

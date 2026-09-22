@@ -130,6 +130,7 @@ export async function POST(req: Request) {
           jobId, userId, pay: n(b.pay), leafletShare: n(b.leafletShare),
           title: (b.title as string) || null,
           junkMailAllowed: Boolean(b.junkMailAllowed),
+          scheduleOptional: Boolean(b.scheduleOptional),
           areaNote: (b.areaNote as string) || null,
           startDate: (b.startDate as string) || null, dueDate: (b.dueDate as string) || null,
           status: (b.status as string) || "assigned",

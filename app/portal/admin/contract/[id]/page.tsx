@@ -13,6 +13,7 @@ type Data = {
   contract?: {
     signed_name: string; signature_png: string; signed_date: string; schedule: string | null;
     junk_mail_allowed?: boolean | null;
+    schedule_optional?: boolean | null;
     // The sub-contract's own figures — an agreement covers one worker's slice.
     leaflet_share?: number | null; area_note?: string | null; pay?: string | null;
     min_hours?: string | null; allocated_time?: string | null;
@@ -167,6 +168,15 @@ export default function SignedContractPage() {
             </li>
           ))}
         </ul>
+
+        {days.length === 0 && d.contract.schedule_optional && (
+          <>
+            <h2 className="mt-8 font-display text-xl font-bold text-ink">Agreed schedule</h2>
+            <p className="mt-2 text-[15px] text-ink/70">
+              No fixed schedule for this job — the drop is to be completed by the due date above.
+            </p>
+          </>
+        )}
 
         {days.length > 0 && (
           <>

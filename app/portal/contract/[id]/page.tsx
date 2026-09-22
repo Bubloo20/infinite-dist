@@ -135,6 +135,15 @@ export default function WorkerContractPage() {
           ))}
         </ul>
 
+        {signedDays.length === 0 && mine?.schedule_optional && (
+          <>
+            <h2 className="mt-8 font-display text-xl font-bold text-ink">Agreed schedule</h2>
+            <p className="mt-2 text-[15px] text-ink/70">
+              No fixed schedule for this job — the drop is to be completed by the due date above.
+            </p>
+          </>
+        )}
+
         {signedDays.length > 0 && (
           <>
             <h2 className="mt-8 font-display text-xl font-bold text-ink">Agreed schedule</h2>

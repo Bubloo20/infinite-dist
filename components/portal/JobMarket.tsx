@@ -498,7 +498,7 @@ export default function JobMarket({ workerName, only }: {
                     </div>
                     <div className="text-right">
                       <p className="font-display text-2xl font-extrabold text-emerald-300">
-                        {money(mineFor(j.id)?.pay ?? j.worker_pay)}
+                        {money(a?.pay ?? j.worker_pay)}
                       </p>
                       <PayState logs={shifts} accepted={accepted} />
                       <button onClick={() => toggleShut(cardId)}
@@ -564,7 +564,7 @@ export default function JobMarket({ workerName, only }: {
                     <div className="mt-5">
                       <p className="mb-2 text-[13px] font-semibold uppercase tracking-[0.1em] text-white/50">Your area diagram</p>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={mineFor(j.id)!.map_image!} alt="Area diagram for your section"
+                      <img src={a.map_image} alt="Area diagram for your section"
                         className="w-full rounded-2xl border border-white/12" />
                     </div>
                   )}

@@ -81,7 +81,7 @@ let schemaReady: Promise<void> | null = null;
  * date. Forget to raise it and your new column never gets added in production,
  * because the migration will be skipped.
  */
-const SCHEMA_VERSION = 5;
+const SCHEMA_VERSION = 6;
 
 /**
  * Bring the schema up to date, once per process.
@@ -379,6 +379,10 @@ async function migrateSchema(): Promise<void> {
   // Whether this drop may go into letterboxes marked "No Junk Mail". It changes
   // how the run is walked, so it's set per sub-contract and told to the worker.
   await sql`ALTER TABLE job_assignments ADD COLUMN IF NOT EXISTS junk_mail_allowed BOOLEAN NOT NULL DEFAULT FALSE;`;
+  // Some work doesn't need the worker to commit to days in advance — a small
+  // drop they'll fit in when they can. Set, the hours step is skipped and the
+  // agreement doesn't ask for a schedule.
+  await sql`ALTER TABLE job_assignments ADD COLUMN IF NOT EXISTS schedule_optional BOOLEAN NOT NULL DEFAULT FALSE;`;
   await sql`ALTER TABLE job_assignments ADD COLUMN IF NOT EXISTS map_center TEXT;`;
 
   /**
@@ -504,6 +508,7 @@ export type JobAssignment = {
   id: number; job_id: number; user_id: number;
   title: string | null;
   junk_mail_allowed: boolean;
+  schedule_optional: boolean;
   pay: string | null; leaflet_share: number | null; area_note: string | null;
   start_date: string | null; due_date: string | null;
   min_hours: string | null; allocated_time: string | null; map_image: string | null;
@@ -669,7 +674,7 @@ export async function listAssignmentsForUser(userId: number): Promise<JobAssignm
 
 export async function upsertAssignment(a: {
   id?: number | null; jobId: number; userId: number; pay?: number | null;
-  title?: string | null; junkMailAllowed?: boolean;
+  title?: string | null; junkMailAllowed?: boolean; scheduleOptional?: boolean;
   leafletShare?: number | null; areaNote?: string | null;
   startDate?: string | null; dueDate?: string | null; status?: string | null;
   minHours?: string | null; allocatedTime?: string | null; mapImage?: string | null;
@@ -702,6 +707,7 @@ export async function upsertAssignment(a: {
         user_id = ${a.userId},
         status = ${movedOn ? "assigned" : (a.status || "assigned")},
         title = ${a.title ?? null}, junk_mail_allowed = ${a.junkMailAllowed ?? false},
+        schedule_optional = ${a.scheduleOptional ?? false},
         pay = ${a.pay ?? null}, leaflet_share = ${a.leafletShare ?? null},
         area_note = ${a.areaNote ?? null}, start_date = ${a.startDate || null},
         due_date = ${a.dueDate || null},
@@ -720,10 +726,10 @@ export async function upsertAssignment(a: {
 
   const r = await sql<{ id: number }>`
     INSERT INTO job_assignments
-      (job_id, user_id, title, junk_mail_allowed, pay, leaflet_share, area_note, start_date, due_date, status,
+      (job_id, user_id, title, junk_mail_allowed, schedule_optional, pay, leaflet_share, area_note, start_date, due_date, status,
        min_hours, allocated_time, map_image, boundary, map_center)
     VALUES
-      (${a.jobId}, ${a.userId}, ${a.title ?? null}, ${a.junkMailAllowed ?? false}, ${a.pay ?? null}, ${a.leafletShare ?? null}, ${a.areaNote ?? null},
+      (${a.jobId}, ${a.userId}, ${a.title ?? null}, ${a.junkMailAllowed ?? false}, ${a.scheduleOptional ?? false}, ${a.pay ?? null}, ${a.leafletShare ?? null}, ${a.areaNote ?? null},
        ${a.startDate || null}, ${a.dueDate || null}, ${a.status || 'assigned'},
        ${a.minHours ?? null}, ${a.allocatedTime ?? null}, ${a.mapImage ?? null},
        ${a.boundary ?? null}, ${a.mapCenter ?? null})

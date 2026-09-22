@@ -268,9 +268,11 @@ const minHoursFor = (leaflets: number) =>
  * It decides how the street is actually walked, so it's asked per sub-contract
  * and spelled out rather than left as jargon on a checkbox.
  */
-function JunkMailToggle({ value, onChange, tone = "dark" }: {
+function Toggle({ value, onChange, label, explain, tone = "dark" }: {
   value: boolean;
   onChange: (v: boolean) => void;
+  label: string;
+  explain: React.ReactNode;
   tone?: "dark" | "plain";
 }) {
   const [why, setWhy] = useState(false);
@@ -285,7 +287,7 @@ function JunkMailToggle({ value, onChange, tone = "dark" }: {
             className="h-4 w-4 shrink-0 accent-orchid"
           />
           <span>
-            Junk mail allowed
+            {label}
             <span className={`ml-2 rounded-md px-1.5 py-0.5 text-[11px] font-bold uppercase ${
               value ? "bg-emerald-500/15 text-emerald-300" : "bg-white/[0.08] text-white/45"}`}>
               {value ? "Yes" : "No"}
@@ -294,7 +296,7 @@ function JunkMailToggle({ value, onChange, tone = "dark" }: {
         </label>
         <button
           type="button"
-          aria-label="What does junk mail allowed mean?"
+          aria-label={`What does ${label.toLowerCase()} mean?`}
           aria-expanded={why}
           onClick={() => setWhy((v) => !v)}
           className="grid h-5 w-5 shrink-0 place-items-center rounded-full border border-white/25 text-[11px] font-bold text-white/55 transition hover:border-white/50 hover:text-white"
@@ -302,15 +304,53 @@ function JunkMailToggle({ value, onChange, tone = "dark" }: {
           i
         </button>
       </div>
-      {why && (
-        <p className="mt-2 max-w-md text-[12px] leading-relaxed text-white/55">
-          Whether the worker may put leaflets in letterboxes marked
-          &ldquo;No Junk Mail&rdquo;. <span className="font-semibold text-white/75">Yes</span> — every box on
-          the street. <span className="font-semibold text-white/75">No</span> — skip any that say no junk
-          mail, addressed items only.
-        </p>
-      )}
+      {why && <p className="mt-2 max-w-md text-[12px] leading-relaxed text-white/55">{explain}</p>}
     </div>
+  );
+}
+
+/**
+ * Whether this run may go into letterboxes marked "No Junk Mail".
+ *
+ * It decides how the street is actually walked, so it's asked per sub-contract
+ * and spelled out rather than left as jargon on a checkbox.
+ */
+function JunkMailToggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <Toggle
+      value={value}
+      onChange={onChange}
+      label="Junk mail allowed"
+      explain={<>
+        Whether the worker may put leaflets in letterboxes marked
+        &ldquo;No Junk Mail&rdquo;. <span className="font-semibold text-white/75">Yes</span> — every box on
+        the street. <span className="font-semibold text-white/75">No</span> — skip any that say no junk
+        mail, addressed items only.
+      </>}
+    />
+  );
+}
+
+/**
+ * Whether the worker has to put down the days they'll work before signing.
+ *
+ * A small drop someone will fit in when they can doesn't need a week of times
+ * committed in advance. Ticked, the hours step is skipped and the agreement
+ * doesn't ask for a schedule.
+ */
+function ScheduleToggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <Toggle
+      value={value}
+      onChange={onChange}
+      label="Schedule not needed"
+      explain={<>
+        Normally the worker fills in the days and times they&apos;ll work before they can sign, and it
+        goes in the agreement. <span className="font-semibold text-white/75">Yes</span> — skip that; they
+        read and sign, and do the drop when they can before the due date.
+        {" "}<span className="font-semibold text-white/75">No</span> — they must put their hours down first.
+      </>}
+    />
   );
 }
 
@@ -320,7 +360,7 @@ export function SubContracts({ job, users, rows, post, del }: {
   del: (entity: string, id: number) => Promise<void>;
 }) {
   const blank = {
-    userId: "", title: "", junkMailAllowed: false, pay: "", leafletShare: "", areaNote: "",
+    userId: "", title: "", junkMailAllowed: false, scheduleOptional: false, pay: "", leafletShare: "", areaNote: "",
     startDate: "", dueDate: "", minHours: "", allocatedTime: "", mapImage: "",
     boundary: "", mapCenter: "",
   };
@@ -333,7 +373,7 @@ export function SubContracts({ job, users, rows, post, del }: {
   const [payRow, setPayRow] = useState<number | null>(null);
   const [payDraft, setPayDraft] = useState("");
   const blankEdit = {
-    who: "", title: "", junk: false, pay: "", leaflets: "",
+    who: "", title: "", junk: false, noSchedule: false, pay: "", leaflets: "",
     area: "", start: "", due: "", minHours: "",
   };
   const [ed, setEd] = useState(blankEdit);
@@ -397,6 +437,7 @@ export function SubContracts({ job, users, rows, post, del }: {
                   {r.map_image ? " · area diagram attached" : ""}
                   {specHasDrawing(parseSpec(r.boundary)) ? " · area drawn on map" : ""}
                   {r.junk_mail_allowed ? " · junk mail allowed" : " · no junk mail"}
+                  {r.schedule_optional ? " · no schedule needed" : ""}
                 </p>
               </div>
               <div className="flex items-center gap-4">
@@ -426,6 +467,7 @@ export function SubContracts({ job, users, rows, post, del }: {
                         await post({
                           entity: "assignment", id: r.id, jobId: job.id, userId: r.user_id,
                           title: r.title, junkMailAllowed: r.junk_mail_allowed,
+                          scheduleOptional: r.schedule_optional,
                           pay: next, leafletShare: r.leaflet_share, areaNote: r.area_note,
                           startDate: r.start_date, dueDate: r.due_date, status: r.status,
                           minHours: r.min_hours, allocatedTime: r.allocated_time,
@@ -453,6 +495,7 @@ export function SubContracts({ job, users, rows, post, del }: {
                       who: String(r.user_id),
                       title: r.title || "",
                       junk: Boolean(r.junk_mail_allowed),
+                      noSchedule: Boolean(r.schedule_optional),
                       pay: r.pay != null ? String(Number(r.pay).toFixed(2)) : "",
                       leaflets: r.leaflet_share != null ? String(r.leaflet_share) : "",
                       area: r.area_note || "",
@@ -552,8 +595,9 @@ export function SubContracts({ job, users, rows, post, del }: {
                     </p>
                   )}
 
-                  <div className="mb-3">
+                  <div className="mb-3 grid gap-2 sm:grid-cols-2">
                     <JunkMailToggle value={ed.junk} onChange={(v) => setEd({ ...ed, junk: v })} />
+                    <ScheduleToggle value={ed.noSchedule} onChange={(v) => setEd({ ...ed, noSchedule: v })} />
                   </div>
 
                   <div className="grid gap-3 lg:grid-cols-2">
@@ -586,6 +630,7 @@ export function SubContracts({ job, users, rows, post, del }: {
                           entity: "assignment", id: r.id, jobId: job.id,
                           userId: Number(ed.who) || r.user_id,
                           title: ed.title.trim() || null, junkMailAllowed: ed.junk,
+                          scheduleOptional: ed.noSchedule,
                           pay: ed.pay === "" ? null : Number(ed.pay),
                           leafletShare: ed.leaflets === "" ? null : Number(ed.leaflets),
                           areaNote: ed.area.trim() || null,
@@ -658,6 +703,9 @@ export function SubContracts({ job, users, rows, post, del }: {
           onChange={(e) => setF({ ...f, title: e.target.value })} />
         <div className="sm:col-span-2">
           <JunkMailToggle value={f.junkMailAllowed} onChange={(v) => setF({ ...f, junkMailAllowed: v })} />
+        </div>
+        <div className="sm:col-span-2">
+          <ScheduleToggle value={f.scheduleOptional} onChange={(v) => setF({ ...f, scheduleOptional: v })} />
         </div>
         <label className="block">
           <span className="mb-1 block text-[11px] font-semibold text-white/35">Start</span>
