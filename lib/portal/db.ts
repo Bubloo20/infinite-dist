@@ -509,6 +509,8 @@ export type JobAssignment = {
   title: string | null;
   junk_mail_allowed: boolean;
   schedule_optional: boolean;
+  /** Added by the API, not stored: the signed id behind a shared map link. */
+  share_token?: string;
   pay: string | null; leaflet_share: number | null; area_note: string | null;
   start_date: string | null; due_date: string | null;
   min_hours: string | null; allocated_time: string | null; map_image: string | null;

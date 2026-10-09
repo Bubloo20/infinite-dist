@@ -370,6 +370,7 @@ export function SubContracts({ job, users, rows, post, del }: {
   const ownHours = useRef(false);
   const [tracing, setTracing] = useState(false);
   const [editing, setEditing] = useState<number | null>(null);
+  const [shared, setShared] = useState<number | null>(null);
   const [payRow, setPayRow] = useState<number | null>(null);
   const [payDraft, setPayDraft] = useState("");
   const blankEdit = {
@@ -508,6 +509,30 @@ export function SubContracts({ job, users, rows, post, del }: {
                   }}
                   className="text-[13px] font-semibold text-orchid transition hover:text-white">
                   {editing === r.id ? "Close map" : specHasDrawing(parseSpec(r.boundary)) ? "Edit area" : "Draw area"}
+                </button>
+                {/*
+                  Just the map, for sending to a worker before any of the
+                  paperwork. The link opens without an account and shows them
+                  where they are once they allow it.
+                */}
+                <button
+                  onClick={async () => {
+                    const url = `${window.location.origin}/map/${r.share_token}`;
+                    try {
+                      if (navigator.share) {
+                        await navigator.share({ title: r.title || r.area_note || "Delivery area", url });
+                      } else {
+                        await navigator.clipboard.writeText(url);
+                        setShared(r.id);
+                        setTimeout(() => setShared((cur) => (cur === r.id ? null : cur)), 2200);
+                      }
+                    } catch {
+                      // Cancelled the share sheet, or no clipboard — show it to copy by hand.
+                      window.prompt("Copy this map link", url);
+                    }
+                  }}
+                  className="text-[13px] font-semibold text-sky-300 transition hover:text-white">
+                  {shared === r.id ? "Link copied ✓" : "Share map"}
                 </button>
                 <button onClick={() => del("assignment", r.id)} className="text-[13px] text-white/30 transition hover:text-rose-300">Remove</button>
               </div>

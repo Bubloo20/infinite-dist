@@ -133,3 +133,27 @@ export function isAdmin(): boolean {
 export function isSignedIn(): boolean {
   return currentSession() !== null;
 }
+
+/* ------------------------------ shared maps ------------------------------- */
+
+/**
+ * A link to one sub-contract's map that works without signing in.
+ *
+ * Handed to a worker over text or WhatsApp so they can see the area and where
+ * they are in it, without an account or an agreement. The id is signed rather
+ * than sent plainly, so the link can't be edited into somebody else's map, and
+ * what it opens is only the shape on a map and what the run is called — no
+ * pay, no contact details, nothing about anyone else.
+ */
+export function mapShareToken(assignmentId: number): string {
+  const sig = crypto.createHmac("sha256", secret())
+    .update(`map.${assignmentId}`).digest("hex").slice(0, 20);
+  return `${assignmentId}-${sig}`;
+}
+
+export function readMapShareToken(token: string): number | null {
+  const [idPart, sig] = String(token || "").split("-");
+  const id = Number(idPart);
+  if (!Number.isInteger(id) || id <= 0 || !sig) return null;
+  return safeEqual(sig, mapShareToken(id).split("-")[1]) ? id : null;
+}

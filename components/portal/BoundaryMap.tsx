@@ -89,27 +89,53 @@ function metresBetween(a: LatLng, b: LatLng): number {
  * way between corners, and someone standing beside that stretch would read as
  * far outside when they're right on the line.
  */
+/**
+ * Metres from a point to one segment of a boundary.
+ *
+ * Measured in a flat local frame centred on the point, which is close enough
+ * over the distances a delivery run covers.
+ */
+function distanceToSegment(pt: LatLng, a: LatLng, b: LatLng): number {
+  const latToM = 111_320;
+  const lngToM = 111_320 * Math.cos((pt[0] * Math.PI) / 180);
+  const ax = (a[1] - pt[1]) * lngToM;
+  const ay = (a[0] - pt[0]) * latToM;
+  const bx = (b[1] - pt[1]) * lngToM;
+  const by = (b[0] - pt[0]) * latToM;
+  const dx = bx - ax;
+  const dy = by - ay;
+  const len2 = dx * dx + dy * dy;
+  // How far along the segment the closest point sits, clamped to its ends.
+  const t = len2 === 0 ? 0 : Math.max(0, Math.min(1, -(ax * dx + ay * dy) / len2));
+  return Math.hypot(ax + t * dx, ay + t * dy);
+}
+
 export function distanceToArea(pt: LatLng, poly: LatLng[]): number {
   if (poly.length < 2) return Infinity;
   if (insideBoundary(pt, poly)) return 0;
 
-  // Work in metres locally so segment maths is straightforward.
-  const latToM = 111_320;
-  const lngToM = 111_320 * Math.cos((pt[0] * Math.PI) / 180);
-  const toXY = (p: LatLng) => [(p[1] - pt[1]) * lngToM, (p[0] - pt[0]) * latToM];
-
   let best = Infinity;
   for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
-    const [ax, ay] = toXY(poly[j]);
-    const [bx, by] = toXY(poly[i]);
-    const dx = bx - ax;
-    const dy = by - ay;
-    const len2 = dx * dx + dy * dy;
-    // How far along the segment the closest point sits, clamped to its ends.
-    const t = len2 === 0 ? 0 : Math.max(0, Math.min(1, -(ax * dx + ay * dy) / len2));
-    const cx = ax + t * dx;
-    const cy = ay + t * dy;
-    best = Math.min(best, Math.hypot(cx, cy));
+    best = Math.min(best, distanceToSegment(pt, poly[j], poly[i]));
+  }
+  return best;
+}
+
+/**
+ * Where a new corner belongs in an outline.
+ *
+ * Every point used to go on the end, so clicking between two existing corners
+ * ran the boundary out to the click and back again and the shape crossed over
+ * itself. The click goes into whichever edge it landed nearest instead, which
+ * is almost always the one meant.
+ */
+export function insertAt(pts: LatLng[], pt: LatLng): number {
+  if (pts.length < 3) return pts.length;
+  let best = pts.length;
+  let bestD = Infinity;
+  for (let i = 0; i < pts.length; i++) {
+    const d = distanceToSegment(pt, pts[i], pts[(i + 1) % pts.length]);
+    if (d < bestD) { bestD = d; best = i + 1; }
   }
   return best;
 }
@@ -439,7 +465,9 @@ export default function BoundaryMap({
           }
 
           if (cur.mode === "area") {
-            emit({ ...cur, mode: "area", shapes: [[...(cur.shapes[0] || []), pt]] });
+            const pts = cur.shapes[0] || [];
+            const where = insertAt(pts, pt);
+            emit({ ...cur, mode: "area", shapes: [[...pts.slice(0, where), pt, ...pts.slice(where)]] });
             return;
           }
           const shapes = cur.shapes.map((r) => [...r]);
