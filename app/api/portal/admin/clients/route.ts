@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { isAdmin, mapShareToken } from "@/lib/portal/auth";
+import { isAdmin, mapShareToken, inviteToken } from "@/lib/portal/auth";
 import {
   listAgencies, upsertAgency, deleteAgency,
   listAgents, upsertAgent, deleteAgent,
@@ -30,7 +30,11 @@ export async function GET() {
       ok: true, dbConfigured: true, agencies, agents, jobs, agencyPayments, interest,
       // Each sub-contract carries the signed id its shared map link uses, so
       // the browser never needs the secret that makes one.
-      assignments: assignments.map((a) => ({ ...a, share_token: mapShareToken(a.id) })),
+      assignments: assignments.map((a) => ({
+        ...a,
+        share_token: mapShareToken(a.id),
+        invite_token: inviteToken(a.id),
+      })),
     });
   } catch (e) {
     return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "Query failed." }, { status: 500 });

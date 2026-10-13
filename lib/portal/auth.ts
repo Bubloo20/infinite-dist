@@ -157,3 +157,28 @@ export function readMapShareToken(token: string): number | null {
   if (!Number.isInteger(id) || id <= 0 || !sig) return null;
   return safeEqual(sig, mapShareToken(id).split("-")[1]) ? id : null;
 }
+
+/**
+ * A link to one sub-contract that stands in for an account.
+ *
+ * Sent to someone who has no login: it opens the terms, takes their hours and
+ * their signature, and then shows the map. Signed with its own prefix so a map
+ * link can never be read as one of these — the map link only ever shows a
+ * shape, this one can put a name to an agreement.
+ *
+ * Anyone holding the link can sign as that worker, which is the deal with
+ * sending work by link rather than by account. Send it to the person, not to a
+ * group, and reissue by deleting the sub-contract if it goes astray.
+ */
+export function inviteToken(assignmentId: number): string {
+  const sig = crypto.createHmac("sha256", secret())
+    .update(`invite.${assignmentId}`).digest("hex").slice(0, 24);
+  return `${assignmentId}-${sig}`;
+}
+
+export function readInviteToken(token: string): number | null {
+  const [idPart, sig] = String(token || "").split("-");
+  const id = Number(idPart);
+  if (!Number.isInteger(id) || id <= 0 || !sig) return null;
+  return safeEqual(sig, inviteToken(id).split("-")[1]) ? id : null;
+}

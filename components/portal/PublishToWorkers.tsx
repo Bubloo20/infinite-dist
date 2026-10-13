@@ -370,7 +370,25 @@ export function SubContracts({ job, users, rows, post, del }: {
   const ownHours = useRef(false);
   const [tracing, setTracing] = useState(false);
   const [editing, setEditing] = useState<number | null>(null);
-  const [shared, setShared] = useState<number | null>(null);
+  const [shared, setShared] = useState<string | null>(null);
+
+  /**
+   * Hand a link over the way the device prefers: the share sheet on a phone,
+   * the clipboard on a desktop, and failing both, something to copy by hand.
+   */
+  const handOver = async (mark: string, title: string, url: string) => {
+    try {
+      if (navigator.share) {
+        await navigator.share({ title, url });
+        return;
+      }
+      await navigator.clipboard.writeText(url);
+      setShared(mark);
+      setTimeout(() => setShared((cur) => (cur === mark ? null : cur)), 2200);
+    } catch {
+      window.prompt("Copy this link", url);
+    }
+  };
   const [payRow, setPayRow] = useState<number | null>(null);
   const [payDraft, setPayDraft] = useState("");
   const blankEdit = {
@@ -515,24 +533,27 @@ export function SubContracts({ job, users, rows, post, del }: {
                   paperwork. The link opens without an account and shows them
                   where they are once they allow it.
                 */}
+                {/*
+                  The whole job by link, for someone with no account: the terms,
+                  their hours, the agreement, a signature, and then the map.
+                */}
                 <button
-                  onClick={async () => {
-                    const url = `${window.location.origin}/map/${r.share_token}`;
-                    try {
-                      if (navigator.share) {
-                        await navigator.share({ title: r.title || r.area_note || "Delivery area", url });
-                      } else {
-                        await navigator.clipboard.writeText(url);
-                        setShared(r.id);
-                        setTimeout(() => setShared((cur) => (cur === r.id ? null : cur)), 2200);
-                      }
-                    } catch {
-                      // Cancelled the share sheet, or no clipboard — show it to copy by hand.
-                      window.prompt("Copy this map link", url);
-                    }
-                  }}
+                  onClick={() => handOver(
+                    `job-${r.id}`,
+                    r.title || r.area_note || "Leaflet distribution",
+                    `${window.location.origin}/job/${r.invite_token}`,
+                  )}
+                  className="text-[13px] font-semibold text-emerald-300 transition hover:text-white">
+                  {shared === `job-${r.id}` ? "Link copied \u2713" : "Send job link"}
+                </button>
+                <button
+                  onClick={() => handOver(
+                    `map-${r.id}`,
+                    r.title || r.area_note || "Delivery area",
+                    `${window.location.origin}/map/${r.share_token}`,
+                  )}
                   className="text-[13px] font-semibold text-sky-300 transition hover:text-white">
-                  {shared === r.id ? "Link copied ✓" : "Share map"}
+                  {shared === `map-${r.id}` ? "Link copied \u2713" : "Map only"}
                 </button>
                 <button onClick={() => del("assignment", r.id)} className="text-[13px] text-white/30 transition hover:text-rose-300">Remove</button>
               </div>
