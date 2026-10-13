@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { currentSession } from "@/lib/portal/auth";
+import { sendSignedAgreement } from "@/lib/portal/contractNotice";
 import {
   listOpenJobs, listJobsForWorkerAll, listInterest, addInterest, removeInterest,
-  getContract, saveContract, findUserById, dbConfigured, listAssignmentsForUser, renameUserTo,
+  getContract, saveContract, findUserById, dbConfigured, listAssignmentsForUser, renameUserTo, getClientJob,
   upsertAssignment, listWorkLogsForUser, syncJobOutCount, acceptAssignment, listContractsForUser,
 } from "@/lib/portal/db";
 
@@ -123,7 +124,24 @@ export async function POST(req: Request) {
       // However they wrote their name on the agreement is how they're known
       // from here on — the register was only ever the office's best guess.
       const renamed = signedName ? await renameUserTo(s.userId, signedName) : false;
-      return NextResponse.json({ ok: true, renamedTo: renamed ? signedName.trim() : null });
+
+      // The office hears about this one the same as one signed on a link.
+      const signedJob = await getClientJob(jobId);
+      const sent = await sendSignedAgreement({
+        job: signedJob ?? null,
+        assignment: signFor ?? null,
+        signedName: signedName || user?.full_name || "",
+        signedDate,
+        signaturePng,
+        schedule: (b.schedule as string) || null,
+      });
+
+      return NextResponse.json({
+        ok: true,
+        renamedTo: renamed ? signedName.trim() : null,
+        emailedOffice: sent.office,
+        mailConfigured: sent.configured,
+      });
     }
     return NextResponse.json({ ok: false, error: "Unknown action." }, { status: 400 });
   } catch (e) {

@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { readInviteToken } from "@/lib/portal/auth";
-import { sendMail, mailConfigured } from "@/lib/portal/mail";
-import { contractEmailHtml } from "@/lib/portal/contractEmail";
+import { sendSignedAgreement, noticeTitle } from "@/lib/portal/contractNotice";
 import {
   listAssignments, getClientJob, getContractForAssignment, saveContract,
   acceptAssignment, findUserById, dbConfigured,
@@ -44,7 +43,7 @@ export async function GET(_req: Request, { params }: { params: { token: string }
     return NextResponse.json({
       ok: true,
       workerName: worker?.full_name ?? "",
-      title: a.title?.trim() || a.area_note?.trim() || job?.area?.trim() || "Leaflet distribution",
+      title: noticeTitle(a, job ?? null),
       area: a.area_note || job?.area || null,
       leaflets: a.leaflet_share,
       pay: a.pay,
@@ -122,38 +121,18 @@ export async function POST(req: Request, { params }: { params: { token: string }
 
     // The agreement is saved either way; posting it out is best effort, and
     // the page tells them to keep their own copy when it doesn't go.
-    const job = found.job;
-    const html = contractEmailHtml({
-      workerName: found.worker?.full_name ?? signedName,
-      title: a.title?.trim() || a.area_note?.trim() || job?.area?.trim() || "Leaflet distribution",
-      area: a.area_note || job?.area || null,
-      leaflets: a.leaflet_share,
-      pay: a.pay,
-      minHours: a.min_hours || job?.min_hours || null,
-      startDate: a.start_date,
-      dueDate: a.due_date,
-      junkMailAllowed: a.junk_mail_allowed,
-      scheduleOptional: a.schedule_optional,
+    const sent = await sendSignedAgreement({
+      job: found.job ?? null,
+      assignment: a,
       signedName,
       signedDate,
       signaturePng,
       schedule: b.schedule || null,
+      workerEmail: email || null,
     });
-    const subject = `Signed agreement — ${signedName} — ${a.title?.trim() || a.area_note?.trim() || `job #${a.job_id}`}`;
+    const { office: emailedOffice, worker: emailedWorker } = sent;
 
-    let emailedWorker = false;
-    let emailedOffice = false;
-    if (mailConfigured()) {
-      // The office always gets one; the worker only if they gave an address.
-      const office = await sendMail({ subject, html });
-      emailedOffice = office.ok;
-      if (email) {
-        const theirs = await sendMail({ subject: "Your signed agreement — Infinite Distribution", html, to: email });
-        emailedWorker = theirs.ok;
-      }
-    }
-
-    return NextResponse.json({ ok: true, emailedWorker, emailedOffice, mailConfigured: mailConfigured() });
+    return NextResponse.json({ ok: true, emailedWorker, emailedOffice, mailConfigured: sent.configured });
   } catch (e) {
     return NextResponse.json(
       { ok: false, error: e instanceof Error ? e.message : "Couldn't record that." },
