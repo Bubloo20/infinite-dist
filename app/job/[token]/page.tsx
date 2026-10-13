@@ -91,6 +91,21 @@ export default function InvitePage() {
   const [arrivedSigned, setArrivedSigned] = useState(false);
   const [savedCopy, setSavedCopy] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [winH, setWinH] = useState(820);
+
+  // Someone coming back to a signed link came back for the map, so it gets
+  // the screen. Measured rather than guessed at, and followed when the phone
+  // is turned.
+  useEffect(() => {
+    const fit = () => setWinH(window.innerHeight);
+    fit();
+    window.addEventListener("resize", fit);
+    window.addEventListener("orientationchange", fit);
+    return () => {
+      window.removeEventListener("resize", fit);
+      window.removeEventListener("orientationchange", fit);
+    };
+  }, []);
 
   useEffect(() => {
     fetch(`/api/portal/invite/${token}`)
@@ -133,6 +148,8 @@ export default function InvitePage() {
     : (["terms", "hours", "agreement", "sign", "map"] as const);
   const key = alreadySigned ? "map" : steps[at];
   const total = steps.length;
+
+  const mapH = arrivedSigned ? Math.max(380, winH - 290) : 420;
 
   const days = Object.entries(schedule).filter(([, v]) => v?.start || v?.end);
   const totalHours = days.reduce((t, [, v]) => t + spanHours(v.start, v.end), 0);
@@ -288,15 +305,6 @@ export default function InvitePage() {
                 ))}
               </div>
 
-              <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-[13px] leading-relaxed text-white/60">
-                {d.startDate || d.dueDate ? (
-                  <>Run it between <span className="font-semibold text-white/85">{longDate(d.startDate)}</span> and{" "}
-                    <span className="font-semibold text-white/85">{longDate(d.dueDate)}</span>.</>
-                ) : (
-                  <>Dates will be confirmed by the office.</>
-                )}
-                {" "}Payment is made within a week of your tracking being checked.
-              </div>
             </>
           )}
 
@@ -462,7 +470,7 @@ export default function InvitePage() {
                 />
                 {!email.trim() && (
                   <span className="mt-1.5 block text-[12px] text-white/40">
-                    Leave it blank and you&apos;ll need to save a copy to your phone instead.
+                    Leave it blank and you can save a copy to your phone instead.
                   </span>
                 )}
               </label>
@@ -490,18 +498,28 @@ export default function InvitePage() {
           {/* ------------------------------- map ------------------------------- */}
           {key === "map" && (
             <>
-              <div className="flex items-start gap-3">
-                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-emerald-500/20 text-xl text-emerald-300">✓</span>
-                <div className="min-w-0">
-                  <h2 className="font-display text-xl font-extrabold text-white">
-                    {arrivedSigned ? "Already signed" : "Job accepted"}
-                  </h2>
-                  <p className="mt-1 text-[13px] text-emerald-100/65">
-                    {d.title} is yours{d.signed?.date ? ` — signed ${longDate(d.signed.date)}` : ""}. Here&apos;s
-                    where you&apos;ll be working.
-                  </p>
+              {arrivedSigned ? (
+                <div className="flex items-center gap-2.5">
+                  <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-emerald-500/20 text-[13px] text-emerald-300">✓</span>
+                  <div className="min-w-0">
+                    <h2 className="truncate font-display text-[17px] font-extrabold text-white">{d.title}</h2>
+                    <p className="text-[12px] text-emerald-100/55">
+                      Signed{d.signed?.date ? ` ${longDate(d.signed.date)}` : ""} — here&apos;s your area
+                    </p>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className="flex items-start gap-3">
+                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-emerald-500/20 text-xl text-emerald-300">✓</span>
+                  <div className="min-w-0">
+                    <h2 className="font-display text-xl font-extrabold text-white">Job accepted</h2>
+                    <p className="mt-1 text-[13px] text-emerald-100/65">
+                      {d.title} is yours{d.signed?.date ? ` — signed ${longDate(d.signed.date)}` : ""}. Here&apos;s
+                      where you&apos;ll be working.
+                    </p>
+                  </div>
+                </div>
+              )}
 
               {/*
                 Everyone leaves with a copy. Emailed where they gave an address,
@@ -526,9 +544,7 @@ export default function InvitePage() {
                   <>
                     <p className="font-display text-[15px] font-bold text-white">Keep a copy</p>
                     <p className="mt-1 text-[13px] leading-relaxed text-amber-100/80">
-                      {d.signed?.name && !email.trim()
-                        ? "You didn't give an email, so save the agreement to your phone now."
-                        : "Save the agreement to your phone so you have your own copy."}
+                      Save the agreement to your phone if you&apos;d like your own copy.
                     </p>
                   </>
                 )}
@@ -544,7 +560,16 @@ export default function InvitePage() {
               </div>
               )}
 
-              {!located && specHasDrawing(spec) && (
+              {!located && specHasDrawing(spec) && arrivedSigned && (
+                <button
+                  onClick={() => setLocated(true)}
+                  className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-orchid/40 bg-gradient-to-r from-electric/20 to-orchid/15 px-4 py-2.5 font-display text-[13px] font-bold text-white"
+                >
+                  Show where I am
+                </button>
+              )}
+
+              {!located && specHasDrawing(spec) && !arrivedSigned && (
                 <button
                   onClick={() => setLocated(true)}
                   className="mt-5 flex w-full items-center justify-between gap-3 rounded-2xl border border-orchid/40 bg-gradient-to-r from-electric/20 to-orchid/15 px-5 py-4 text-left"
@@ -559,9 +584,9 @@ export default function InvitePage() {
                 </button>
               )}
 
-              <div className={`mt-4 ${sentTo || savedCopy || arrivedSigned ? "" : "pointer-events-none opacity-30"}`}>
+              <div className="mt-4">
                 {specHasDrawing(spec) ? (
-                  <BoundaryMap spec={spec} center={parseCenter(d.mapCenter)} height={420} locate={located} />
+                  <BoundaryMap spec={spec} center={parseCenter(d.mapCenter)} height={mapH} locate={located} expandable />
                 ) : (
                   <div className="grid h-48 place-items-center rounded-2xl border border-white/12 bg-white/[0.03] px-6 text-center text-[14px] text-white/45">
                     No area has been drawn for this job yet — the office will send it through.

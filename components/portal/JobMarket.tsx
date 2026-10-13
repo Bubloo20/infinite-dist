@@ -400,7 +400,7 @@ export default function JobMarket({ workerName, only }: {
                       </button>
                     )}
                     {expanded === j.id && (
-                      <div className="mt-4"><BoundaryMap spec={spec} center={parseCenter(j.map_center)} height={340} /></div>
+                      <div className="mt-4"><BoundaryMap spec={spec} center={parseCenter(j.map_center)} height={340} expandable /></div>
                     )}
 
                     <div className="mt-5 flex flex-wrap gap-2">
@@ -524,8 +524,7 @@ export default function JobMarket({ workerName, only }: {
                       {mapOpen === cardId && (
                       <div className="mt-2">
                       <BoundaryMap spec={spec} center={parseCenter(a?.map_center ?? j.map_center)} height={phone ? 260 : 400}
-                        locate={accepted}
-                        fullHref={a ? `/portal/job/${a.id}/map` : undefined} />
+                        locate={accepted} expandable />
                       </div>
                       )}
                     </div>

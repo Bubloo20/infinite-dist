@@ -107,7 +107,7 @@ export default function SharedMapPage() {
         )}
 
         {specHasDrawing(spec) ? (
-          <BoundaryMap spec={spec} center={center} height={height} locate={located} />
+          <BoundaryMap spec={spec} center={center} height={height} locate={located} expandable />
         ) : (
           <div className="grid h-64 place-items-center rounded-2xl border border-white/12 bg-white/[0.03] text-white/45">
             No area has been drawn for this job yet.

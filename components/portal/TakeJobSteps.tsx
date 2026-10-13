@@ -186,7 +186,7 @@ export default function TakeJobSteps({
                 <p className="mb-2 text-[12px] font-bold uppercase tracking-wide text-white/35">
                   Where you&apos;ll be working
                 </p>
-                <BoundaryMap spec={spec} height={300} />
+                <BoundaryMap spec={spec} height={300} expandable />
               </div>
             )}
           </>

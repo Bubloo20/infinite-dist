@@ -189,7 +189,7 @@ export default function BoundaryMap({
   locate?: boolean;
   /** Where the "Full screen" link goes. Omitted, no link is shown. */
   fullHref?: string;
-  /** Offer a full-window version for drawing in. */
+  /** Offer a full-window version — to draw in, or just to read. */
   expandable?: boolean;
   onChange?: (spec: AreaSpec, center: [number, number, number]) => void;
 }) {
@@ -751,8 +751,21 @@ export default function BoundaryMap({
             <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
               <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
             </svg>
-            Bigger map
+            {editable ? "Bigger map" : "Full screen"}
           </button>
+        )}
+
+        {/*
+          Shown only while they're outside, across the top of the map itself —
+          a warning under the map is a warning they scroll past.
+        */}
+        {outOfZone !== null && (
+          <div className="pointer-events-none absolute inset-x-0 top-0 z-[600] flex items-center justify-center gap-2 bg-rose-600/95 px-3 py-1.5 text-center text-white">
+            <span aria-hidden className="text-[12px]">⚠</span>
+            <span className="text-[12px] font-bold">
+              You&apos;re outside the area — {readable(outOfZone)} away
+            </span>
+          </div>
         )}
 
         {fullHref && (
@@ -786,15 +799,19 @@ export default function BoundaryMap({
           <div className="flex shrink-0 items-center justify-between gap-3 px-4 py-3">
             <div>
               <p className="font-display text-[15px] font-bold text-white">
-                {spec.mode === "roads" ? "Drawing road runs" : "Drawing the delivery area"}
+                {editable
+                  ? spec.mode === "roads" ? "Drawing road runs" : "Drawing the delivery area"
+                  : spec.mode === "roads" ? "Your roads" : "Your delivery area"}
               </p>
               <p className="text-[12px] text-white/45">
-                {points} point{points === 1 ? "" : "s"} — everything you draw here is kept
+                {editable
+                  ? `${points} point${points === 1 ? "" : "s"} — everything you draw here is kept`
+                  : "Pinch to zoom, drag to move around"}
               </p>
             </div>
             <button type="button" onClick={() => setExpanded(false)}
               className="rounded-xl bg-gradient-to-r from-electric to-orchid px-5 py-2.5 font-display text-[13px] font-bold text-white">
-              Done
+              {editable ? "Done" : "Close"}
             </button>
           </div>
           <div className="min-h-0 flex-1 px-3 pb-3">
@@ -802,7 +819,8 @@ export default function BoundaryMap({
               spec={spec}
               center={liveCenter()}
               editable={editable}
-              height={Math.max(320, vh - 72)}
+              locate={locate}
+              height={Math.max(200, vh - 72)}
               onChange={(sp, c) => { setSpec(sp); specRef.current = sp; onChangeRef.current?.(sp, c); }}
             />
           </div>
@@ -812,26 +830,6 @@ export default function BoundaryMap({
 
       {locate && (
         <>
-          {/* Far enough out that it needs saying loudly, not as a quiet chip. */}
-          {outOfZone !== null && (
-            <div className="mt-2 flex flex-wrap items-center gap-3 rounded-xl border border-rose-400/50 bg-rose-500/15 px-4 py-3">
-              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-rose-500/25 text-[15px]">⚠</span>
-              <span className="min-w-0 flex-1">
-                <span className="block font-display text-[15px] font-bold text-rose-100">
-                  You&apos;re not in the right area
-                </span>
-                <span className="mt-0.5 block text-[13px] text-rose-200/80">
-                  {readable(outOfZone)} from {drawnArea.length >= 3 ? "your delivery area" : "your nearest road"} —
-                  head back before you keep delivering.
-                </span>
-              </span>
-              <button type="button" onClick={recentre}
-                className="shrink-0 rounded-lg border border-rose-300/40 bg-rose-500/20 px-3 py-1.5 text-[12px] font-bold text-rose-100 transition hover:bg-rose-500/30">
-                Show me
-              </button>
-            </div>
-          )}
-
           <div className="mt-2 flex flex-wrap items-center gap-2">
             {me ? (
               <>
