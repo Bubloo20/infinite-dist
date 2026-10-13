@@ -82,8 +82,15 @@ export default function InvitePage() {
   const [sig, setSig] = useState<string | null>(null);
   const [agreed, setAgreed] = useState(false);
   const [readTerms, setReadTerms] = useState(false);
+  const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
   const [located, setLocated] = useState(false);
+  // What became of their copy once it was signed.
+  const [sentTo, setSentTo] = useState<string | null>(null);
+  // True only when the link was opened on a job that was already signed.
+  const [arrivedSigned, setArrivedSigned] = useState(false);
+  const [savedCopy, setSavedCopy] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     fetch(`/api/portal/invite/${token}`)
@@ -93,6 +100,7 @@ export default function InvitePage() {
         setD(v);
         setName(v.workerName || "");
         if (v.signed) {
+          setArrivedSigned(true);
           try { setSchedule(v.signed.schedule ? JSON.parse(v.signed.schedule) : {}); } catch { /* ignore */ }
         }
         setState("ok");
@@ -155,6 +163,7 @@ export default function InvitePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           signedName: name.trim(),
+          email: email.trim(),
           signaturePng: sig,
           signedDate: iso(new Date()),
           schedule: JSON.stringify(schedule),
@@ -163,12 +172,41 @@ export default function InvitePage() {
       });
       const v = await r.json();
       if (!v.ok) { setNotice(v.error || "Couldn't record that — try again."); return; }
+      setSentTo(v.emailedWorker ? email.trim() : null);
       setD({ ...d, signed: { name: name.trim(), date: iso(new Date()), schedule: JSON.stringify(schedule) } });
       setAt(steps.length - 1);
     } catch {
       setNotice("Couldn't record that — check your connection and try again.");
     } finally {
       setBusy(false);
+    }
+  };
+
+  /**
+   * Save the agreement to the phone as a PDF.
+   *
+   * Built from a printable sheet rendered off-screen rather than a second
+   * layout, so what they keep is the same document the office gets — the same
+   * trap as the invoice, where a separately drawn PDF drifted from the page.
+   */
+  const saveCopy = async () => {
+    setSaving(true);
+    try {
+      const sheet = document.getElementById("contract-sheet");
+      if (!sheet) return;
+      const { elementToPdf } = await import("@/lib/invoicePdf");
+      const blob = await elementToPdf(sheet);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `Agreement - ${(d.signed?.name || name || "signed").trim()}.pdf`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+      setSavedCopy(true);
+    } catch {
+      setNotice("Couldn't make the file. Take a screenshot of this page instead, or give us an email above.");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -409,6 +447,26 @@ export default function InvitePage() {
                   className="w-full rounded-xl border border-white/12 bg-white/[0.05] px-4 py-3 text-[16px] text-white outline-none focus:border-orchid/60" />
               </label>
 
+              <label className="mt-4 block">
+                <span className="mb-1.5 block text-[12px] font-bold uppercase tracking-wide text-white/40">
+                  Your email <span className="text-white/25">— so we can send you a copy</span>
+                </span>
+                <input
+                  type="email"
+                  inputMode="email"
+                  autoComplete="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  className="w-full rounded-xl border border-white/12 bg-white/[0.05] px-4 py-3 text-[16px] text-white outline-none focus:border-orchid/60"
+                />
+                {!email.trim() && (
+                  <span className="mt-1.5 block text-[12px] text-white/40">
+                    Leave it blank and you&apos;ll need to save a copy to your phone instead.
+                  </span>
+                )}
+              </label>
+
               <div className="mt-4">
                 <span className="mb-1.5 block text-[12px] font-bold uppercase tracking-wide text-white/40">Signature</span>
                 <SignaturePad onChange={setSig} />
@@ -436,7 +494,7 @@ export default function InvitePage() {
                 <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-emerald-500/20 text-xl text-emerald-300">✓</span>
                 <div className="min-w-0">
                   <h2 className="font-display text-xl font-extrabold text-white">
-                    {alreadySigned && at === 0 ? "Already signed" : "Job accepted"}
+                    {arrivedSigned ? "Already signed" : "Job accepted"}
                   </h2>
                   <p className="mt-1 text-[13px] text-emerald-100/65">
                     {d.title} is yours{d.signed?.date ? ` — signed ${longDate(d.signed.date)}` : ""}. Here&apos;s
@@ -444,6 +502,47 @@ export default function InvitePage() {
                   </p>
                 </div>
               </div>
+
+              {/*
+                Everyone leaves with a copy. Emailed where they gave an address,
+                and where they didn't, saved to the phone before the map — the
+                agreement is theirs as much as it is the office's.
+              */}
+              {!arrivedSigned && (
+              <div className={`mt-5 rounded-2xl border px-4 py-4 ${
+                sentTo || savedCopy
+                  ? "border-emerald-400/30 bg-emerald-500/[0.08]"
+                  : "border-amber-400/40 bg-amber-500/[0.1]"}`}>
+                {sentTo ? (
+                  <p className="text-[14px] leading-relaxed text-emerald-100">
+                    A copy has been emailed to <span className="font-semibold">{sentTo}</span>, and the
+                    office has one.
+                  </p>
+                ) : savedCopy ? (
+                  <p className="text-[14px] leading-relaxed text-emerald-100">
+                    Saved to your phone. The office has a copy too.
+                  </p>
+                ) : (
+                  <>
+                    <p className="font-display text-[15px] font-bold text-white">Keep a copy</p>
+                    <p className="mt-1 text-[13px] leading-relaxed text-amber-100/80">
+                      {d.signed?.name && !email.trim()
+                        ? "You didn't give an email, so save the agreement to your phone now."
+                        : "Save the agreement to your phone so you have your own copy."}
+                    </p>
+                  </>
+                )}
+                {!sentTo && (
+                  <button
+                    onClick={saveCopy}
+                    disabled={saving}
+                    className="mt-3 w-full rounded-xl bg-gradient-to-r from-electric to-orchid px-5 py-3 font-display text-[14px] font-bold text-white"
+                  >
+                    {saving ? "Preparing…" : savedCopy ? "Save it again" : "Save a copy to my phone"}
+                  </button>
+                )}
+              </div>
+              )}
 
               {!located && specHasDrawing(spec) && (
                 <button
@@ -460,7 +559,7 @@ export default function InvitePage() {
                 </button>
               )}
 
-              <div className="mt-4">
+              <div className={`mt-4 ${sentTo || savedCopy || arrivedSigned ? "" : "pointer-events-none opacity-30"}`}>
                 {specHasDrawing(spec) ? (
                   <BoundaryMap spec={spec} center={parseCenter(d.mapCenter)} height={420} locate={located} />
                 ) : (
@@ -505,6 +604,98 @@ export default function InvitePage() {
               className="flex-1 rounded-2xl bg-gradient-to-r from-electric to-orchid px-6 py-4 font-display text-[15px] font-bold text-white shadow-[0_16px_40px_-14px_rgba(182,109,199,0.85)]">
               {label}
             </button>
+          </div>
+        )}
+
+        {/*
+          Off-screen, and only once there's something to keep. Positioned rather
+          than hidden: a display:none element has no size, and nothing can be
+          captured from it.
+        */}
+        {d.signed && (
+          <div aria-hidden className="pointer-events-none fixed left-[-10000px] top-0">
+            <div id="contract-sheet" style={{ width: 820 }} className="bg-white px-12 py-12 text-ink">
+              <h1 className="font-display text-3xl font-extrabold tracking-tight text-ink">
+                Independent Contractor Agreement
+              </h1>
+              <p className="mt-2 text-[15px] text-ink/70">
+                Sarvesh Mohanrajh, operating under Infinite Distribution · ABN 66 177 274 211
+              </p>
+
+              <div className="mt-7 grid grid-cols-2 gap-3 rounded-xl border border-slate-200 bg-slate-50 p-5">
+                {([
+                  ["Contractor", d.signed.name],
+                  ["Job", d.title],
+                  ["Area", d.area || "—"],
+                  ["Leaflets", d.leaflets ? d.leaflets.toLocaleString() : "—"],
+                  ["Payment", money(d.pay)],
+                  ["Minimum hours", tidyHours(d.minHours) || "—"],
+                  ["Start", longDate(d.startDate)],
+                  ["Due", longDate(d.dueDate)],
+                ] as [string, string][]).map(([k, v]) => (
+                  <div key={k}>
+                    <p className="text-[11px] font-bold uppercase tracking-wide text-ink/45">{k}</p>
+                    <p className="mt-0.5 font-semibold text-ink">{v}</p>
+                  </div>
+                ))}
+              </div>
+
+              <h2 className="mt-8 font-display text-xl font-bold text-ink">Agreed schedule</h2>
+              {d.scheduleOptional ? (
+                <p className="mt-2 text-[15px] text-ink/70">
+                  No fixed schedule for this job — the drop is to be completed by the due date above.
+                </p>
+              ) : days.length ? (
+                <table className="mt-3 w-full border-collapse text-[14px]">
+                  <tbody>
+                    {days.sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => (
+                      <tr key={k}>
+                        <td className="border border-slate-300 px-3 py-2 font-semibold">
+                          {new Date(`${k}T00:00:00`).toLocaleDateString("en-AU", { weekday: "long", day: "numeric", month: "long" })}
+                        </td>
+                        <td className="border border-slate-300 px-3 py-2">Start: {clockLabel(v.start) || "—"}</td>
+                        <td className="border border-slate-300 px-3 py-2">End: {clockLabel(v.end) || "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <p className="mt-2 text-[15px] text-ink/70">No days were recorded.</p>
+              )}
+
+              <h2 className="mt-8 font-display text-xl font-bold text-ink">Terms</h2>
+              <ul className="mt-3 list-disc space-y-2 pl-5 text-[14px] leading-relaxed text-ink/80">
+                <li className="font-semibold text-ink">{junkMailTerm(d.junkMailAllowed)}</li>
+                {CONTRACT_TERMS.map((t) => <li key={t}>{t}</li>)}
+              </ul>
+
+              <h2 className="mt-8 font-display text-xl font-bold text-ink">Signatures</h2>
+              <div className="mt-3 grid grid-cols-2 gap-8 text-[15px]">
+                <div>
+                  <p className="text-[13px] font-bold uppercase tracking-wide text-ink/50">Contractor</p>
+                  {sig && (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img src={sig} alt="Signature"
+                      className="mt-2 h-24 w-full rounded border border-slate-300 bg-slate-900 object-contain p-2" />
+                  )}
+                  <p className="mt-2 font-semibold text-ink">{d.signed.name}</p>
+                  <p className="text-[14px] text-ink/70">Date: {longDate(d.signed.date)}</p>
+                </div>
+                <div>
+                  <p className="text-[13px] font-bold uppercase tracking-wide text-ink/50">
+                    Infinite Distribution representative
+                  </p>
+                  <p className="mt-[72px] font-semibold text-ink">Sarvesh Mohanrajh</p>
+                  <p className="text-[14px] text-ink/70">Date: {longDate(d.signed.date)}</p>
+                </div>
+              </div>
+
+              <p className="mt-8 text-[13px] leading-relaxed text-ink/55">
+                Signed electronically through the Infinite Distribution team portal. By signing, the
+                contractor confirmed they had read and agreed to these terms and that they are engaged as
+                an independent subcontractor, not an employee.
+              </p>
+            </div>
           </div>
         )}
 

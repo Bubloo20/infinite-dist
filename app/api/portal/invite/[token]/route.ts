@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { readInviteToken } from "@/lib/portal/auth";
+import { sendMail, mailConfigured } from "@/lib/portal/mail";
+import { contractEmailHtml } from "@/lib/portal/contractEmail";
 import {
   listAssignments, getClientJob, getContractForAssignment, saveContract,
   acceptAssignment, findUserById, dbConfigured,
@@ -80,7 +82,10 @@ export async function POST(req: Request, { params }: { params: { token: string }
     return NextResponse.json({ ok: false, error: "The database isn't connected." }, { status: 503 });
   }
 
-  let b: { signedName?: string; signaturePng?: string; signedDate?: string; schedule?: string; agreed?: boolean };
+  let b: {
+    signedName?: string; signaturePng?: string; signedDate?: string;
+    schedule?: string; agreed?: boolean; email?: string;
+  };
   try {
     b = await req.json();
   } catch {
@@ -101,6 +106,7 @@ export async function POST(req: Request, { params }: { params: { token: string }
     if (!found) return NextResponse.json({ ok: false, error: "That work is no longer there." }, { status: 404 });
     const { assignment: a } = found;
 
+    const email = String(b.email || "").trim();
     await acceptAssignment(a.id, a.user_id);
     await saveContract({
       jobId: a.job_id,
@@ -111,8 +117,43 @@ export async function POST(req: Request, { params }: { params: { token: string }
       signedDate,
       schedule: b.schedule || null,
       agreedPay: a.pay != null ? Number(a.pay) : null,
+      signedEmail: email || null,
     });
-    return NextResponse.json({ ok: true });
+
+    // The agreement is saved either way; posting it out is best effort, and
+    // the page tells them to keep their own copy when it doesn't go.
+    const job = found.job;
+    const html = contractEmailHtml({
+      workerName: found.worker?.full_name ?? signedName,
+      title: a.title?.trim() || a.area_note?.trim() || job?.area?.trim() || "Leaflet distribution",
+      area: a.area_note || job?.area || null,
+      leaflets: a.leaflet_share,
+      pay: a.pay,
+      minHours: a.min_hours || job?.min_hours || null,
+      startDate: a.start_date,
+      dueDate: a.due_date,
+      junkMailAllowed: a.junk_mail_allowed,
+      scheduleOptional: a.schedule_optional,
+      signedName,
+      signedDate,
+      signaturePng,
+      schedule: b.schedule || null,
+    });
+    const subject = `Signed agreement — ${signedName} — ${a.title?.trim() || a.area_note?.trim() || `job #${a.job_id}`}`;
+
+    let emailedWorker = false;
+    let emailedOffice = false;
+    if (mailConfigured()) {
+      // The office always gets one; the worker only if they gave an address.
+      const office = await sendMail({ subject, html });
+      emailedOffice = office.ok;
+      if (email) {
+        const theirs = await sendMail({ subject: "Your signed agreement — Infinite Distribution", html, to: email });
+        emailedWorker = theirs.ok;
+      }
+    }
+
+    return NextResponse.json({ ok: true, emailedWorker, emailedOffice, mailConfigured: mailConfigured() });
   } catch (e) {
     return NextResponse.json(
       { ok: false, error: e instanceof Error ? e.message : "Couldn't record that." },

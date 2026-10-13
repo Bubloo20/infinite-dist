@@ -5,6 +5,10 @@ import { usePathname } from "next/navigation";
 import { submitForm } from "@/lib/forms";
 import Image from "next/image";
 
+/** Pages that are the app rather than the website: the portal, and the links sent to workers. */
+const BARE = ["/portal", "/job/", "/map/"];
+const isBare = (p: string | null) => BARE.some((b) => p?.startsWith(b));
+
 export default function Footer() {
   const pathname = usePathname();
   const [subscribed, setSubscribed] = useState(false);
@@ -26,7 +30,8 @@ export default function Footer() {
   };
 
   // The team portal is a standalone app — no marketing chrome.
-  if (pathname?.startsWith("/portal")) return null;
+  // The portal and the links sent to workers are the app, not the website.
+  if (isBare(pathname)) return null;
 
   return (
     <footer className="bg-night text-white">

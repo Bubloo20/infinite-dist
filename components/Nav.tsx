@@ -17,6 +17,10 @@ const commonLinks = [
 
 const servicesPaths = ["/quality", "/courier"];
 
+/** Pages that are the app rather than the website: the portal, and the links sent to workers. */
+const BARE = ["/portal", "/job/", "/map/"];
+const isBare = (p: string | null) => BARE.some((b) => p?.startsWith(b));
+
 export default function Nav() {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -50,8 +54,8 @@ export default function Nav() {
 
   const servicesActive = servicesPaths.includes(pathname);
 
-  // The team portal is a standalone app — no marketing chrome.
-  if (pathname?.startsWith("/portal")) return null;
+  // The portal and the links sent to workers are the app, not the website.
+  if (isBare(pathname)) return null;
 
   return (
     <header

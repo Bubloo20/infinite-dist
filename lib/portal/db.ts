@@ -81,7 +81,7 @@ let schemaReady: Promise<void> | null = null;
  * date. Forget to raise it and your new column never gets added in production,
  * because the migration will be skipped.
  */
-const SCHEMA_VERSION = 6;
+const SCHEMA_VERSION = 7;
 
 /**
  * Bring the schema up to date, once per process.
@@ -194,6 +194,9 @@ async function migrateSchema(): Promise<void> {
   // What the pay was when they put their name to it. If the sub-contract's pay
   // moves away from this, they agreed to a different number and have to say so.
   await sql`ALTER TABLE job_contracts ADD COLUMN IF NOT EXISTS agreed_pay NUMERIC(10,2);`;
+  // Where their copy was sent. Someone signing by link may have no account and
+  // so no address on file.
+  await sql`ALTER TABLE job_contracts ADD COLUMN IF NOT EXISTS signed_email TEXT;`;
   // Agreements signed before this was recorded agreed to whatever the pay is
   // now — nothing has changed under them.
   await sql`
@@ -526,6 +529,7 @@ export type JobContract = {
   id: number; job_id: number; user_id: number; assignment_id: number | null; signed_name: string;
   signature_png: string; signed_date: string; schedule: string | null;
   agreed_pay: string | null;
+  signed_email: string | null;
   agreed: boolean; created_at: string;
 };
 
@@ -891,18 +895,20 @@ export async function saveContract(c: {
   jobId: number; userId: number; assignmentId?: number | null; signedName: string;
   signaturePng: string; signedDate: string; schedule?: string | null;
   agreedPay?: number | null;
+  signedEmail?: string | null;
 }) {
   await ensureSchema();
   // Keyed on the sub-contract, so a worker holding two on one job signs twice.
   if (c.assignmentId) {
     await sql`
       INSERT INTO job_contracts
-        (job_id, user_id, assignment_id, signed_name, signature_png, signed_date, schedule, agreed_pay, agreed)
+        (job_id, user_id, assignment_id, signed_name, signature_png, signed_date, schedule, agreed_pay, signed_email, agreed)
       VALUES (${c.jobId}, ${c.userId}, ${c.assignmentId}, ${c.signedName}, ${c.signaturePng},
-              ${c.signedDate}, ${c.schedule || null}, ${c.agreedPay ?? null}, TRUE)
+              ${c.signedDate}, ${c.schedule || null}, ${c.agreedPay ?? null}, ${c.signedEmail ?? null}, TRUE)
       ON CONFLICT (assignment_id) WHERE assignment_id IS NOT NULL DO UPDATE SET
         signed_name = EXCLUDED.signed_name, signature_png = EXCLUDED.signature_png,
         signed_date = EXCLUDED.signed_date, agreed_pay = EXCLUDED.agreed_pay,
+        signed_email = COALESCE(EXCLUDED.signed_email, job_contracts.signed_email),
         -- Re-signing over a pay change keeps the days they already gave us.
         schedule = COALESCE(EXCLUDED.schedule, job_contracts.schedule), created_at = NOW();`;
     return;
