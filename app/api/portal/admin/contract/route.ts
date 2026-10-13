@@ -9,7 +9,11 @@ export const dynamic = "force-dynamic";
 export async function GET(req: Request) {
   if (!isAdmin()) return NextResponse.json({ ok: false, error: "Admin access required." }, { status: 401 });
 
-  const jobId = Number(new URL(req.url).searchParams.get("jobId"));
+  const q = new URL(req.url).searchParams;
+  const jobId = Number(q.get("jobId"));
+  // A job split between workers has one agreement each. Asked for a particular
+  // one, answer with that one; the job on its own can only mean the latest.
+  const contractId = Number(q.get("contractId")) || 0;
   try {
     await ensureSchema();
     if (!jobId) return NextResponse.json({ ok: true, contracts: await listContracts() });
@@ -28,7 +32,9 @@ export async function GET(req: Request) {
               a.start_date, a.due_date, a.title
        FROM job_contracts c
        LEFT JOIN job_assignments a ON a.id = c.assignment_id
-      WHERE c.job_id = ${jobId} ORDER BY c.created_at DESC LIMIT 1;`;
+      WHERE c.job_id = ${jobId}
+        AND (${contractId} = 0 OR c.id = ${contractId})
+      ORDER BY c.created_at DESC LIMIT 1;`;
     const contract = rows.rows[0];
     if (!contract) return NextResponse.json({ ok: false, error: "No signed contract for this job." }, { status: 404 });
 

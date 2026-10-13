@@ -86,7 +86,8 @@ export default function SignedContractPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`/api/portal/admin/contract?jobId=${id}`)
+    const which = typeof window === "undefined" ? null : new URLSearchParams(window.location.search).get("c");
+    fetch(`/api/portal/admin/contract?jobId=${id}${which ? `&contractId=${which}` : ""}`)
       .then((r) => r.json()).then(setD).catch(() => setD({ ok: false }))
       .finally(() => setLoading(false));
   }, [id]);

@@ -916,7 +916,7 @@ function WorkerRow({ user, t, post, contracts, jobs, mine, onDelete }: {
                   {a.pay ? `$${Number(a.pay).toFixed(2)}` : "—"}
                 </span>
                 {signed && (
-                  <a href={`/portal/admin/contract/${a.job_id}`} className="text-[13px] font-semibold text-white/45 transition hover:text-white">
+                  <a href={`/portal/admin/contract/${a.job_id}?c=${signed.id}`} className="text-[13px] font-semibold text-white/45 transition hover:text-white">
                     Contract ↗
                   </a>
                 )}
@@ -956,7 +956,7 @@ function WorkerRow({ user, t, post, contracts, jobs, mine, onDelete }: {
                       <span className="text-white/70">
                         {job?.title || `Job #${c.job_id}`} — signed {day(c.signed_date)}
                       </span>
-                      <Link href={`/portal/admin/contract/${c.job_id}`} className="text-[13px] font-bold text-orchid hover:text-white">
+                      <Link href={`/portal/admin/contract/${c.job_id}?c=${c.id}`} className="text-[13px] font-bold text-orchid hover:text-white">
                         View / print ↗
                       </Link>
                     </div>
