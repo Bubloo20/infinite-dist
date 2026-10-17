@@ -1,5 +1,6 @@
+import crypto from "crypto";
 import { sql } from "@vercel/postgres";
-import { types } from "@neondatabase/serverless";
+import { types, neonConfig } from "@neondatabase/serverless";
 import { isTestName, unpackLinks } from "./text";
 
 export { isTestName, unpackLinks };
@@ -14,6 +15,23 @@ export { isTestName, unpackLinks };
  * correct and stable regardless of server timezone.
  */
 types.setTypeParser(1082, (v: string) => v);
+
+/**
+ * Never serve a query from a cache.
+ *
+ * The driver talks to Neon over HTTP, and Next caches fetches by request body
+ * — so the same SQL text came back with whatever it returned the first time,
+ * for the life of the cache. Proved in one request: read a column, write it,
+ * read it again with the same text, and the write was invisible; the same
+ * query worded differently returned the truth. A row read as empty once stayed
+ * empty, which for a share link means a working link that never opens again.
+ *
+ * Set here rather than per route because it has to hold for every query in the
+ * app, and a route that forgets is a stale read nobody notices until a number
+ * is wrong on a page.
+ */
+neonConfig.fetchFunction = (input: RequestInfo | URL, init?: RequestInit) =>
+  fetch(input, { ...init, cache: "no-store" });
 
 export type PortalUser = {
   id: number;
@@ -81,7 +99,7 @@ let schemaReady: Promise<void> | null = null;
  * date. Forget to raise it and your new column never gets added in production,
  * because the migration will be skipped.
  */
-const SCHEMA_VERSION = 7;
+const SCHEMA_VERSION = 8;
 
 /**
  * Bring the schema up to date, once per process.
@@ -387,6 +405,21 @@ async function migrateSchema(): Promise<void> {
   // agreement doesn't ask for a schedule.
   await sql`ALTER TABLE job_assignments ADD COLUMN IF NOT EXISTS schedule_optional BOOLEAN NOT NULL DEFAULT FALSE;`;
   await sql`ALTER TABLE job_assignments ADD COLUMN IF NOT EXISTS map_center TEXT;`;
+  /*
+   * The two share links, kept as stored keys rather than signatures.
+   *
+   * Signed links were only ever as permanent as PORTAL_SECRET: changing the
+   * secret — which you must be able to do, it is how a leak is closed — killed
+   * every link that had ever been sent. A key that lives on the row outlives
+   * the secret, the deploy and anything else, so a link sent to a worker keeps
+   * working until the sub-contract itself is deleted.
+   *
+   * One each, because the two links say different things: a map link shows a
+   * shape, an invite link can put somebody's name to an agreement. Sharing one
+   * key would let the holder of the first derive the second.
+   */
+  await sql`ALTER TABLE job_assignments ADD COLUMN IF NOT EXISTS map_key TEXT;`;
+  await sql`ALTER TABLE job_assignments ADD COLUMN IF NOT EXISTS invite_key TEXT;`;
 
   /**
    * A job split across several workers. Each sub-contract carries its own pay,
@@ -512,7 +545,10 @@ export type JobAssignment = {
   title: string | null;
   junk_mail_allowed: boolean;
   schedule_optional: boolean;
-  /** Added by the API, not stored: the signed ids behind the shared links. */
+  /** The permanent keys behind the two share links. */
+  map_key: string | null;
+  invite_key: string | null;
+  /** Added by the API, not stored: the links themselves. */
   share_token?: string;
   invite_token?: string;
   pay: string | null; leaflet_share: number | null; area_note: string | null;
@@ -753,6 +789,71 @@ export async function acceptAssignment(id: number, userId: number) {
     RETURNING job_id;`;
   // Accepting is what puts those leaflets out for delivery.
   if (r.rows[0]) await syncJobOutCount(r.rows[0].job_id);
+}
+
+/** The two kinds of link a sub-contract can have. */
+export type ShareKind = "map" | "invite";
+
+const KEY_COLUMN: Record<ShareKind, "map_key" | "invite_key"> = {
+  map: "map_key",
+  invite: "invite_key",
+};
+
+/**
+ * This sub-contract's permanent link keys, minting them the first time.
+ *
+ * Written once and never rotated, so the link in somebody's messages still
+ * opens next year. Generated here rather than in SQL so the randomness is the
+ * crypto kind — the link is the only thing standing between a stranger and
+ * signing as this worker.
+ */
+export async function shareKeys(assignmentId: number): Promise<{ map: string; invite: string }> {
+  await ensureSchema();
+  const r = await sql<{ map_key: string | null; invite_key: string | null }>`
+    SELECT map_key, invite_key FROM job_assignments WHERE id = ${assignmentId};`;
+  const row = r.rows[0];
+  if (!row) return { map: "", invite: "" };
+
+  let map = row.map_key;
+  let invite = row.invite_key;
+  if (!map) {
+    map = crypto.randomBytes(10).toString("hex");
+    await sql`UPDATE job_assignments SET map_key = ${map} WHERE id = ${assignmentId} AND map_key IS NULL;`;
+  }
+  if (!invite) {
+    invite = crypto.randomBytes(12).toString("hex");
+    await sql`UPDATE job_assignments SET invite_key = ${invite} WHERE id = ${assignmentId} AND invite_key IS NULL;`;
+  }
+  // Re-read only if a racing request won: whoever wrote first owns the key.
+  if (!row.map_key || !row.invite_key) {
+    const again = await sql<{ map_key: string; invite_key: string }>`
+      SELECT map_key, invite_key FROM job_assignments WHERE id = ${assignmentId};`;
+    if (again.rows[0]) { map = again.rows[0].map_key; invite = again.rows[0].invite_key; }
+  }
+  return { map: map || "", invite: invite || "" };
+}
+
+/**
+ * Which sub-contract a link opens, or null.
+ *
+ * Compared in constant time, and only against the column for this kind of
+ * link, so a map link stays a map link however it is dressed up.
+ */
+export async function readShareKey(kind: ShareKind, token: string): Promise<number | null> {
+  const [idPart, key] = String(token || "").split("-");
+  const id = Number(idPart);
+  if (!Number.isInteger(id) || id <= 0 || !key) return null;
+  await ensureSchema();
+  const col = KEY_COLUMN[kind];
+  const r = col === "map_key"
+    ? await sql<{ k: string | null }>`SELECT map_key AS k FROM job_assignments WHERE id = ${id};`
+    : await sql<{ k: string | null }>`SELECT invite_key AS k FROM job_assignments WHERE id = ${id};`;
+  const stored = r.rows[0]?.k;
+  if (!stored) return null;
+  const a = Buffer.from(stored);
+  const b = Buffer.from(key);
+  if (a.length !== b.length) return null;
+  return crypto.timingSafeEqual(a, b) ? id : null;
 }
 
 export async function deleteAssignment(id: number) {

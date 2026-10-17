@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { readMapShareToken } from "@/lib/portal/auth";
+import { readShareKey } from "@/lib/portal/db";
 import { listAssignments, getClientJob, dbConfigured } from "@/lib/portal/db";
 
 export const dynamic = "force-dynamic";
@@ -13,7 +14,7 @@ export const dynamic = "force-dynamic";
  * called. No pay, no dates, no names, nothing about the rest of the job.
  */
 export async function GET(_req: Request, { params }: { params: { token: string } }) {
-  const id = readMapShareToken(params.token);
+  const id = (await readShareKey("map", params.token)) ?? readMapShareToken(params.token);
   if (!id) return NextResponse.json({ ok: false, error: "That link isn't valid." }, { status: 404 });
   if (!dbConfigured()) {
     return NextResponse.json({ ok: false, error: "The database isn't connected." }, { status: 503 });

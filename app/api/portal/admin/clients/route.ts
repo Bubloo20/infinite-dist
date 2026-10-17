@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { isAdmin, mapShareToken, inviteToken } from "@/lib/portal/auth";
+import { isAdmin } from "@/lib/portal/auth";
 import {
   listAgencies, upsertAgency, deleteAgency,
   listAgents, upsertAgent, deleteAgent,
@@ -7,7 +7,7 @@ import {
   assignJob, setJobPublished, setJobBrief, setJobProgress,
   listAgencyPayments, addAgencyPayment, deleteAgencyPayment, listInterest,
   listAssignments, upsertAssignment, deleteAssignment, syncJobOutCount, setJobCountOverride,
-  dbConfigured,
+  dbConfigured, shareKeys,
 } from "@/lib/portal/db";
 
 export const dynamic = "force-dynamic";
@@ -26,15 +26,19 @@ export async function GET() {
     const [agencies, agents, jobs, agencyPayments, interest, assignments] = await Promise.all([
       listAgencies(), listAgents(), listClientJobs(), listAgencyPayments(), listInterest(), listAssignments(),
     ]);
+    const withLinks = await Promise.all(assignments.map(async (a) => {
+      const k = a.map_key && a.invite_key
+        ? { map: a.map_key, invite: a.invite_key }
+        : await shareKeys(a.id);
+      return { ...a, share_token: `${a.id}-${k.map}`, invite_token: `${a.id}-${k.invite}` };
+    }));
+
     return NextResponse.json({
       ok: true, dbConfigured: true, agencies, agents, jobs, agencyPayments, interest,
-      // Each sub-contract carries the signed id its shared map link uses, so
-      // the browser never needs the secret that makes one.
-      assignments: assignments.map((a) => ({
-        ...a,
-        share_token: mapShareToken(a.id),
-        invite_token: inviteToken(a.id),
-      })),
+      // Each sub-contract carries its two links. The keys arrive with the row,
+      // so this costs nothing beyond the first load after a sub-contract is
+      // made — only a row that has never had keys goes back to the database.
+      assignments: withLinks,
     });
   } catch (e) {
     return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "Query failed." }, { status: 500 });

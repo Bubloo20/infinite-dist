@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { readInviteToken } from "@/lib/portal/auth";
+import { readShareKey } from "@/lib/portal/db";
 import { sendSignedAgreement, noticeTitle } from "@/lib/portal/contractNotice";
 import {
   listAssignments, getClientJob, getContractForAssignment, saveContract,
@@ -29,7 +30,7 @@ async function load(id: number) {
  * anything about the other workers on it.
  */
 export async function GET(_req: Request, { params }: { params: { token: string } }) {
-  const id = readInviteToken(params.token);
+  const id = (await readShareKey("invite", params.token)) ?? readInviteToken(params.token);
   if (!id) return NextResponse.json({ ok: false, error: "That link isn't valid." }, { status: 404 });
   if (!dbConfigured()) {
     return NextResponse.json({ ok: false, error: "The database isn't connected." }, { status: 503 });
@@ -75,7 +76,7 @@ export async function GET(_req: Request, { params }: { params: { token: string }
  * put on it — the link decides who that is, never the request body.
  */
 export async function POST(req: Request, { params }: { params: { token: string } }) {
-  const id = readInviteToken(params.token);
+  const id = (await readShareKey("invite", params.token)) ?? readInviteToken(params.token);
   if (!id) return NextResponse.json({ ok: false, error: "That link isn't valid." }, { status: 404 });
   if (!dbConfigured()) {
     return NextResponse.json({ ok: false, error: "The database isn't connected." }, { status: 503 });
