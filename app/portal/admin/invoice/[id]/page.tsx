@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import type { Agency, Agent, ClientJob } from "@/lib/portal/db";
 import { elementToPdf, invoiceFileName } from "@/lib/invoicePdf";
+import InvoiceSheet from "@/components/portal/InvoiceSheet";
 
 /** Where the draft lands, and the wording that goes with it. */
 const DRAFT_TO = "bubloo.mohanrajh@gmail.com";
@@ -305,71 +306,24 @@ export default function InvoicePage() {
         </p>
       </div>
 
-      {/* The sheet itself — also what the PDF download captures. */}
-      <div id="invoice-sheet" className="mx-auto max-w-[820px] bg-white px-12 py-12 shadow-xl print:max-w-none print:px-0 print:py-0 print:shadow-none">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/images/logo-dark.png" alt="Infinite Distribution" className="mb-8 h-16 w-auto" />
-
-        <h1 className="font-display text-4xl font-extrabold tracking-tight text-ink">INVOICE</h1>
-        <div className="mt-3 space-y-0.5 text-[15px] text-ink/80">
-          <p>ABN: 66 177 274 211</p>
-          <p>Email: bubloo.mohanrajh@gmail.com</p>
-          <p>Phone: 0421 042 007</p>
-        </div>
-
-        <hr className="my-7 border-t-2 border-ink/25" />
-
-        <div className="flex flex-wrap justify-between gap-6">
-          <div className="text-[15px] text-ink/85">
-            <p className="font-bold text-ink">Invoice To:</p>
-            <p className="mt-1">Company name: <span className="font-semibold">{agency?.name || "—"}</span></p>
-            {agent && <p>Attn: <span className="font-semibold">{agent.name}</span></p>}
-            {agency?.email && <p>{agency.email}</p>}
-            {agency?.address && <p>{agency.address}</p>}
-          </div>
-          <div className="text-[15px] text-ink/85">
-            {/* The number is optional — with none set, the line comes off entirely. */}
-            {job.invoice_no && (
-              <p>Invoice No: <span className="font-semibold">{job.invoice_no}</span></p>
-            )}
-            <p>Invoice Date: <span className="font-semibold">{dateAu(job.invoice_date) }</span></p>
-          </div>
-        </div>
-
-        <table className="mt-9 w-full border-collapse text-[15px]">
-          <thead>
-            <tr className="bg-slate-100">
-              {["Leaflet type", "Period (Day of completion)", "Quantity", "Rate per leaflet ($)", "Total ($)"].map((h) => (
-                <th key={h} className="border border-slate-300 px-3 py-2.5 text-left font-bold text-ink">{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td className="border border-slate-300 px-3 py-3">{leafletLine(job.area, job.title)}</td>
-              <td className="border border-slate-300 px-3 py-3">{dateAu(finishedOn)}</td>
-              <td className="border border-slate-300 px-3 py-3">{qty ? qty.toLocaleString("en-AU") : "—"}</td>
-              <td className="border border-slate-300 px-3 py-3">{rate ? rate.toFixed(2) : "—"}</td>
-              <td className="border border-slate-300 px-3 py-3 font-semibold">{money(total)}</td>
-            </tr>
-          </tbody>
-        </table>
-
-        <div className="mt-8">
-          <p className="font-bold text-ink">Payment Details</p>
-          <p className="mt-2 text-lg font-extrabold text-ink">Total Amount Due: ${money(total)}</p>
-          <p className="mt-1 text-[15px] text-ink/70">Please pay within 1 week of invoice date</p>
-        </div>
-
-        <hr className="my-7 border-t-2 border-ink/25" />
-
-        <div className="text-[15px] text-ink/85">
-          <p className="font-bold text-ink">Bank Details</p>
-          <p className="mt-1">Account name: Sarvesh Mohanrajh</p>
-          <p>BSB: 670 - 864</p>
-          <p>Account No: 3878 5206</p>
-        </div>
-      </div>
+      {/* The sheet itself — also what the PDF download captures. Shared with
+          the invoice typed by hand, so there is only ever one of these. */}
+      <InvoiceSheet
+        to={{
+          company: agency?.name || "",
+          attn: agent?.name || null,
+          email: agency?.email || null,
+          address: agency?.address || null,
+        }}
+        invoiceNo={job.invoice_no}
+        invoiceDate={job.invoice_date}
+        lines={[{
+          description: leafletLine(job.area, job.title),
+          period: dateAu(finishedOn),
+          quantity: qty || null,
+          rate: rate || null,
+        }]}
+      />
 
       <style jsx global>{`
         @media print {

@@ -340,7 +340,18 @@ export default function AdminDashboard({ onSignOut }: { onSignOut: () => void })
 
       {msg && <p className="mt-5 rounded-xl border border-rose-400/25 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">{msg}</p>}
 
-      <div className="mt-8 flex flex-wrap gap-1 rounded-2xl border border-white/10 bg-white/[0.04] p-1">
+      {/* Billing something that never went through a job — a one-off, a
+          correction. Sits above the tabs because it belongs to no tab. */}
+      <div className="mt-8 flex justify-end">
+        <Link
+          href="/portal/admin/invoice/new"
+          className="rounded-xl border border-white/15 bg-white/[0.06] px-5 py-2.5 text-sm font-bold text-white/80 transition hover:bg-white/[0.12] hover:text-white"
+        >
+          + Create invoice
+        </Link>
+      </div>
+
+      <div className="mt-3 flex flex-wrap gap-1 rounded-2xl border border-white/10 bg-white/[0.04] p-1">
         {tabs.map((t) => (
           <button key={t.k} onClick={() => setTab(t.k)}
             className={`flex-1 whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-bold transition ${
