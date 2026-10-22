@@ -121,6 +121,21 @@ export default function InvoicePage() {
     });
   };
 
+  const fileName = invoiceFileName(agency?.name, job?.invoice_date ?? null);
+
+  /*
+   * Chrome fills its "Save as PDF" box from the page title, so the title is
+   * the file name for everyone who prints rather than downloads — which, with
+   * the print button sitting at the top of this page, is most of the time.
+   * Held for as long as the invoice is open and put back on the way out.
+   */
+  useEffect(() => {
+    if (!job) return;
+    const was = document.title;
+    document.title = fileName.replace(/\.pdf$/, "");
+    return () => { document.title = was; };
+  }, [job, fileName]);
+
   if (loading) return <div className="grid min-h-screen place-items-center bg-white text-ink">Loading…</div>;
   if (denied) return <div className="grid min-h-screen place-items-center bg-white text-ink">Admin sign-in required. <Link href="/portal/admin" className="ml-2 underline">Sign in</Link></div>;
   if (!job) return <div className="grid min-h-screen place-items-center bg-white text-ink">Invoice not found.</div>;
@@ -183,7 +198,7 @@ export default function InvoicePage() {
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement("a");
                 a.href = url;
-                a.download = invoiceFileName(job.invoice_no, agency?.name);
+                a.download = fileName;
                 a.click();
                 setTimeout(() => URL.revokeObjectURL(url), 10_000);
 
@@ -211,7 +226,7 @@ export default function InvoicePage() {
           </span>
         </div>
         <p className="mt-2.5 text-[13px] text-ink/50">
-          Saves <span className="font-semibold text-ink/70">{invoiceFileName(job.invoice_no, agency?.name)}</span> and opens a Gmail compose to {DRAFT_TO} with the subject and message filled in —
+          Saves <span className="font-semibold text-ink/70">{fileName}</span> and opens a Gmail compose to {DRAFT_TO} with the subject and message filled in —
           drag the downloaded file in to attach it, then send it to yourself or forward it on.
         </p>
       </div>

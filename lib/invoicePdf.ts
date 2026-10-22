@@ -20,11 +20,23 @@ const SHEET_WIDTH = 820;
  * Alexander.pdf" is findable months later in a way "Letterbox invoice.pdf" is
  * not. Characters a file system won't take are dropped.
  */
-export const invoiceFileName = (invoiceNo: string | null, agency?: string | null) => {
-  const safe = (v: string) => v.replace(/[\/:*?"<>|]/g, "").replace(/\s+/g, " ").trim();
-  const parts = ["Invoice", invoiceNo ? safe(invoiceNo) : "", agency ? `- ${safe(agency)}` : ""]
-    .filter(Boolean);
-  return `${parts.join(" ")}.pdf`;
+/**
+ * What the invoice is called once it leaves here.
+ *
+ * The agency, the invoice date and what it is for — which is how it gets
+ * filed and searched for months later, by somebody who only has the file.
+ * The date is written exactly as the invoice prints it, so the name and the
+ * page agree.
+ */
+export const invoiceFileName = (agency?: string | null, invoiceDate?: string | null) => {
+  // Windows refuses these outright; a stray run of spaces just reads badly.
+  const safe = (v: string) => v.replace(/[\\/:*?"<>|]/g, "").replace(/\s+/g, " ").trim();
+  const on = invoiceDate ? new Date(invoiceDate) : new Date();
+  const when = Number.isNaN(on.getTime())
+    ? ""
+    : on.toLocaleDateString("en-AU", { day: "2-digit", month: "long", year: "numeric" });
+  const parts = [agency ? safe(agency) : "", when, "Letterbox Drop Invoice"].filter(Boolean);
+  return `${parts.join(" - ")}.pdf`;
 };
 
 /**
