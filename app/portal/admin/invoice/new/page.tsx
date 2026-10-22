@@ -2,19 +2,22 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import InvoiceSheet, { invoiceTotal, money, type InvoiceLine } from "@/components/portal/InvoiceSheet";
+import InvoiceSheet, {
+  invoiceTotal, lineTotal, money, BLANK_LINE, KIND_LABEL,
+  type InvoiceLine, type InvoiceKind,
+} from "@/components/portal/InvoiceSheet";
 import { elementToPdf, invoiceFileName } from "@/lib/invoicePdf";
 
 const iso = (d: Date) => d.toISOString().slice(0, 10);
 
-const BLANK_LINE: InvoiceLine = { description: "", period: "", quantity: null, rate: null };
-
 type Draft = {
+  kind: InvoiceKind;
   company: string; attn: string; email: string; address: string;
   invoiceNo: string; invoiceDate: string; lines: InvoiceLine[];
 };
 
 const EMPTY: Draft = {
+  kind: "leaflets",
   company: "", attn: "", email: "", address: "",
   invoiceNo: "", invoiceDate: "", lines: [{ ...BLANK_LINE }],
 };
@@ -65,7 +68,14 @@ export default function NewInvoicePage() {
       const raw = localStorage.getItem(STORE);
       if (raw) {
         const saved = JSON.parse(raw) as Partial<Draft>;
-        setD({ ...EMPTY, ...saved, lines: saved.lines?.length ? saved.lines : [{ ...BLANK_LINE }] });
+        setD({
+          ...EMPTY, ...saved,
+          kind: saved.kind === "boards" ? "boards" : "leaflets",
+          // Drafts saved before open boards existed have no amount field.
+          lines: saved.lines?.length
+            ? saved.lines.map((l) => ({ ...BLANK_LINE, ...l }))
+            : [{ ...BLANK_LINE }],
+        });
       } else {
         setD({ ...EMPTY, invoiceDate: iso(new Date()) });
       }
@@ -80,7 +90,8 @@ export default function NewInvoicePage() {
     try { localStorage.setItem(STORE, JSON.stringify(d)); } catch { /* private window */ }
   }, [d, ready]);
 
-  const fileName = invoiceFileName(d.company, d.invoiceDate || null);
+  const boards = d.kind === "boards";
+  const fileName = invoiceFileName(d.company, d.invoiceDate || null, KIND_LABEL[d.kind]);
 
   // The browser's "Save as PDF" takes its file name from the page title.
   useEffect(() => {
@@ -92,7 +103,7 @@ export default function NewInvoicePage() {
   const setLine = (i: number, patch: Partial<InvoiceLine>) =>
     setD((p) => ({ ...p, lines: p.lines.map((l, n) => (n === i ? { ...l, ...patch } : l)) }));
 
-  const total = invoiceTotal(d.lines);
+  const total = invoiceTotal(d.lines, d.kind);
 
   if (!ready) return <div className="grid min-h-screen place-items-center bg-white text-ink">Loading…</div>;
 
@@ -106,7 +117,7 @@ export default function NewInvoicePage() {
           <button
             onClick={() => {
               if (!confirm("Clear this invoice and start again?")) return;
-              setD({ ...EMPTY, invoiceDate: iso(new Date()), lines: [{ ...BLANK_LINE }] });
+              setD({ ...EMPTY, kind: d.kind, invoiceDate: iso(new Date()), lines: [{ ...BLANK_LINE }] });
             }}
             className="rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-bold text-slate-600 transition hover:text-ink"
           >
@@ -141,6 +152,23 @@ export default function NewInvoicePage() {
             Save as PDF / Print
           </button>
         </div>
+      </div>
+
+      {/*
+        What is being billed. It changes the columns on the invoice, not just
+        the wording: boards are a price per drop, so there is no rate to show.
+      */}
+      <div className="mx-auto mb-5 flex max-w-[820px] gap-1 rounded-2xl border border-slate-200 bg-white p-1 shadow-sm print:hidden">
+        {(["leaflets", "boards"] as const).map((k) => (
+          <button
+            key={k}
+            onClick={() => setD({ ...d, kind: k })}
+            className={`flex-1 rounded-xl px-4 py-2.5 text-sm font-bold transition ${
+              d.kind === k ? "bg-ink text-white" : "text-slate-500 hover:text-ink"}`}
+          >
+            {k === "leaflets" ? "Leaflet drop" : "Open boards"}
+          </button>
+        ))}
       </div>
 
       {/* ------------------------------ the form ------------------------------ */}
@@ -183,7 +211,9 @@ export default function NewInvoicePage() {
       <div className="mx-auto mb-6 max-w-[820px] rounded-2xl border border-slate-200 bg-white px-6 py-5 shadow-sm print:hidden">
         <div className="flex items-center justify-between gap-3">
           <p className="font-display text-lg font-extrabold text-ink">What they&apos;re being charged</p>
-          <p className="text-[13px] font-semibold text-ink/45">Quantity × rate — the totals add themselves</p>
+          <p className="text-[13px] font-semibold text-ink/45">
+            {boards ? "A price per drop — the lines add themselves" : "Quantity × rate — the totals add themselves"}
+          </p>
         </div>
 
         <div className="mt-4 space-y-4">
@@ -191,12 +221,17 @@ export default function NewInvoicePage() {
             <div key={i} className="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
               <div className="grid gap-3 sm:grid-cols-2">
                 <label className="block sm:col-span-2">
-                  <span className="mb-1 block text-[13px] font-semibold text-ink/55">Leaflet type</span>
-                  <input className={input} value={l.description} placeholder="Box Hill South leaflets"
+                  <span className="mb-1 block text-[13px] font-semibold text-ink/55">
+                    {boards ? "Work type" : "Leaflet type"}
+                  </span>
+                  <input className={input} value={l.description}
+                    placeholder={boards ? "Open boards" : "Box Hill South leaflets"}
                     onChange={(e) => setLine(i, { description: e.target.value })} />
                 </label>
                 <label className="block sm:col-span-2">
-                  <span className="mb-1 block text-[13px] font-semibold text-ink/55">Period (day of completion)</span>
+                  <span className="mb-1 block text-[13px] font-semibold text-ink/55">
+                    {boards ? "Day of completion" : "Period (day of completion)"}
+                  </span>
                   <input className={input} value={l.period} placeholder="21 October 2026"
                     onChange={(e) => setLine(i, { period: e.target.value })} />
                 </label>
@@ -205,16 +240,24 @@ export default function NewInvoicePage() {
                   <NumberCell value={l.quantity} placeholder="1000" step="1"
                     onChange={(v) => setLine(i, { quantity: v })} />
                 </label>
-                <label className="block">
-                  <span className="mb-1 block text-[13px] font-semibold text-ink/55">Rate per leaflet ($)</span>
-                  <NumberCell value={l.rate} placeholder="0.14" step="0.001"
-                    onChange={(v) => setLine(i, { rate: v })} />
-                </label>
+                {boards ? (
+                  <label className="block">
+                    <span className="mb-1 block text-[13px] font-semibold text-ink/55">Total ($)</span>
+                    <NumberCell value={l.amount} placeholder="65.00" step="0.01"
+                      onChange={(v) => setLine(i, { amount: v })} />
+                  </label>
+                ) : (
+                  <label className="block">
+                    <span className="mb-1 block text-[13px] font-semibold text-ink/55">Rate per leaflet ($)</span>
+                    <NumberCell value={l.rate} placeholder="0.14" step="0.001"
+                      onChange={(v) => setLine(i, { rate: v })} />
+                  </label>
+                )}
               </div>
 
               <div className="mt-3 flex items-center justify-between gap-3">
                 <p className="text-[15px] font-bold text-ink">
-                  Line total: ${money((l.quantity || 0) * (l.rate || 0))}
+                  Line total: ${money(lineTotal(l, d.kind))}
                 </p>
                 {d.lines.length > 1 && (
                   <button
@@ -245,6 +288,7 @@ export default function NewInvoicePage() {
       </p>
 
       <InvoiceSheet
+        kind={d.kind}
         to={{ company: d.company, attn: d.attn, email: d.email, address: d.address }}
         invoiceNo={d.invoiceNo}
         invoiceDate={d.invoiceDate}

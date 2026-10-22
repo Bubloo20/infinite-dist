@@ -1,14 +1,43 @@
 "use client";
 
-/** One billed line. The total is never typed — it is quantity times rate. */
+/**
+ * What is being billed, which decides how a line adds up.
+ *
+ * Leaflets are priced per leaflet, so the total follows from the count. Open
+ * boards are a price for the drop however many boards go out, so the amount is
+ * the figure itself — multiplying by a count would be wrong, and a rate column
+ * on that invoice is a column that can only ever read "n/a".
+ */
+export type InvoiceKind = "leaflets" | "boards";
+
 export type InvoiceLine = {
   description: string;
   period: string;
   quantity: number | null;
+  /** Leaflets: the price per leaflet. */
   rate: number | null;
+  /** Open boards: what the drop costs, as charged. */
+  amount: number | null;
+};
+
+export const BLANK_LINE: InvoiceLine = {
+  description: "", period: "", quantity: null, rate: null, amount: null,
+};
+
+export const COLUMNS: Record<InvoiceKind, string[]> = {
+  leaflets: ["Leaflet type", "Period (Day of completion)", "Quantity", "Rate per leaflet ($)", "Total ($)"],
+  boards: ["Work type", "Day of completion", "Quantity", "Total ($)"],
+};
+
+/** What this kind of invoice is called, on the file and to a person. */
+export const KIND_LABEL: Record<InvoiceKind, string> = {
+  leaflets: "Letterbox Drop Invoice",
+  boards: "Open Boards Invoice",
 };
 
 export type InvoiceSheetProps = {
+  /** Leaflets unless said otherwise — every invoice was one until now. */
+  kind?: InvoiceKind;
   to: { company: string; attn?: string | null; email?: string | null; address?: string | null };
   /** Optional — with none set, the line comes off entirely. */
   invoiceNo?: string | null;
@@ -25,11 +54,12 @@ export const dateAu = (d: string | null | undefined) =>
     day: "2-digit", month: "long", year: "numeric",
   });
 
-/** What a line comes to. Blank quantity or rate bills nothing rather than NaN. */
-export const lineTotal = (l: InvoiceLine) => (l.quantity || 0) * (l.rate || 0);
+/** What a line comes to. A blank field bills nothing rather than NaN. */
+export const lineTotal = (l: InvoiceLine, kind: InvoiceKind = "leaflets") =>
+  kind === "boards" ? l.amount || 0 : (l.quantity || 0) * (l.rate || 0);
 
-export const invoiceTotal = (lines: InvoiceLine[]) =>
-  lines.reduce((sum, l) => sum + lineTotal(l), 0);
+export const invoiceTotal = (lines: InvoiceLine[], kind: InvoiceKind = "leaflets") =>
+  lines.reduce((sum, l) => sum + lineTotal(l, kind), 0);
 
 /**
  * The invoice itself, as the agency receives it.
@@ -39,9 +69,11 @@ export const invoiceTotal = (lines: InvoiceLine[]) =>
  * version that drifts is always the one nobody is looking at. It is also what
  * the PDF download captures, so what is on screen is what gets sent.
  */
-export default function InvoiceSheet({ to, invoiceNo, invoiceDate, lines }: InvoiceSheetProps) {
-  const total = invoiceTotal(lines);
-  const billed = lines.length ? lines : [{ description: "", period: "", quantity: null, rate: null }];
+export default function InvoiceSheet({
+  kind = "leaflets", to, invoiceNo, invoiceDate, lines,
+}: InvoiceSheetProps) {
+  const total = invoiceTotal(lines, kind);
+  const billed = lines.length ? lines : [BLANK_LINE];
 
   return (
     <div
@@ -77,7 +109,7 @@ export default function InvoiceSheet({ to, invoiceNo, invoiceDate, lines }: Invo
       <table className="mt-9 w-full border-collapse text-[15px]">
         <thead>
           <tr className="bg-slate-100">
-            {["Leaflet type", "Period (Day of completion)", "Quantity", "Rate per leaflet ($)", "Total ($)"].map((h) => (
+            {COLUMNS[kind].map((h) => (
               <th key={h} className="border border-slate-300 px-3 py-2.5 text-left font-bold text-ink">{h}</th>
             ))}
           </tr>
@@ -90,8 +122,10 @@ export default function InvoiceSheet({ to, invoiceNo, invoiceDate, lines }: Invo
               <td className="border border-slate-300 px-3 py-3">
                 {l.quantity ? l.quantity.toLocaleString("en-AU") : "—"}
               </td>
-              <td className="border border-slate-300 px-3 py-3">{l.rate ? l.rate.toFixed(2) : "—"}</td>
-              <td className="border border-slate-300 px-3 py-3 font-semibold">{money(lineTotal(l))}</td>
+              {kind === "leaflets" && (
+                <td className="border border-slate-300 px-3 py-3">{l.rate ? l.rate.toFixed(2) : "—"}</td>
+              )}
+              <td className="border border-slate-300 px-3 py-3 font-semibold">{money(lineTotal(l, kind))}</td>
             </tr>
           ))}
         </tbody>

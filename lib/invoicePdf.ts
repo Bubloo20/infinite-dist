@@ -28,14 +28,19 @@ const SHEET_WIDTH = 820;
  * The date is written exactly as the invoice prints it, so the name and the
  * page agree.
  */
-export const invoiceFileName = (agency?: string | null, invoiceDate?: string | null) => {
+export const invoiceFileName = (
+  agency?: string | null,
+  invoiceDate?: string | null,
+  // What the work was, so a boards invoice doesn't file itself under leaflets.
+  what: string = "Letterbox Drop Invoice",
+) => {
   // Windows refuses these outright; a stray run of spaces just reads badly.
   const safe = (v: string) => v.replace(/[\\/:*?"<>|]/g, "").replace(/\s+/g, " ").trim();
   const on = invoiceDate ? new Date(invoiceDate) : new Date();
   const when = Number.isNaN(on.getTime())
     ? ""
     : on.toLocaleDateString("en-AU", { day: "2-digit", month: "long", year: "numeric" });
-  const parts = [agency ? safe(agency) : "", when, "Letterbox Drop Invoice"].filter(Boolean);
+  const parts = [agency ? safe(agency) : "", when, safe(what)].filter(Boolean);
   return `${parts.join(" - ")}.pdf`;
 };
 

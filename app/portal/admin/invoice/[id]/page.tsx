@@ -322,6 +322,7 @@ export default function InvoicePage() {
           period: dateAu(finishedOn),
           quantity: qty || null,
           rate: rate || null,
+          amount: null,
         }]}
       />
 
