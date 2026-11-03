@@ -1,7 +1,7 @@
 import crypto from "crypto";
 import { sql } from "@vercel/postgres";
 import { types, neonConfig } from "@neondatabase/serverless";
-import { isTestName, unpackLinks } from "./text";
+import { isTestName, unpackLinks, todayAu } from "./text";
 
 export { isTestName, unpackLinks };
 
@@ -1088,7 +1088,7 @@ export async function addFinanceEntry(e: {
   const r = await sql<{ id: number }>`
     INSERT INTO finance_entries (kind, amount, category, description, entry_date)
     VALUES (${e.kind}, ${e.amount}, ${e.category || null}, ${e.description || null},
-            ${e.entryDate || new Date().toISOString().slice(0, 10)})
+            ${e.entryDate || todayAu()})
     RETURNING id;
   `;
   return r.rows[0].id;

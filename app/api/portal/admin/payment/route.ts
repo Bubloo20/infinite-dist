@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { isAdmin } from "@/lib/portal/auth";
 import { addPayment, deletePayment, setWorkLogPaid } from "@/lib/portal/db";
+import { todayAu } from "@/lib/portal/text";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +23,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "Enter a payment amount." }, { status: 400 });
   }
   try {
-    const paidOn = b.paidOn || new Date().toISOString().slice(0, 10);
+    const paidOn = b.paidOn || todayAu();
     const id = await addPayment({
       userId: b.userId, amount, paidOn,
       method: b.method || null, note: b.note || null,

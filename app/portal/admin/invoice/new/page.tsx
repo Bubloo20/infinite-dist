@@ -7,8 +7,9 @@ import InvoiceSheet, {
   type InvoiceLine, type InvoiceKind,
 } from "@/components/portal/InvoiceSheet";
 import { elementToPdf, invoiceFileName } from "@/lib/invoicePdf";
+import { todayAu } from "@/lib/portal/text";
 
-const iso = (d: Date) => d.toISOString().slice(0, 10);
+
 
 type Draft = {
   kind: InvoiceKind;
@@ -77,10 +78,10 @@ export default function NewInvoicePage() {
             : [{ ...BLANK_LINE }],
         });
       } else {
-        setD({ ...EMPTY, invoiceDate: iso(new Date()) });
+        setD({ ...EMPTY, invoiceDate: todayAu() });
       }
     } catch {
-      setD({ ...EMPTY, invoiceDate: iso(new Date()) });
+      setD({ ...EMPTY, invoiceDate: todayAu() });
     }
     setReady(true);
   }, []);
@@ -117,7 +118,7 @@ export default function NewInvoicePage() {
           <button
             onClick={() => {
               if (!confirm("Clear this invoice and start again?")) return;
-              setD({ ...EMPTY, kind: d.kind, invoiceDate: iso(new Date()), lines: [{ ...BLANK_LINE }] });
+              setD({ ...EMPTY, kind: d.kind, invoiceDate: todayAu(), lines: [{ ...BLANK_LINE }] });
             }}
             className="rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-bold text-slate-600 transition hover:text-ink"
           >

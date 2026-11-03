@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useState } from "react";
 import { GlassCard, ActionButton } from "./PortalShell";
-import { tidyHours, formatHours } from "@/lib/portal/text";
+import { tidyHours, formatHours, smsHref } from "@/lib/portal/text";
 import BoundaryMap, { type AreaSpec, EMPTY_SPEC, parseSpec, specHasDrawing, countPoints } from "./BoundaryMap";
 import ImageDrop from "./ImageDrop";
 import type { Agency, ClientJob, PortalUser, JobInterest, JobAssignment } from "@/lib/portal/db";
@@ -376,15 +376,32 @@ export function SubContracts({ job, users, rows, post, del }: {
    * Hand a link over the way the device prefers: the share sheet on a phone,
    * the clipboard on a desktop, and failing both, something to copy by hand.
    */
+  /**
+   * Hand a link to the person it is for.
+   *
+   * Opens a text message with the link already written - Phone Link at the
+   * desk, Messages on a phone - because that is how these actually reach a
+   * worker. The link goes on the clipboard first, every time: if nothing
+   * answers the sms: handler, nothing is lost and it can be pasted anywhere.
+   *
+   * Navigated through a constructed anchor rather than window.location, which
+   * would unload the dashboard if no app took the scheme.
+   */
   const handOver = async (mark: string, title: string, url: string) => {
     try {
-      if (navigator.share) {
-        await navigator.share({ title, url });
-        return;
-      }
       await navigator.clipboard.writeText(url);
-      setShared(mark);
-      setTimeout(() => setShared((cur) => (cur === mark ? null : cur)), 2200);
+    } catch {
+      /* no clipboard here - the message itself still carries the link */
+    }
+    setShared(mark);
+    setTimeout(() => setShared((cur) => (cur === mark ? null : cur)), 2600);
+
+    try {
+      const a = document.createElement("a");
+      a.href = smsHref(`${title}
+${url}`);
+      a.rel = "noopener";
+      a.click();
     } catch {
       window.prompt("Copy this link", url);
     }
@@ -544,7 +561,7 @@ export function SubContracts({ job, users, rows, post, del }: {
                     `${window.location.origin}/job/${r.invite_token}`,
                   )}
                   className="text-[13px] font-semibold text-emerald-300 transition hover:text-white">
-                  {shared === `job-${r.id}` ? "Link copied \u2713" : "Send job link"}
+                  {shared === `job-${r.id}` ? "Copied - opening messages" : "Send job link"}
                 </button>
                 <button
                   onClick={() => handOver(
@@ -553,7 +570,7 @@ export function SubContracts({ job, users, rows, post, del }: {
                     `${window.location.origin}/map/${r.share_token}`,
                   )}
                   className="text-[13px] font-semibold text-sky-300 transition hover:text-white">
-                  {shared === `map-${r.id}` ? "Link copied \u2713" : "Map only"}
+                  {shared === `map-${r.id}` ? "Copied - opening messages" : "Map only"}
                 </button>
                 <button onClick={() => del("assignment", r.id)} className="text-[13px] text-white/30 transition hover:text-rose-300">Remove</button>
               </div>

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { currentSession } from "@/lib/portal/auth";
 import { sendSignedAgreement } from "@/lib/portal/contractNotice";
+import { todayAu } from "@/lib/portal/text";
 import {
   listOpenJobs, listJobsForWorkerAll, listInterest, addInterest, removeInterest,
   getContract, saveContract, findUserById, dbConfigured, listAssignmentsForUser, renameUserTo, getClientJob,
@@ -94,7 +95,7 @@ export async function POST(req: Request) {
     if (b.action === "sign") {
       const signaturePng = String(b.signaturePng || "");
       const signedName = String(b.signedName || "").trim();
-      const signedDate = String(b.signedDate || "").trim() || new Date().toISOString().slice(0, 10);
+      const signedDate = String(b.signedDate || "").trim() || todayAu();
       if (!signedName) return NextResponse.json({ ok: false, error: "Type your full name." }, { status: 400 });
       if (!signaturePng.startsWith("data:image/")) {
         return NextResponse.json({ ok: false, error: "Please draw your signature." }, { status: 400 });

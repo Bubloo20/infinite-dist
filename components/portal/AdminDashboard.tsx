@@ -11,10 +11,10 @@ import TrendChart, { type TrendPoint } from "./TrendChart";
 import PublishToWorkers from "./PublishToWorkers";
 import SignatureSetting from "./SignatureSetting";
 import type { JobInterest, JobAssignment } from "@/lib/portal/db";
-import { tidyHours, parseHours, formatHours, clockLabel } from "@/lib/portal/text";
+import { tidyHours, parseHours, formatHours, clockLabel, todayAu } from "@/lib/portal/text";
 
 /** Today, stamped the way the server stamps a payment. */
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => todayAu();
 import { isTestName } from "@/lib/portal/text";
 import DateInput from "./DateInput";
 
@@ -407,7 +407,7 @@ function JobsTab({ logs, q, setQ, post, assignments, jobs, users, del, removeLog
     const blob = new Blob([[head.join(","), ...rows].join("\n")], { type: "text/csv" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = `infinite-jobs-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `infinite-jobs-${todayAu()}.csv`;
     a.click(); URL.revokeObjectURL(a.href);
   };
 
@@ -668,7 +668,7 @@ const JobRow = memo(function JobRow({ log, post, removeLog, patchLog }: {
               : "rounded-xl border border-amber-400/40 bg-amber-500/15 px-4 py-2.5 text-sm font-bold text-amber-200 transition hover:bg-amber-500/25"}>
             {log.verified_at ? "Verified ✓ — undo" : "Verify tracking"}
           </button>
-          <button onClick={() => patchLog(log.id, { paid_on: paid ? null : new Date().toISOString().slice(0, 10) }, { markPaid: !paid })}
+          <button onClick={() => patchLog(log.id, { paid_on: paid ? null : todayAu() }, { markPaid: !paid })}
             disabled={!paid && !log.verified_at}
             className={`${paid ? btnGhost : btn} disabled:cursor-not-allowed disabled:opacity-40`}
             title={!paid && !log.verified_at ? "Verify the tracking first" : undefined}>
@@ -995,7 +995,7 @@ function PaymentsTab({ users, payments, logs, post, reload, setMsg }: {
   post: (u: string, b: unknown) => Promise<boolean>;
   reload: () => void; setMsg: (m: string) => void;
 }) {
-  const [f, setF] = useState({ userId: "", amount: "", paidOn: new Date().toISOString().slice(0, 10), method: "", note: "" });
+  const [f, setF] = useState({ userId: "", amount: "", paidOn: todayAu(), method: "", note: "" });
   const [target, setTarget] = useState<"all" | string>("all");
   const name = (id: number) => users.find((u) => u.id === id)?.full_name || `User ${id}`;
 
@@ -1105,7 +1105,7 @@ function FinanceTab({ entries, totals, post, reload, trend }: {
   reload: () => void;
   trend: TrendPoint[];
 }) {
-  const [f, setF] = useState({ kind: "revenue", amount: "", category: "", description: "", entryDate: new Date().toISOString().slice(0, 10) });
+  const [f, setF] = useState({ kind: "revenue", amount: "", category: "", description: "", entryDate: todayAu() });
 
   const remove = async (id: number) => {
     await fetch(`/api/portal/admin/finance?id=${id}`, { method: "DELETE" });

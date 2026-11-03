@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { isAdmin } from "@/lib/portal/auth";
+import { todayAu } from "@/lib/portal/text";
 import {
   listAgencies, upsertAgency, deleteAgency,
   listAgents, upsertAgent, deleteAgent,
@@ -164,7 +165,7 @@ export async function POST(req: Request) {
         }
         const id = await addAgencyPayment({
           agencyId, amount,
-          paidOn: (b.paidOn as string) || new Date().toISOString().slice(0, 10),
+          paidOn: (b.paidOn as string) || todayAu(),
           method: (b.method as string) || null, note: (b.note as string) || null,
         });
         return NextResponse.json({ ok: true, id });

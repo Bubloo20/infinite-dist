@@ -82,3 +82,36 @@ export function clockLabel(hhmm: string | null | undefined): string {
   const h12 = h % 12 === 0 ? 12 : h % 12;
   return `${h12}:${m[2]} ${period}`;
 }
+
+/**
+ * A text message, ready to send, with the link already in it.
+ *
+ * `sms:` is handled by Phone Link on Windows and by Messages on a phone, so
+ * one href covers sending from the desk and sending from the van. The empty
+ * recipient is deliberate — no worker's number is on file, so the app opens on
+ * the contact picker with the message already written.
+ *
+ * The `?&body=` spelling is not a typo: iOS wants the ampersand before the
+ * first parameter and Android tolerates it, while the tidier `?body=` is the
+ * one iOS quietly drops.
+ */
+export const smsHref = (text: string, to = "") =>
+  `sms:${to}?&body=${encodeURIComponent(text)}`;
+
+/**
+ * Today, in Melbourne, as "YYYY-MM-DD".
+ *
+ * `new Date().toISOString()` is UTC, and Melbourne runs ten or eleven hours
+ * ahead of it — so anything dated before mid-morning recorded the day before.
+ * An invoice raised at nine reads as yesterday's, and so does a contract
+ * signed over breakfast.
+ *
+ * Pinned to Melbourne rather than to whatever clock the machine keeps: the
+ * server runs on UTC, and a worker's phone could be anywhere, but the date on
+ * the paperwork is always the date here.
+ */
+export const todayAu = (): string =>
+  new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Australia/Melbourne",
+    year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(new Date());

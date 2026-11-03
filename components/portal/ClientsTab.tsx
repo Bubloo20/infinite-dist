@@ -7,6 +7,7 @@ import type { Agency, Agent, ClientJob, AgencyPayment, JobStatus, InvoiceStatus 
 import { SubContracts } from "./PublishToWorkers";
 import type { PortalUser, JobAssignment } from "@/lib/portal/db";
 import DateInput from "./DateInput";
+import { todayAu } from "@/lib/portal/text";
 
 const money = (v: number) => `$${v.toFixed(2)}`;
 const num = (v: string | null) => (v === null ? 0 : Number(v) || 0);
@@ -118,7 +119,7 @@ function AgencyDetail({ agency, agents, jobs, payments, post, del }: {
 }) {
   const [tab, setTab] = useState<"agents" | "jobs" | "payments" | "details">("agents");
   const [newAgent, setNewAgent] = useState({ name: "", email: "", phone: "" });
-  const [pay, setPay] = useState({ amount: "", paidOn: new Date().toISOString().slice(0, 10), method: "", note: "" });
+  const [pay, setPay] = useState({ amount: "", paidOn: todayAu(), method: "", note: "" });
   const [d, setD] = useState({
     name: agency.name, pricePerLeaflet: agency.price_per_leaflet || "",
     email: agency.email || "", phone: agency.phone || "", address: agency.address || "",

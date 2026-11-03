@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { isAdmin } from "@/lib/portal/auth";
 import { setWorkLogAmount, setWorkLogPaid, setWorkLogVerified, deleteWorkLog } from "@/lib/portal/db";
+import { todayAu } from "@/lib/portal/text";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +30,7 @@ export async function POST(req: Request) {
       await setWorkLogVerified(b.id, Boolean(b.verified));
     }
     if (b.markPaid !== undefined) {
-      await setWorkLogPaid(b.id, b.markPaid ? b.paidOn || new Date().toISOString().slice(0, 10) : null);
+      await setWorkLogPaid(b.id, b.markPaid ? b.paidOn || todayAu() : null);
     }
     return NextResponse.json({ ok: true });
   } catch (e) {

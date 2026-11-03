@@ -5,7 +5,7 @@ import { useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { CONTRACT_TERMS, junkMailTerm } from "@/components/portal/JobContract";
 import type { ClientJob, JobAssignment } from "@/lib/portal/db";
-import { tidyHours, clockLabel } from "@/lib/portal/text";
+import { tidyHours, clockLabel, todayAu } from "@/lib/portal/text";
 
 const dateAu = (d: string | null | undefined) =>
   d ? new Date(d).toLocaleDateString("en-AU", { day: "2-digit", month: "long", year: "numeric" }) : "____________________";
@@ -84,7 +84,7 @@ export default function WorkerContractPage() {
     : mine?.allocated_time || (solo ? job.allocated_time : null) || "____________________";
 
   // The day this agreement was drawn up for them.
-  const drawnUp = (mine?.created_at || "").slice(0, 10) || new Date().toISOString().slice(0, 10);
+  const drawnUp = (mine?.created_at || "").slice(0, 10) || todayAu();
 
   const signedSchedule: Record<string, { start: string; end: string }> = (() => {
     try { return signed?.schedule ? JSON.parse(signed.schedule) : {}; } catch { return {}; }

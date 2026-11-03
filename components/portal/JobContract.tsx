@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { GlassCard } from "./PortalShell";
 import { submitForm } from "@/lib/forms";
 import type { ClientJob, JobAssignment } from "@/lib/portal/db";
-import { parseHours, formatHours, tidyHours, clockLabel } from "@/lib/portal/text";
+import { parseHours, formatHours, tidyHours, clockLabel, todayAu } from "@/lib/portal/text";
 
 /** Terms transcribed from the Independent Contractor Agreement. */
 export { CONTRACT_TERMS, junkMailTerm } from "@/lib/portal/contractTerms";
@@ -142,7 +142,7 @@ export default function JobContract({
   }) => void;
 }) {
   const [name, setName] = useState(workerName);
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(todayAu());
   const [sig, setSig] = useState<string | null>(null);
   const [agreed, setAgreed] = useState(false);
   const [schedule, setSchedule] = useState<Record<string, { start: string; end: string }>>({});

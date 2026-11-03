@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { GlassCard, ActionButton } from "./PortalShell";
 import { SignaturePad } from "./JobContract";
+import { todayAu } from "@/lib/portal/text";
 
 const money = (v: number | null) =>
   v == null ? "—" : `$${v.toLocaleString("en-AU", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -44,7 +45,7 @@ export default function PayChangeNotice({
         body: JSON.stringify({
           action: "sign", jobId, assignmentId,
           signedName: name.trim(), signaturePng: signature,
-          signedDate: new Date().toISOString().slice(0, 10),
+          signedDate: todayAu(),
           // Signing the new figure is the agreement.
           agreed: true,
           // No schedule: the days already agreed are kept as they are.
