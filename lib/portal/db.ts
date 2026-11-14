@@ -99,7 +99,7 @@ let schemaReady: Promise<void> | null = null;
  * date. Forget to raise it and your new column never gets added in production,
  * because the migration will be skipped.
  */
-const SCHEMA_VERSION = 8;
+const SCHEMA_VERSION = 9;
 
 /**
  * Bring the schema up to date, once per process.
@@ -418,6 +418,36 @@ async function migrateSchema(): Promise<void> {
    * shape, an invite link can put somebody's name to an agreement. Sharing one
    * key would let the holder of the first derive the second.
    */
+  /*
+   * An agreement that belongs to no job.
+   *
+   * Work that never came through an agency — a one-off, a favour, someone
+   * helping for a day — still wants the same terms signed. Kept in its own
+   * table rather than bent into job_contracts, which hangs off a job and a
+   * sub-contract that in this case do not exist.
+   */
+  await sql`
+    CREATE TABLE IF NOT EXISTS adhoc_contracts (
+      id SERIAL PRIMARY KEY,
+      share_key TEXT NOT NULL,
+      worker_name TEXT,
+      title TEXT,
+      area TEXT,
+      leaflets INTEGER,
+      pay NUMERIC(10,2),
+      min_hours TEXT,
+      start_date DATE,
+      due_date DATE,
+      junk_mail_allowed BOOLEAN NOT NULL DEFAULT FALSE,
+      schedule_optional BOOLEAN NOT NULL DEFAULT FALSE,
+      signed_name TEXT,
+      signature_png TEXT,
+      signed_date DATE,
+      schedule TEXT,
+      signed_email TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );`;
+
   await sql`ALTER TABLE job_assignments ADD COLUMN IF NOT EXISTS map_key TEXT;`;
   await sql`ALTER TABLE job_assignments ADD COLUMN IF NOT EXISTS invite_key TEXT;`;
 
@@ -789,6 +819,82 @@ export async function acceptAssignment(id: number, userId: number) {
     RETURNING job_id;`;
   // Accepting is what puts those leaflets out for delivery.
   if (r.rows[0]) await syncJobOutCount(r.rows[0].job_id);
+}
+
+export type AdhocContract = {
+  id: number; share_key: string;
+  worker_name: string | null; title: string | null; area: string | null;
+  leaflets: number | null; pay: string | null; min_hours: string | null;
+  start_date: string | null; due_date: string | null;
+  junk_mail_allowed: boolean; schedule_optional: boolean;
+  signed_name: string | null; signature_png: string | null; signed_date: string | null;
+  schedule: string | null; signed_email: string | null; created_at: string;
+};
+
+export type AdhocTerms = {
+  workerName?: string | null; title?: string | null; area?: string | null;
+  leaflets?: number | null; pay?: number | null; minHours?: string | null;
+  startDate?: string | null; dueDate?: string | null;
+  junkMailAllowed?: boolean; scheduleOptional?: boolean;
+};
+
+/** A one-off agreement, and the link that opens it. Permanent, like the rest. */
+export async function createAdhocContract(t: AdhocTerms): Promise<{ id: number; token: string }> {
+  await ensureSchema();
+  const key = crypto.randomBytes(12).toString("hex");
+  const r = await sql<{ id: number }>`
+    INSERT INTO adhoc_contracts
+      (share_key, worker_name, title, area, leaflets, pay, min_hours,
+       start_date, due_date, junk_mail_allowed, schedule_optional)
+    VALUES (${key}, ${t.workerName ?? null}, ${t.title ?? null}, ${t.area ?? null},
+            ${t.leaflets ?? null}, ${t.pay ?? null}, ${t.minHours ?? null},
+            ${t.startDate || null}, ${t.dueDate || null},
+            ${t.junkMailAllowed ?? false}, ${t.scheduleOptional ?? false})
+    RETURNING id;`;
+  return { id: r.rows[0].id, token: `${r.rows[0].id}-${key}` };
+}
+
+/** Which one-off agreement a link opens, compared in constant time. */
+export async function readAdhocToken(token: string): Promise<number | null> {
+  const [idPart, key] = String(token || "").split("-");
+  const id = Number(idPart);
+  if (!Number.isInteger(id) || id <= 0 || !key) return null;
+  await ensureSchema();
+  const r = await sql<{ k: string | null }>`
+    SELECT share_key AS k FROM adhoc_contracts WHERE id = ${id};`;
+  const stored = r.rows[0]?.k;
+  if (!stored) return null;
+  const a = Buffer.from(stored);
+  const b = Buffer.from(key);
+  if (a.length !== b.length) return null;
+  return crypto.timingSafeEqual(a, b) ? id : null;
+}
+
+export async function getAdhocContract(id: number): Promise<AdhocContract | null> {
+  await ensureSchema();
+  const r = await sql<AdhocContract>`SELECT * FROM adhoc_contracts WHERE id = ${id};`;
+  return r.rows[0] ?? null;
+}
+
+export async function listAdhocContracts(): Promise<AdhocContract[]> {
+  await ensureSchema();
+  return (await sql<AdhocContract>`
+    SELECT * FROM adhoc_contracts ORDER BY id DESC LIMIT 200;`).rows;
+}
+
+/** Sign it. Refused once signed, so a link cannot be signed twice over. */
+export async function signAdhocContract(id: number, v: {
+  signedName: string; signaturePng: string; signedDate: string;
+  schedule?: string | null; email?: string | null;
+}): Promise<boolean> {
+  await ensureSchema();
+  const r = await sql`
+    UPDATE adhoc_contracts
+       SET signed_name = ${v.signedName}, signature_png = ${v.signaturePng},
+           signed_date = ${v.signedDate}, schedule = ${v.schedule ?? null},
+           signed_email = ${v.email ?? null}
+     WHERE id = ${id} AND signed_name IS NULL;`;
+  return (r.rowCount ?? 0) > 0;
 }
 
 /** The two kinds of link a sub-contract can have. */

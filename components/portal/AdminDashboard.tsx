@@ -342,7 +342,13 @@ export default function AdminDashboard({ onSignOut }: { onSignOut: () => void })
 
       {/* Billing something that never went through a job — a one-off, a
           correction. Sits above the tabs because it belongs to no tab. */}
-      <div className="mt-8 flex justify-end">
+      <div className="mt-8 flex flex-wrap justify-end gap-2">
+        <Link
+          href="/portal/admin/contract/new"
+          className="rounded-xl border border-white/15 bg-white/[0.06] px-5 py-2.5 text-sm font-bold text-white/80 transition hover:bg-white/[0.12] hover:text-white"
+        >
+          + Create contract
+        </Link>
         <Link
           href="/portal/admin/invoice/new"
           className="rounded-xl border border-white/15 bg-white/[0.06] px-5 py-2.5 text-sm font-bold text-white/80 transition hover:bg-white/[0.12] hover:text-white"

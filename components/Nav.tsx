@@ -18,7 +18,7 @@ const commonLinks = [
 const servicesPaths = ["/quality", "/courier"];
 
 /** Pages that are the app rather than the website: the portal, and the links sent to workers. */
-const BARE = ["/portal", "/job/", "/map/"];
+const BARE = ["/portal", "/job/", "/map/", "/sign/"];
 const isBare = (p: string | null) => BARE.some((b) => p?.startsWith(b));
 
 export default function Nav() {

@@ -6,7 +6,7 @@ import { submitForm } from "@/lib/forms";
 import Image from "next/image";
 
 /** Pages that are the app rather than the website: the portal, and the links sent to workers. */
-const BARE = ["/portal", "/job/", "/map/"];
+const BARE = ["/portal", "/job/", "/map/", "/sign/"];
 const isBare = (p: string | null) => BARE.some((b) => p?.startsWith(b));
 
 export default function Footer() {
