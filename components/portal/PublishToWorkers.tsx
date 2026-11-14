@@ -368,22 +368,30 @@ function ScheduleToggle({ value, onChange }: { value: boolean; onChange: (v: boo
  * was run — the workers' own areas are shown together instead, which is the
  * same picture arrived at from the other end.
  */
-function JobArea({ job, pieces, post }: {
+function JobArea({ job, pieces, post, onCut }: {
   job: ClientJob;
   pieces: MapPiece[];
   post: (body: Record<string, unknown>) => Promise<boolean>;
+  /** Hand a freshly cut piece to the sub-contract form below. */
+  onCut: (spec: AreaSpec, centre: [number, number, number] | null) => void;
 }) {
   const saved = parseSpec(job.boundary);
   const drawn = specHasDrawing(saved);
 
   const [editing, setEditing] = useState(false);
+  // Cutting is drawing too, but what comes out of it is somebody's piece
+  // rather than the round, so it never touches the job's own outline.
+  const [cutting, setCutting] = useState(false);
+  const [piece, setPiece] = useState<AreaSpec>(EMPTY_SPEC);
+  const [pieceCentre, setPieceCentre] = useState<[number, number, number] | null>(null);
   const [spec, setSpec] = useState<AreaSpec>(saved);
   const [centre, setCentre] = useState<[number, number, number] | null>(parseCenter(job.map_center));
   const [saving, setSaving] = useState(false);
 
   // Reopening the panel starts from whatever is stored, not from an edit that
   // was abandoned last time.
-  const open = () => { setSpec(parseSpec(job.boundary)); setEditing(true); };
+  const open = () => { setSpec(parseSpec(job.boundary)); setCutting(false); setEditing(true); };
+  const startCut = () => { setPiece(EMPTY_SPEC); setPieceCentre(null); setEditing(false); setCutting(true); };
 
   const save = async () => {
     setSaving(true);
@@ -410,7 +418,20 @@ function JobArea({ job, pieces, post }: {
           <p className="text-[13px] text-white/40">{summary}</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          {editing ? (
+          {cutting ? (
+            <>
+              <button onClick={() => setCutting(false)}
+                className="rounded-xl border border-white/12 bg-white/[0.05] px-4 py-2 text-[13px] font-bold text-white/60 transition hover:text-white">
+                Cancel
+              </button>
+              <button
+                onClick={() => { onCut(piece, pieceCentre); setCutting(false); }}
+                disabled={!specHasDrawing(piece)}
+                className="rounded-xl bg-gradient-to-r from-electric to-orchid px-5 py-2 text-[13px] font-bold text-white disabled:opacity-40">
+                Make this a sub-contract
+              </button>
+            </>
+          ) : editing ? (
             <>
               <button onClick={() => setEditing(false)}
                 className="rounded-xl border border-white/12 bg-white/[0.05] px-4 py-2 text-[13px] font-bold text-white/60 transition hover:text-white">
@@ -422,26 +443,44 @@ function JobArea({ job, pieces, post }: {
               </button>
             </>
           ) : (
-            <button onClick={open}
-              className="rounded-xl border border-white/12 bg-white/[0.05] px-4 py-2 text-[13px] font-bold text-white/70 transition hover:text-white">
-              {drawn ? "Edit the round" : "Draw the round"}
-            </button>
+            <>
+              <button onClick={startCut}
+                className="rounded-xl border border-orchid/40 bg-orchid/10 px-4 py-2 text-[13px] font-bold text-orchid transition hover:bg-orchid/20 hover:text-white">
+                Cut a piece
+              </button>
+              <button onClick={open}
+                className="rounded-xl border border-white/12 bg-white/[0.05] px-4 py-2 text-[13px] font-bold text-white/70 transition hover:text-white">
+                {drawn ? "Edit the round" : "Draw the round"}
+              </button>
+            </>
           )}
         </div>
       </div>
 
-      {(editing || drawn || pieces.length > 0) && (
+      {(editing || cutting || drawn || pieces.length > 0) && (
         <div className="mt-3">
           <BoundaryMap
-            key={editing ? "round-edit" : "round-view"}
-            spec={editing ? spec : saved}
+            key={cutting ? "round-cut" : editing ? "round-edit" : "round-view"}
+            spec={cutting ? piece : editing ? spec : saved}
             center={parseCenter(job.map_center)}
-            editable={editing}
+            editable={editing || cutting}
             expandable
-            height={editing ? 420 : 320}
-            pieces={pieces}
-            onChange={(sp, c) => { setSpec(sp); setCentre(c); }}
+            height={editing || cutting ? 420 : 320}
+            // Cutting draws the round itself underneath, alongside the pieces
+            // already taken; editing the round only needs the pieces.
+            pieces={cutting && drawn
+              ? [{ name: "Whole round", spec: saved, colour: "#94a3b8", outline: true }, ...pieces]
+              : pieces}
+            onChange={(sp, c) => {
+              if (cutting) { setPiece(sp); setPieceCentre(c); } else { setSpec(sp); setCentre(c); }
+            }}
           />
+          {cutting && (
+            <p className="mt-2 text-[13px] text-white/40">
+              Trace one worker&apos;s piece. The round is dashed behind you and the pieces already taken
+              are shaded — then name who it belongs to below.
+            </p>
+          )}
           {editing && (
             <p className="mt-2 text-[13px] text-white/40">
               Click to trace the outside of the whole round. Each worker&apos;s piece shows underneath as
@@ -469,6 +508,9 @@ export function SubContracts({ job, users, rows, post, del }: {
   const ownPay = useRef(false);
   const ownHours = useRef(false);
   const [tracing, setTracing] = useState(false);
+  // Set when the area came off the round above, so the form can say so.
+  const [justCut, setJustCut] = useState(false);
+  const addRef = useRef<HTMLDivElement>(null);
   const [editing, setEditing] = useState<number | null>(null);
   const [shared, setShared] = useState<string | null>(null);
 
@@ -571,7 +613,23 @@ ${url}`);
       </div>
 
       <div className="mt-4">
-        <JobArea job={job} pieces={piecesFor()} post={post} />
+        <JobArea
+          job={job}
+          pieces={piecesFor()}
+          post={post}
+          onCut={(sp, c) => {
+            setF((prev) => ({
+              ...prev,
+              boundary: JSON.stringify(sp),
+              mapCenter: c ? JSON.stringify(c) : prev.mapCenter,
+            }));
+            setAdding(true);
+            setTracing(false);
+            setJustCut(true);
+            // The form is below the map that was just drawn on.
+            setTimeout(() => addRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }), 60);
+          }}
+        />
       </div>
 
       {rows.length > 0 && (
@@ -850,6 +908,7 @@ ${url}`);
         </div>
       )}
 
+      <div ref={addRef} />
       <button onClick={() => setAdding((v) => !v)}
         className="mt-4 flex w-full items-center justify-between gap-3 rounded-xl border border-white/12 bg-white/[0.05] px-4 py-3 text-left transition hover:bg-white/[0.08]">
         <span>
@@ -925,6 +984,13 @@ ${url}`);
             hint="Paste a Google Maps screenshot — then trace it below to turn it into a live map." />
         </div>
 
+        {justCut && countPoints(traceSpec) > 0 && (
+          <p className="sm:col-span-6 rounded-xl border border-orchid/35 bg-orchid/10 px-3.5 py-2.5 text-[13px] font-semibold text-orchid">
+            The piece you just cut is already on this sub-contract ({countPoints(traceSpec)} points) —
+            name who it belongs to and what it pays.
+          </p>
+        )}
+
         <div className="sm:col-span-6">
           <button type="button" onClick={() => setTracing((v) => !v)}
             className="rounded-xl border border-white/12 bg-white/[0.05] px-4 py-2.5 text-sm font-semibold text-white/70 transition hover:bg-white/[0.1] hover:text-white">
@@ -946,6 +1012,7 @@ ${url}`);
                 Click to drop boundary points. The worker gets this as a live map they can zoom, with their own position on it.
               </p>
               <BoundaryMap spec={traceSpec} editable expandable height={380}
+                pieces={[...roundPiece(), ...piecesFor()]}
                 onChange={(sp, c) => setF((prev) => ({ ...prev, boundary: JSON.stringify(sp), mapCenter: JSON.stringify(c) }))} />
             </div>
           </div>
@@ -954,7 +1021,7 @@ ${url}`);
 
         <div className="sm:col-span-6">
           <ActionButton className={btn} disabled={!f.userId} busyLabel="Adding…"
-            onClick={async () => { if (await post({ entity: "assignment", jobId: job.id, ...f, allocatedTime: spanOf(f.startDate, f.dueDate) })) { setF(blank); setAdding(false); setTracing(false); } }}>
+            onClick={async () => { if (await post({ entity: "assignment", jobId: job.id, ...f, allocatedTime: spanOf(f.startDate, f.dueDate) })) { setF(blank); setAdding(false); setTracing(false); setJustCut(false); } }}>
             Add sub-contract
           </ActionButton>
         </div>
