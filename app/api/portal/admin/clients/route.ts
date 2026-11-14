@@ -5,7 +5,7 @@ import {
   listAgencies, upsertAgency, deleteAgency,
   listAgents, upsertAgent, deleteAgent,
   listClientJobs, upsertClientJob, deleteClientJob,
-  assignJob, setJobPublished, setJobBrief, setJobProgress,
+  assignJob, setJobPublished, setJobBrief, setJobProgress, setJobArea,
   listAgencyPayments, addAgencyPayment, deleteAgencyPayment, listInterest,
   listAssignments, upsertAssignment, deleteAssignment, syncJobOutCount, setJobCountOverride,
   dbConfigured, shareKeys,
@@ -123,6 +123,12 @@ export async function POST(req: Request) {
         // Marketplace extras: assignment, publishing, worker brief and boundary.
         if (b.assignedUserId !== undefined) await assignJob(id, n(b.assignedUserId));
         if (b.published !== undefined) await setJobPublished(id, Boolean(b.published));
+        // Just the outline, drawn on the job card — never through setJobBrief,
+        // which would rewrite the pay and hours alongside it.
+        if (b.areaOnly) {
+          await setJobArea(id, (b.boundary as string) || null, (b.mapCenter as string) || null);
+          return NextResponse.json({ ok: true, id });
+        }
         if (b.workerPay !== undefined || b.allocatedTime !== undefined || b.minHours !== undefined || b.boundary !== undefined) {
           await setJobBrief(id, {
             workerPay: n(b.workerPay),

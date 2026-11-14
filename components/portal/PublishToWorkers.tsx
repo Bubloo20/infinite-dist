@@ -3,7 +3,10 @@
 import { useMemo, useRef, useState } from "react";
 import { GlassCard, ActionButton } from "./PortalShell";
 import { tidyHours, formatHours, smsHref } from "@/lib/portal/text";
-import BoundaryMap, { type AreaSpec, EMPTY_SPEC, parseSpec, specHasDrawing, countPoints } from "./BoundaryMap";
+import BoundaryMap, {
+  type AreaSpec, type MapPiece, EMPTY_SPEC, PIECE_COLOURS,
+  parseSpec, specHasDrawing, countPoints,
+} from "./BoundaryMap";
 import ImageDrop from "./ImageDrop";
 import type { Agency, ClientJob, PortalUser, JobInterest, JobAssignment } from "@/lib/portal/db";
 import DateInput from "./DateInput";
@@ -354,6 +357,103 @@ function ScheduleToggle({ value, onChange }: { value: boolean; onChange: (v: boo
   );
 }
 
+/**
+ * The whole round, and the pieces cut from it.
+ *
+ * Drawn once for the job and then carved up: each worker's area is traced
+ * inside it, with the outline and everyone else's piece showing underneath so
+ * the pieces meet instead of overlapping.
+ *
+ * Where nobody drew the round first — which is how every job before this one
+ * was run — the workers' own areas are shown together instead, which is the
+ * same picture arrived at from the other end.
+ */
+function JobArea({ job, pieces, post }: {
+  job: ClientJob;
+  pieces: MapPiece[];
+  post: (body: Record<string, unknown>) => Promise<boolean>;
+}) {
+  const saved = parseSpec(job.boundary);
+  const drawn = specHasDrawing(saved);
+
+  const [editing, setEditing] = useState(false);
+  const [spec, setSpec] = useState<AreaSpec>(saved);
+  const [centre, setCentre] = useState<[number, number, number] | null>(parseCenter(job.map_center));
+  const [saving, setSaving] = useState(false);
+
+  // Reopening the panel starts from whatever is stored, not from an edit that
+  // was abandoned last time.
+  const open = () => { setSpec(parseSpec(job.boundary)); setEditing(true); };
+
+  const save = async () => {
+    setSaving(true);
+    const ok = await post({
+      entity: "job", id: job.id, areaOnly: true,
+      boundary: specHasDrawing(spec) ? JSON.stringify(spec) : null,
+      mapCenter: centre ? JSON.stringify(centre) : (job.map_center ?? null),
+    });
+    setSaving(false);
+    if (ok) setEditing(false);
+  };
+
+  const summary = drawn
+    ? `${countPoints(saved)} points${pieces.length ? ` · ${pieces.length} piece${pieces.length === 1 ? "" : "s"} cut from it` : " · nothing cut from it yet"}`
+    : pieces.length
+      ? `No overall area drawn — this is ${pieces.length} worker${pieces.length === 1 ? "'s area" : "s' areas"} put together`
+      : "Draw the whole round once, then cut each worker's piece from it";
+
+  return (
+    <div className="mb-4 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <p className="font-display text-[15px] font-bold text-white">The whole round</p>
+          <p className="text-[13px] text-white/40">{summary}</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {editing ? (
+            <>
+              <button onClick={() => setEditing(false)}
+                className="rounded-xl border border-white/12 bg-white/[0.05] px-4 py-2 text-[13px] font-bold text-white/60 transition hover:text-white">
+                Cancel
+              </button>
+              <button onClick={save} disabled={saving}
+                className="rounded-xl bg-gradient-to-r from-electric to-orchid px-5 py-2 text-[13px] font-bold text-white">
+                {saving ? "Saving…" : "Save the round"}
+              </button>
+            </>
+          ) : (
+            <button onClick={open}
+              className="rounded-xl border border-white/12 bg-white/[0.05] px-4 py-2 text-[13px] font-bold text-white/70 transition hover:text-white">
+              {drawn ? "Edit the round" : "Draw the round"}
+            </button>
+          )}
+        </div>
+      </div>
+
+      {(editing || drawn || pieces.length > 0) && (
+        <div className="mt-3">
+          <BoundaryMap
+            key={editing ? "round-edit" : "round-view"}
+            spec={editing ? spec : saved}
+            center={parseCenter(job.map_center)}
+            editable={editing}
+            expandable
+            height={editing ? 420 : 320}
+            pieces={pieces}
+            onChange={(sp, c) => { setSpec(sp); setCentre(c); }}
+          />
+          {editing && (
+            <p className="mt-2 text-[13px] text-white/40">
+              Click to trace the outside of the whole round. Each worker&apos;s piece shows underneath as
+              you go, so you can see what is already spoken for.
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function SubContracts({ job, users, rows, post, del }: {
   job: ClientJob; users: PortalUser[]; rows: JobAssignment[];
   post: (body: Record<string, unknown>) => Promise<boolean>;
@@ -439,6 +539,25 @@ ${url}`);
   const payTotal = rows.reduce((t, r) => t + Number(r.pay || 0), 0);
   const left = (job.quantity ?? 0) - taken;
 
+  /** Each worker's piece, in a colour that stays with them down the page. */
+  const piecesFor = (exclude?: number): MapPiece[] =>
+    rows
+      .map((r, i) => ({ r, i, spec: parseSpec(r.boundary) }))
+      .filter(({ r, spec }) => r.id !== exclude && specHasDrawing(spec))
+      .map(({ r, i, spec }) => ({
+        name: nameOf(r.user_id),
+        spec,
+        colour: PIECE_COLOURS[i % PIECE_COLOURS.length],
+      }));
+
+  /** The round itself, shown dashed behind a piece being cut from it. */
+  const roundPiece = (): MapPiece[] => {
+    const round = parseSpec(job.boundary);
+    return specHasDrawing(round)
+      ? [{ name: "Whole round", spec: round, colour: "#94a3b8", outline: true }]
+      : [];
+  };
+
   return (
     <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -451,8 +570,12 @@ ${url}`);
         </p>
       </div>
 
+      <div className="mt-4">
+        <JobArea job={job} pieces={piecesFor()} post={post} />
+      </div>
+
       {rows.length > 0 && (
-        <div className="mt-4 space-y-2">
+        <div className="space-y-2">
           {rows.map((r) => (
             <div key={r.id} className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-white/[0.04] px-4 py-3 ${
               editing === r.id ? "border-orchid/40" : "border-white/10"}`}>
@@ -678,7 +801,12 @@ ${url}`);
                         Click to drop boundary points. {nameOf(r.user_id)} gets this as a live map with their own position on it.
                       </p>
                       <BoundaryMap spec={editSpec} center={parseCenter(r.map_center)} editable expandable height={360}
+                        pieces={[...roundPiece(), ...piecesFor(r.id)]}
                         onChange={(sp, c) => { setEditSpec(sp); setEditCenter(c); }} />
+                      <p className="mt-2 text-[13px] text-white/35">
+                        The whole round is dashed behind you, and everyone else&apos;s piece is shaded —
+                        cut {nameOf(r.user_id)}&apos;s out of what is left.
+                      </p>
                     </div>
                   </div>
                   <div className="mt-3 flex flex-wrap items-center gap-2">

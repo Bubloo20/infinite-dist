@@ -171,6 +171,24 @@ const readable = (m: number) => (m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${
 
 const ROAD_COLOURS = ["#7c3aed", "#0ea5e9", "#f59e0b", "#ec4899", "#10b981", "#f43f5e"];
 
+/**
+ * Somebody else's area, shown underneath but never editable.
+ *
+ * Two jobs, one shape: the whole round drawn behind a worker's piece so the
+ * piece can be cut from it, and every worker's piece drawn together when
+ * nobody has drawn the whole round. Read-only and non-interactive throughout,
+ * so a click meant for the outline being drawn never lands on one of these.
+ */
+export type MapPiece = {
+  name: string;
+  spec: AreaSpec;
+  colour?: string;
+  /** The containing outline, rather than one of the pieces inside it. */
+  outline?: boolean;
+};
+
+export const PIECE_COLOURS = ["#0ea5e9", "#f59e0b", "#ec4899", "#10b981", "#f43f5e", "#a855f7"];
+
 export default function BoundaryMap({
   spec: specProp,
   center,
@@ -179,6 +197,7 @@ export default function BoundaryMap({
   locate = false,
   fullHref,
   expandable = false,
+  pieces,
   onChange,
 }: {
   spec: AreaSpec;
@@ -191,6 +210,8 @@ export default function BoundaryMap({
   fullHref?: string;
   /** Offer a full-window version — to draw in, or just to read. */
   expandable?: boolean;
+  /** Areas drawn underneath for reference — never edited, never saved. */
+  pieces?: MapPiece[];
   onChange?: (spec: AreaSpec, center: [number, number, number]) => void;
 }) {
   const holder = useRef<HTMLDivElement>(null);
@@ -200,6 +221,9 @@ export default function BoundaryMap({
   // The search result sits in its own layer so clearing it never touches the
   // boundary being drawn.
   const foundRef = useRef<import("leaflet").LayerGroup | null>(null);
+  // Underneath everything, and cleared on its own, so redrawing the outline
+  // being edited never disturbs the ones drawn for reference.
+  const piecesRef = useRef<import("leaflet").LayerGroup | null>(null);
   const glowTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const specRef = useRef<AreaSpec>(specProp);
   const newRunRef = useRef(false);
@@ -214,6 +238,10 @@ export default function BoundaryMap({
 
   const [placingArrow, setPlacingArrow] = useState(false);
   const [arrowHint, setArrowHint] = useState("");
+  // Bumped once Leaflet has loaded and the layers exist. Effects that draw
+  // into those layers run before the dynamic import resolves, find nothing,
+  // and would never run again on their own.
+  const [mapReady, setMapReady] = useState(0);
   const [expanded, setExpanded] = useState(false);
   const [vh, setVh] = useState(800);
   const [q, setQ] = useState("");
@@ -432,9 +460,11 @@ export default function BoundaryMap({
         maxNativeZoom: TILE_MAX_NATIVE_ZOOM,
       }).addTo(map);
 
+      piecesRef.current = L.layerGroup().addTo(map);
       groupRef.current = L.layerGroup().addTo(map);
       foundRef.current = L.layerGroup().addTo(map);
       redraw();
+      setMapReady((n) => n + 1);
 
       // Frame whatever exists, else the saved view, else Northcote.
       const all = specRef.current.shapes.flat();
@@ -530,11 +560,79 @@ export default function BoundaryMap({
       mapRef.current?.remove();
       mapRef.current = null;
       groupRef.current = null;
+      piecesRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editable, locate]);
 
   useEffect(() => { redraw(); }, [spec, redraw]);
+
+  /**
+   * Draw the reference areas, and frame them when there is nothing else.
+   *
+   * Everything here is interactive:false — on a map you are drawing on, a
+   * polygon that swallows a click costs you the point you meant to place.
+   * Labels are permanent because the whole use of this is seeing at a glance
+   * whose piece is whose.
+   */
+  useEffect(() => {
+    const L = LRef.current;
+    const layer = piecesRef.current;
+    if (!L || !layer) return;
+    layer.clearLayers();
+    if (!pieces?.length) return;
+
+    const corners: LatLng[] = [];
+    pieces.forEach((piece, pi) => {
+      const colour = piece.colour || PIECE_COLOURS[pi % PIECE_COLOURS.length];
+      piece.spec.shapes.forEach((shape) => {
+        if (shape.length < 2) return;
+        corners.push(...shape);
+        if (piece.spec.mode === "area" && shape.length >= 3) {
+          L.polygon(shape, {
+            color: colour,
+            weight: piece.outline ? 3 : 2,
+            // The containing round is an outline you draw inside, so it is
+            // dashed and barely filled; a piece is shaded enough to read.
+            dashArray: piece.outline ? "10 7" : undefined,
+            fillColor: colour,
+            fillOpacity: piece.outline ? 0.04 : 0.16,
+            interactive: false,
+          }).addTo(layer);
+        } else {
+          L.polyline(shape, {
+            color: colour, weight: piece.outline ? 3 : 5, opacity: 0.8,
+            dashArray: piece.outline ? "10 7" : undefined,
+            lineCap: "round", interactive: false,
+          }).addTo(layer);
+        }
+      });
+
+      // One label per piece, on its first corner.
+      const first = piece.spec.shapes.find((sh) => sh.length)?.[0];
+      if (first && piece.name) {
+        L.marker(first, {
+          interactive: false,
+          icon: L.divIcon({
+            className: "",
+            iconSize: [0, 0],
+            html: `<span style="display:inline-block;transform:translate(8px,-8px);white-space:nowrap;background:${colour};color:#fff;font:700 11px/1.5 system-ui,sans-serif;padding:1px 7px;border-radius:999px;box-shadow:0 2px 8px rgba(0,0,0,.45)">${
+              piece.name.replace(/[<>&]/g, "")}</span>`,
+          }),
+        }).addTo(layer);
+      }
+    });
+
+    // Frame them only when there is no drawing of our own to centre on —
+    // otherwise this would yank the map while somebody is placing points.
+    if (corners.length >= 2 && !specHasDrawing(specRef.current)) {
+      try {
+        mapRef.current?.fitBounds(L.latLngBounds(corners), { padding: [28, 28], maxZoom: 17 });
+      } catch {
+        /* a single point, or bounds Leaflet won't take */
+      }
+    }
+  }, [pieces, mapReady]);
 
 
   /**

@@ -958,6 +958,20 @@ export async function setJobProgress(jobId: number, jobNumber: string | null) {
   await sql`UPDATE client_jobs SET job_number = ${jobNumber} WHERE id = ${jobId};`;
 }
 
+/**
+ * The job's own outline, and nothing else.
+ *
+ * Separate from setJobBrief, which rewrites the pay, the hours and the diagram
+ * in the same statement — handing it only an outline would quietly blank the
+ * rest. Drawing the overall area is something you do long after those are set.
+ */
+export async function setJobArea(jobId: number, boundary: string | null, mapCenter: string | null) {
+  await ensureSchema();
+  await sql`
+    UPDATE client_jobs SET boundary = ${boundary}, map_center = ${mapCenter}
+     WHERE id = ${jobId};`;
+}
+
 export async function setJobBrief(jobId: number, b: {
   workerPay?: number | null; allocatedTime?: string | null; minHours?: string | null;
   boundary?: string | null; mapCenter?: string | null; mapImage?: string | null;
